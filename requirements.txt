@@ -1,0 +1,6 @@
+# AsOf runtime + tooling dependencies.
+# Lambda packages must be built against Python 3.13 (the newest Lambda runtime),
+# not the host interpreter -- see SPIKE-RESULTS.md environment notes.
+
+psycopg2-binary==2.9.10   # CockroachDB is PostgreSQL wire-compatible
+boto3==1.35.99            # Bedrock (Converse + Titan embeddings), SSM, CloudWatch

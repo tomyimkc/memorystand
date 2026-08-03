@@ -1,0 +1,24 @@
+# Secrets -- never commit a connection string or an API key
+.env
+*.pem
+*.crt
+certs/
+spike_db_results.json
+spike_bedrock_results.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Build artifacts
+build/
+dist/
+*.zip
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
