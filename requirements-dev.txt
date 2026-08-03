@@ -1,0 +1,7 @@
+# Test-only dependencies, on top of requirements.txt.
+#
+# Not folded into requirements.txt because the Lambda deployment package
+# (see requirements.txt's header comment) must not carry test tooling.
+
+-r requirements.txt
+pytest==8.3.5

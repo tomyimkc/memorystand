@@ -1,0 +1,45 @@
+{
+  "Version": "2012-10-17",
+  "Id": "standing-lambda-execution-policy",
+  "Statement": [
+    {
+      "Sid": "InvokeNamedBedrockModelsOnly",
+      "Effect": "Allow",
+      "Action": "bedrock:InvokeModel",
+      "Resource": [
+        "arn:aws:bedrock:REGION::foundation-model/anthropic.claude-3-5-haiku-20241022-v1:0",
+        "arn:aws:bedrock:REGION::foundation-model/amazon.titan-embed-text-v2:0"
+      ]
+    },
+    {
+      "Sid": "ReadStandingParametersOnly",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:GetParameter",
+        "ssm:GetParameters"
+      ],
+      "Resource": "arn:aws:ssm:REGION:ACCOUNT_ID:parameter/standing/*"
+    },
+    {
+      "Sid": "DecryptStandingSecureStringsOnly",
+      "Effect": "Allow",
+      "Action": "kms:Decrypt",
+      "Resource": "KMS_KEY_ARN_PLACEHOLDER",
+      "Condition": {
+        "StringEquals": {
+          "kms:ViaService": "ssm.REGION.amazonaws.com"
+        }
+      }
+    },
+    {
+      "Sid": "WriteOwnLogGroupOnly",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:REGION:ACCOUNT_ID:log-group:/aws/lambda/standing:*"
+    }
+  ]
+}

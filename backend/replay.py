@@ -151,21 +151,27 @@ def belief_state_at(tenant_id: str, instant: Any, *, limit: int = 500) -> list[d
 def recall_as_of(tenant_id: str, agent_id: str | None, query: str, instant: Any, k: int = 5) -> list[dict]:
     """Re-run the agent's own recall query, pinned to a past instant.
 
-    Verified to work: AS OF SYSTEM TIME composes with a vector ORDER BY in a single
-    top-level statement, so this is the identical ranking the agent saw, not a
-    reconstruction of it.
+    The ranking is the identical one the agent saw, not a reconstruction: the whole
+    transaction is pinned to the instant, then the same vector ORDER BY runs inside it.
     """
     literal = _as_aost_literal(instant)
     vec_literal = embeddings.to_pgvector(embeddings.embed(query))
     conn = db.get_conn()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Statement-level "FROM t AS OF SYSTEM TIME" is valid SQL, but NOT once
+            # psycopg2's implicit transaction has already fixed a timestamp -- that
+            # raises FeatureNotSupported: "inconsistent AS OF SYSTEM TIME timestamp".
+            # Pin the transaction instead, exactly as belief_state_at() does, and then
+            # run an ordinary query inside it. Same result, and it composes with the
+            # vector ORDER BY.
+            cur.execute(f"SET TRANSACTION AS OF SYSTEM TIME '{literal}'")
             cur.execute(
-                f"""
+                """
                 SELECT memory_id::string AS memory_id, content, entity, attribute_key,
                        attribute_value, trust_tier, confidence,
                        embedding <=> %s AS distance
-                FROM agent_memories AS OF SYSTEM TIME '{literal}'
+                FROM agent_memories
                 WHERE tenant_id = %s AND verdict = 'accepted'
                 ORDER BY embedding <=> %s
                 LIMIT %s

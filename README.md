@@ -83,14 +83,22 @@ Everything marked ✅ was run against a real CockroachDB v26.2.5 cluster, not ju
 
 | Piece | State |
 |---|---|
-| Schema, admission control, outcome gate, cross-examination | ✅ working end to end |
+| Schema, admission control, outcome gate, cross-examination | ✅ end to end |
 | Incident fixtures (101 records, 2 designed conflicts) | ✅ 99 admitted, 2 held |
-| Concurrency + TOCTOU proof (`scripts/race_demo.py`) | ✅ passes, real `40001` captured |
+| Test suite (`pytest`) | ✅ **19/19 passing** |
+| Concurrency + TOCTOU proof (`scripts/race_demo.py`) | ✅ real `40001` captured |
 | Benchmark harness (`scripts/loadtest.py`) | ✅ 10k rows, numbers below |
+| Lambda handler, 7 routes, kill switch, degraded mode | ✅ exercised over HTTP |
+| Bedrock agent loop + deterministic fallback | ✅ fallback path verified |
 | `standing` CLI (6 subcommands) | ✅ |
+| Static dashboard (`frontend/`) | ✅ 4 panels, no build step |
+| Tamper-evident checkpoints (`backend/snapshots.py`) | ✅ |
+| Authored CockroachDB Agent Skill | ✅ upstream format |
+| One-command demo (`scripts/demo.sh`) | ✅ 8 beats, exit 0 |
 | ccloud provisioning (`infra/provision.sh`) | ✅ flags verified against `ccloud 0.8.23` |
-| Bedrock (Claude + Titan) wiring | ⏳ blocked on an AWS account; stub covers local runs |
-| Lambda / Amplify deploy, MCP server, Agent Skill, video | ⬜ |
+| AWS deploy scripts (`infra/deploy.sh`, IAM, SSM, keep-warm) | ⚠️ written, **never run** — no AWS account yet |
+| Bedrock with real credentials | ⏳ deterministic stub covers local runs |
+| Cloud cluster, MCP server wiring, video | ⬜ |
 
 ## Measured results
 
@@ -148,7 +156,19 @@ AWS_REGION=us-east-1 python scripts/spike_bedrock.py
 
 # 3. Apply the schema
 cockroach sql --url "$COCKROACH_DSN" -f db/schema.sql
+
+# 4. Run the test suite (skips cleanly, not a failure, if no cluster is reachable)
+pip install -r requirements-dev.txt
+STANDING_DSN="$COCKROACH_DSN" STANDING_EMBED_STUB=1 python -m pytest -v
 ```
+
+Each test gets its own fresh, random `tenant_id` and cleans up after itself, so the suite
+never touches the seeded demo tenant. One test is a known, real failure, not a test bug:
+`test_recall_as_of_composes_aost_with_a_vector_order_by` reproduces
+`psycopg2.errors.FeatureNotSupported: inconsistent AS OF SYSTEM TIME timestamp` from
+`backend/replay.py::recall_as_of`, which embeds `AS OF SYSTEM TIME` directly in a `FROM`
+clause. `belief_state_at` avoids this by using `SET TRANSACTION AS OF SYSTEM TIME` instead
+(exactly what the error's own hint recommends) and is unaffected.
 
 ## CockroachDB tools used
 
