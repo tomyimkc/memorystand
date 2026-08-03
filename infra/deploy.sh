@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
 #
-# Standing -- build and deploy the Lambda that serves backend/ behind a Function URL.
+# MemoryStand -- build and deploy the Lambda that serves backend/ behind a Function URL.
 #
 # WHY DOCKER: the machine running this script has Python 3.14 locally, but the newest
 # Lambda runtime is python3.13, and psycopg2-binary ships compiled C extensions linked
@@ -19,7 +19,7 @@
 #
 # Usage:
 #   ./infra/deploy.sh
-#   FUNCTION_NAME=standing REGION=us-east-1 ./infra/deploy.sh
+#   FUNCTION_NAME=memorystand REGION=us-east-1 ./infra/deploy.sh
 #
 # Re-run any time: every AWS call below is written to converge rather than fail on a
 # second run (create-if-missing, update-if-present).
@@ -29,7 +29,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." >/dev/null 2>&1 && pwd)"
 
-FUNCTION_NAME="${FUNCTION_NAME:-standing}"
+FUNCTION_NAME="${FUNCTION_NAME:-memorystand}"
 REGION="${REGION:-${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}}"
 ROLE_NAME="${ROLE_NAME:-standing-lambda-role}"
 RUNTIME="python3.13"
@@ -81,13 +81,13 @@ clean up. Write backend/handler.py (exposing a module-level "handler(event, cont
 or "lambda_handler(event, context)"), then re-run ./infra/deploy.sh.
 
 Contract this script assumes backend/handler.py follows (as of the version last read):
-  - Reads the DSN directly from the STANDING_DSN environment variable (backend/db.py's
-    frozen dsn() contract) -- this script resolves /standing/dsn from SSM at DEPLOY
+  - Reads the DSN directly from the MEMORYSTAND_DSN environment variable (backend/db.py's
+    frozen dsn() contract) -- this script resolves /memorystand/dsn from SSM at DEPLOY
     TIME (with the deployer's own credentials, not the function's) and bakes the value
     into that Lambda environment variable. The function's own execution role is never
-    granted permission to read /standing/dsn.
+    granted permission to read /memorystand/dsn.
   - Resolves the kill switch and shared secret from SSM at RUNTIME, by parameter name,
-    via env vars STANDING_KILL_SWITCH_SSM_PARAM and STANDING_SHARED_SECRET_SSM_PARAM
+    via env vars MEMORYSTAND_KILL_SWITCH_SSM_PARAM and MEMORYSTAND_SHARED_SECRET_SSM_PARAM
     (kms:Decrypt is scoped for the SecureString case in infra/iam_policy.json).
   - Serves GET /health by calling backend.db.server_version(), which requires a live
     connection -- this is the endpoint infra/keepwarm.sh pings on a schedule, so a
@@ -116,7 +116,7 @@ sed \
   -e "s#REGION#${REGION}#g" \
   "$REPO_ROOT/infra/iam_policy.json" > "$RENDERED_POLICY"
 # The rendered file also fixes the log group Sid to this function's name specifically.
-sed -i.bak "s#log-group:/aws/lambda/standing:\\*#log-group:/aws/lambda/${FUNCTION_NAME}:*#g" "$RENDERED_POLICY"
+sed -i.bak "s#log-group:/aws/lambda/memorystand:\\*#log-group:/aws/lambda/${FUNCTION_NAME}:*#g" "$RENDERED_POLICY"
 rm -f "$RENDERED_POLICY.bak"
 
 echo "==> Ensuring IAM role $ROLE_NAME exists (trust: lambda.amazonaws.com only)"
@@ -141,7 +141,7 @@ else
   aws iam create-role \
     --role-name "$ROLE_NAME" \
     --assume-role-policy-document "file://$TRUST_POLICY" \
-    --description "Standing Lambda execution role -- least privilege, see infra/iam_policy.json" \
+    --description "MemoryStand Lambda execution role -- least privilege, see infra/iam_policy.json" \
     >/dev/null
   role_created=1
   echo "    created"
@@ -202,36 +202,36 @@ fi
 # Environment variables backend/handler.py actually reads. Two different trust levels,
 # deliberately handled two different ways:
 #
-#   - STANDING_DSN: backend/db.py's dsn() (frozen contract) reads this env var directly --
-#     handler.py never calls SSM for it. So THIS SCRIPT resolves /standing/dsn from SSM
+#   - MEMORYSTAND_DSN: backend/db.py's dsn() (frozen contract) reads this env var directly --
+#     handler.py never calls SSM for it. So THIS SCRIPT resolves /memorystand/dsn from SSM
 #     right now, with the *deployer's* credentials, and bakes the resolved value into the
 #     function's environment (Lambda encrypts environment variables at rest). The
 #     function's own execution role is deliberately never granted ssm:GetParameter on
-#     /standing/dsn -- infra/iam_policy.json only covers kill_switch and shared_secret,
+#     /memorystand/dsn -- infra/iam_policy.json only covers kill_switch and shared_secret,
 #     the two values handler.py resolves itself at runtime.
-#   - STANDING_KILL_SWITCH_SSM_PARAM / STANDING_SHARED_SECRET_SSM_PARAM: parameter NAMES,
+#   - MEMORYSTAND_KILL_SWITCH_SSM_PARAM / MEMORYSTAND_SHARED_SECRET_SSM_PARAM: parameter NAMES,
 #     not values -- handler.py resolves these at runtime via ssm:GetParameter (matching
 #     iam_policy.json), decrypting the shared secret with kms:Decrypt. Setting them here
 #     is redundant with handler.py's own defaults but pins the contract explicitly.
 #
 # AWS_REGION is a reserved Lambda env key, already injected automatically -- not set here.
-echo "==> Resolving /standing/dsn from SSM (deploy-time only; the function's own role cannot read it)"
-if ! DSN_VALUE="$(aws ssm get-parameter --name /standing/dsn --with-decryption \
+echo "==> Resolving /memorystand/dsn from SSM (deploy-time only; the function's own role cannot read it)"
+if ! DSN_VALUE="$(aws ssm get-parameter --name /memorystand/dsn --with-decryption \
       --region "$REGION" --query 'Parameter.Value' --output text 2>&1)"; then
-  echo "Could not read /standing/dsn from SSM in $REGION." >&2
+  echo "Could not read /memorystand/dsn from SSM in $REGION." >&2
   echo "Run ./infra/ssm_setup.sh first, then re-run this script. Details: $DSN_VALUE" >&2
   exit 1
 fi
 
 ENV_FILE="$BUILD_DIR/lambda-environment.json"
-( umask 077 && STANDING_DSN_FOR_JSON="$DSN_VALUE" python3 -c '
+( umask 077 && MEMORYSTAND_DSN_FOR_JSON="$DSN_VALUE" python3 -c '
 import json, os
 print(json.dumps({"Variables": {
-    "STANDING_DSN": os.environ["STANDING_DSN_FOR_JSON"],
-    "STANDING_KILL_SWITCH_SSM_PARAM": "/standing/kill_switch",
-    "STANDING_SHARED_SECRET_SSM_PARAM": "/standing/shared_secret",
-    "STANDING_EMBED_MODEL": "amazon.titan-embed-text-v2:0",
-    "STANDING_CHAT_MODEL": "anthropic.claude-3-5-haiku-20241022-v1:0",
+    "MEMORYSTAND_DSN": os.environ["MEMORYSTAND_DSN_FOR_JSON"],
+    "MEMORYSTAND_KILL_SWITCH_SSM_PARAM": "/memorystand/kill_switch",
+    "MEMORYSTAND_SHARED_SECRET_SSM_PARAM": "/memorystand/shared_secret",
+    "MEMORYSTAND_EMBED_MODEL": "amazon.titan-embed-text-v2:0",
+    "MEMORYSTAND_CHAT_MODEL": "anthropic.claude-3-5-haiku-20241022-v1:0",
 }}))
 ' > "$ENV_FILE" )
 unset DSN_VALUE
@@ -307,7 +307,7 @@ aws lambda put-function-concurrency \
 
 echo "==> Ensuring a public Function URL (auth type NONE) exists"
 echo "    (no charge beyond normal Lambda invocation cost; anyone with the URL can call it --"
-echo "     that is why /standing/shared_secret exists for the handler to check)"
+echo "     that is why /memorystand/shared_secret exists for the handler to check)"
 if aws lambda get-function-url-config --function-name "$FUNCTION_NAME" --region "$REGION" >/dev/null 2>&1; then
   aws lambda update-function-url-config \
     --function-name "$FUNCTION_NAME" \

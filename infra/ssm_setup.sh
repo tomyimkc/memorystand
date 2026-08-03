@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
 #
-# Standing -- create the SSM Parameter Store entries the deploy and the running Lambda need.
+# MemoryStand -- create the SSM Parameter Store entries the deploy and the running Lambda need.
 #
 # Creates exactly three parameters, all under the /standing/ prefix that
 # infra/iam_policy.json scopes ssm:GetParameter to:
 #
-#   /standing/dsn            SecureString  CockroachDB connection string. Read by
+#   /memorystand/dsn            SecureString  CockroachDB connection string. Read by
 #                                           infra/deploy.sh at DEPLOY TIME (with the
 #                                           deployer's own credentials) and baked into the
 #                                           function's environment -- the running Lambda's
 #                                           own execution role is never granted access to
 #                                           this one.
-#   /standing/shared_secret  SecureString  generated here. Read by the running Lambda at
+#   /memorystand/shared_secret  SecureString  generated here. Read by the running Lambda at
 #                                           request time (cached ~60s) to gate the two
 #                                           Bedrock-calling routes.
-#   /standing/kill_switch    String        "off" -- flip to "on" to make the Lambda refuse
+#   /memorystand/kill_switch    String        "off" -- flip to "on" to make the Lambda refuse
 #                                           writes without a redeploy (see README "Limits").
 #                                           Read by the running Lambda on every write request.
 #
@@ -28,10 +28,10 @@
 # to stdout/stderr -- only the parameter NAME and a create/update/skip result.
 #
 # Usage:
-#   STANDING_DSN='postgresql://user:pass@host:26257/defaultdb?sslmode=verify-full' \
+#   MEMORYSTAND_DSN='postgresql://user:pass@host:26257/defaultdb?sslmode=verify-full' \
 #     ./infra/ssm_setup.sh [--force]
 #
-#   REGION=us-east-1 STANDING_DSN='...' ./infra/ssm_setup.sh --force
+#   REGION=us-east-1 MEMORYSTAND_DSN='...' ./infra/ssm_setup.sh --force
 #
 set -euo pipefail
 
@@ -42,7 +42,7 @@ for arg in "$@"; do
   case "$arg" in
     --force) FORCE=1 ;;
     -h|--help)
-      echo "Usage: STANDING_DSN='<dsn>' $0 [--force]"
+      echo "Usage: MEMORYSTAND_DSN='<dsn>' $0 [--force]"
       exit 0
       ;;
     *)
@@ -64,9 +64,9 @@ fi
 account_id="$(echo "$caller_identity" | python3 -c 'import json,sys; print(json.load(sys.stdin)["Account"])' 2>/dev/null || true)"
 echo "    ok (account ${account_id:-unknown}, region $REGION)"
 
-if [[ -z "${STANDING_DSN:-}" ]]; then
-  echo "STANDING_DSN is not set. Provide the CockroachDB connection string, e.g.:" >&2
-  echo "  STANDING_DSN='postgresql://user:pass@host:26257/defaultdb?sslmode=verify-full' $0" >&2
+if [[ -z "${MEMORYSTAND_DSN:-}" ]]; then
+  echo "MEMORYSTAND_DSN is not set. Provide the CockroachDB connection string, e.g.:" >&2
+  echo "  MEMORYSTAND_DSN='postgresql://user:pass@host:26257/defaultdb?sslmode=verify-full' $0" >&2
   exit 1
 fi
 
@@ -102,11 +102,11 @@ put_param() {
   fi
 }
 
-echo "==> /standing/dsn (SecureString)"
-put_param "/standing/dsn" "SecureString" "$STANDING_DSN" \
-  "Standing: CockroachDB connection string used by the Lambda handler"
+echo "==> /memorystand/dsn (SecureString)"
+put_param "/memorystand/dsn" "SecureString" "$MEMORYSTAND_DSN" \
+  "MemoryStand: CockroachDB connection string used by the Lambda handler"
 
-echo "==> /standing/shared_secret (SecureString, generated)"
+echo "==> /memorystand/shared_secret (SecureString, generated)"
 # openssl is present on every platform this project targets (macOS + the Lambda build
 # image); fall back to Python's secrets module if it is ever missing.
 if command -v openssl >/dev/null 2>&1; then
@@ -114,16 +114,16 @@ if command -v openssl >/dev/null 2>&1; then
 else
   shared_secret="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
 fi
-put_param "/standing/shared_secret" "SecureString" "$shared_secret" \
-  "Standing: shared secret validating requests to the Lambda Function URL"
+put_param "/memorystand/shared_secret" "SecureString" "$shared_secret" \
+  "MemoryStand: shared secret validating requests to the Lambda Function URL"
 unset shared_secret
 
-echo "==> /standing/kill_switch (String)"
-put_param "/standing/kill_switch" "String" "off" \
-  "Standing: 'on' makes the Lambda refuse writes without a redeploy (operator kill switch)"
+echo "==> /memorystand/kill_switch (String)"
+put_param "/memorystand/kill_switch" "String" "off" \
+  "MemoryStand: 'on' makes the Lambda refuse writes without a redeploy (operator kill switch)"
 
 echo
 echo "Done. Parameter names created/updated under /standing/ (values were never printed):"
-echo "  /standing/dsn"
-echo "  /standing/shared_secret"
-echo "  /standing/kill_switch"
+echo "  /memorystand/dsn"
+echo "  /memorystand/shared_secret"
+echo "  /memorystand/kill_switch"

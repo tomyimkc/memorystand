@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Shared fixtures for the Standing test suite.
+"""Shared fixtures for the MemoryStand test suite.
 
-Connects to the live local CockroachDB cluster named by ``STANDING_DSN`` (or
+Connects to the live local CockroachDB cluster named by ``MEMORYSTAND_DSN`` (or
 ``COCKROACH_DSN``). A judge who clones this repo without a running cluster
 should see the suite reported as SKIPPED, not FAILED -- so reachability is
 probed once at collection time, and every test is skipped with one clear
@@ -28,7 +28,7 @@ import pytest
 
 # `pytest` run from the repo root already puts the repo root on sys.path via
 # rootdir insertion, but this mirrors the bootstrap pattern used by
-# cli/standing.py and db/seed/seed.py (see CLAUDE.md hard-won fact #7) so
+# cli/memorystand.py and db/seed/seed.py (see CLAUDE.md hard-won fact #7) so
 # these tests are also runnable as plain scripts / from other cwds.
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
@@ -36,9 +36,9 @@ if str(REPO_ROOT) not in sys.path:
 
 # Tests must be reproducible without AWS credentials -- force the
 # deterministic embedding stub unless the environment already set something.
-os.environ.setdefault("STANDING_EMBED_STUB", "1")
+os.environ.setdefault("MEMORYSTAND_EMBED_STUB", "1")
 os.environ.setdefault(
-    "STANDING_DSN", "postgresql://root@localhost:26257/defaultdb?sslmode=disable"
+    "MEMORYSTAND_DSN", "postgresql://root@localhost:26257/defaultdb?sslmode=disable"
 )
 
 from backend import db  # noqa: E402
@@ -61,8 +61,8 @@ def _probe_cluster() -> tuple[bool, str]:
 CLUSTER_REACHABLE, _CLUSTER_REASON = _probe_cluster()
 
 SKIP_REASON = (
-    "No reachable CockroachDB cluster via STANDING_DSN/COCKROACH_DSN "
-    f"({os.environ.get('STANDING_DSN') or os.environ.get('COCKROACH_DSN')!r}). "
+    "No reachable CockroachDB cluster via MEMORYSTAND_DSN/COCKROACH_DSN "
+    f"({os.environ.get('MEMORYSTAND_DSN') or os.environ.get('COCKROACH_DSN')!r}). "
     f"Detail: {_CLUSTER_REASON}. Start the cluster (see README) and re-run."
 )
 

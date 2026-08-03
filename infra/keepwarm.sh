@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
 #
-# Standing -- keep the demo alive unattended through 2026-09-15 by pinging /health.
+# MemoryStand -- keep the demo alive unattended through 2026-09-15 by pinging /health.
 #
 # WHY /health AND NOT JUST THE LAMBDA: a scheduled `lambda:InvokeFunction` only proves the
 # *container* is warm. It says nothing about CockroachDB -- a Basic-tier cluster idle for
@@ -21,11 +21,11 @@
 #
 # Usage:
 #   ./infra/keepwarm.sh
-#   FUNCTION_NAME=standing REGION=us-east-1 END_DATE=2026-09-16T00:00:00Z ./infra/keepwarm.sh
+#   FUNCTION_NAME=memorystand REGION=us-east-1 END_DATE=2026-09-16T00:00:00Z ./infra/keepwarm.sh
 #
 set -euo pipefail
 
-FUNCTION_NAME="${FUNCTION_NAME:-standing}"
+FUNCTION_NAME="${FUNCTION_NAME:-memorystand}"
 REGION="${REGION:-${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}}"
 INTERVAL_MINUTES="${INTERVAL_MINUTES:-5}"
 END_DATE="${END_DATE:-2026-09-16T00:00:00Z}"  # one day past the 2026-09-15 requirement, as a buffer
@@ -68,7 +68,7 @@ if aws events describe-connection --name "$CONNECTION_NAME" --region "$REGION" >
 else
   aws events create-connection \
     --name "$CONNECTION_NAME" \
-    --description "Standing keep-warm: unused API key, target is a public Function URL" \
+    --description "MemoryStand keep-warm: unused API key, target is a public Function URL" \
     --authorization-type API_KEY \
     --auth-parameters '{"ApiKeyAuthParameters":{"ApiKeyName":"x-standing-keepwarm","ApiKeyValue":"unused-public-endpoint"}}' \
     --region "$REGION" \
@@ -129,7 +129,7 @@ else
   aws iam create-role \
     --role-name "$SCHEDULER_ROLE_NAME" \
     --assume-role-policy-document "file://$SCHEDULER_TRUST_POLICY" \
-    --description "Standing keep-warm: lets EventBridge Scheduler call one API destination" \
+    --description "MemoryStand keep-warm: lets EventBridge Scheduler call one API destination" \
     >/dev/null
   scheduler_role_created=1
   echo "    created"
@@ -175,7 +175,7 @@ if aws scheduler get-schedule --name "$SCHEDULE_NAME" --region "$REGION" >/dev/n
     --flexible-time-window '{"Mode":"OFF"}' \
     --target "$TARGET_JSON" \
     --end-date "$END_DATE" \
-    --description "Standing: periodic GET $HEALTH_URL to keep Lambda + CockroachDB warm" \
+    --description "MemoryStand: periodic GET $HEALTH_URL to keep Lambda + CockroachDB warm" \
     --state ENABLED \
     --region "$REGION" \
     >/dev/null
@@ -187,7 +187,7 @@ else
     --flexible-time-window '{"Mode":"OFF"}' \
     --target "$TARGET_JSON" \
     --end-date "$END_DATE" \
-    --description "Standing: periodic GET $HEALTH_URL to keep Lambda + CockroachDB warm" \
+    --description "MemoryStand: periodic GET $HEALTH_URL to keep Lambda + CockroachDB warm" \
     --state ENABLED \
     --region "$REGION" \
     >/dev/null

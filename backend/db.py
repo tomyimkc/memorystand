@@ -25,7 +25,7 @@ from psycopg2 import pool as pg_pool
 
 T = TypeVar("T")
 
-DSN_ENV = "STANDING_DSN"
+DSN_ENV = "MEMORYSTAND_DSN"
 FALLBACK_DSN_ENV = "COCKROACH_DSN"
 SERIALIZATION_FAILURE = "40001"
 
@@ -48,7 +48,7 @@ def dsn() -> str:
     if not value:
         raise RuntimeError(
             f"No connection string. Set {DSN_ENV} (or {FALLBACK_DSN_ENV}).\n"
-            "Local dev:  export STANDING_DSN='postgresql://root@localhost:26257/defaultdb?sslmode=disable'\n"
+            "Local dev:  export MEMORYSTAND_DSN='postgresql://root@localhost:26257/defaultdb?sslmode=disable'\n"
             "Cloud:      ccloud cluster connection-string <cluster> --sql-user <user>"
         )
     return value

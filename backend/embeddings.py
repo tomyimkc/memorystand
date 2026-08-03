@@ -24,9 +24,9 @@ import time
 from typing import Sequence
 
 EMBED_DIMS = 512
-MODEL_ID = os.environ.get("STANDING_EMBED_MODEL", "amazon.titan-embed-text-v2:0")
+MODEL_ID = os.environ.get("MEMORYSTAND_EMBED_MODEL", "amazon.titan-embed-text-v2:0")
 REGION = os.environ.get("AWS_REGION", "us-east-1")
-STUB_ENV = "STANDING_EMBED_STUB"
+STUB_ENV = "MEMORYSTAND_EMBED_STUB"
 
 _client = None
 _stub_used = False

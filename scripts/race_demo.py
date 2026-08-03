@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Live proof that CockroachDB SERIALIZABLE protects Standing's memory layer
+"""Live proof that CockroachDB SERIALIZABLE protects MemoryStand's memory layer
 under concurrent agents, driven entirely through the real application code
 (backend.db.retry_serializable, backend.memory.remember) -- not a synthetic
 harness that only pretends to use the retry path.
@@ -56,7 +56,7 @@ if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
 DEFAULT_DSN = "postgresql://root@localhost:26257/defaultdb?sslmode=disable"
-# Respect an operator-supplied STANDING_DSN / COCKROACH_DSN; only fill in the
+# Respect an operator-supplied MEMORYSTAND_DSN / COCKROACH_DSN; only fill in the
 # known-good local default (see the platform facts this script was written
 # against) if neither is already set.
 os.environ.setdefault("COCKROACH_DSN", DEFAULT_DSN)
@@ -440,7 +440,7 @@ def main() -> int:
     args = ap.parse_args()
 
     print("=" * 78)
-    print("Standing -- scripts/race_demo.py: SERIALIZABLE concurrency proof")
+    print("MemoryStand -- scripts/race_demo.py: SERIALIZABLE concurrency proof")
     print("=" * 78)
 
     report: list[str] = []
@@ -450,7 +450,7 @@ def main() -> int:
         "`backend.db.retry_serializable` / `backend.memory.remember` code paths -- "
         "no isolation from the application, no mocked database calls.\n"
     )
-    report.append(f"- DSN: `{os.environ.get('STANDING_DSN') or os.environ.get('COCKROACH_DSN')}`")
+    report.append(f"- DSN: `{os.environ.get('MEMORYSTAND_DSN') or os.environ.get('COCKROACH_DSN')}`")
     report.append(f"- requested writers: {args.writers}\n")
 
     overall_ok = True

@@ -24,7 +24,7 @@ call -- re-seeding just re-exercises admission control against a now-larger
 belief state.
 
 This script does not import backend.embeddings directly; it only sets
-STANDING_EMBED_STUB in the environment (before importing backend.memory) so
+MEMORYSTAND_EMBED_STUB in the environment (before importing backend.memory) so
 that backend.embeddings.embed() picks it up. That keeps the embedding
 backend decision inside backend/, where it belongs, per the frozen API.
 """
@@ -49,7 +49,7 @@ from pathlib import Path
 
 DEFAULT_DSN = "postgresql://root@localhost:26257/defaultdb?sslmode=disable"
 
-# Fixed so demo recordings, screenshots, and `standing show <decision-id>`
+# Fixed so demo recordings, screenshots, and `memorystand show <decision-id>`
 # walkthroughs are reproducible across re-seeds and across machines.
 DEFAULT_TENANT_ID = "9c8f6e5a-9d1a-4a1c-8f2e-3b6d1c7a4e10"
 
@@ -181,10 +181,10 @@ def main() -> int:
     os.environ["COCKROACH_DSN"] = args.dsn
 
     if "AWS_ACCESS_KEY_ID" not in os.environ and "AWS_PROFILE" not in os.environ:
-        os.environ.setdefault("STANDING_EMBED_STUB", "1")
+        os.environ.setdefault("MEMORYSTAND_EMBED_STUB", "1")
         print(
             "No AWS credentials detected (AWS_ACCESS_KEY_ID / AWS_PROFILE unset); "
-            "forcing STANDING_EMBED_STUB=1 so embeddings use the deterministic local stub."
+            "forcing MEMORYSTAND_EMBED_STUB=1 so embeddings use the deterministic local stub."
         )
     else:
         print("AWS credentials detected; embeddings will use Amazon Titan Text Embeddings V2.")

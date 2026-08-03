@@ -26,14 +26,14 @@ import random
 import time
 from typing import Any
 
-# STANDING_CHAT_MODEL overrides this. The default below is a safe *starting point*,
+# MEMORYSTAND_CHAT_MODEL overrides this. The default below is a safe *starting point*,
 # not a guarantee: it is the id used in scripts/spike_bedrock.py, but Bedrock model
 # access is granted per AWS account and per region, so the account actually running
 # this must have requested access to whichever model id ends up here (Bedrock
 # console -> Model access), or every call raises ModelUnavailable and the agent
 # loop runs on its deterministic fallback instead.
 DEFAULT_MODEL_ID = "anthropic.claude-3-5-haiku-20241022-v1:0"
-MODEL_ID = os.environ.get("STANDING_CHAT_MODEL", DEFAULT_MODEL_ID)
+MODEL_ID = os.environ.get("MEMORYSTAND_CHAT_MODEL", DEFAULT_MODEL_ID)
 REGION = os.environ.get("AWS_REGION", "us-east-1")
 
 # Retry policy for throttling only. Small and bounded for the same reason

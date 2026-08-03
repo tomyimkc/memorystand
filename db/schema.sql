@@ -1,4 +1,4 @@
--- Standing — agentic memory on CockroachDB
+-- MemoryStand — agentic memory on CockroachDB
 -- SPDX-License-Identifier: Apache-2.0
 --
 -- Apply with:  cockroach sql --url "$COCKROACH_DSN" -f db/schema.sql

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
 #
-# Standing -- bring up everything locally, from nothing, with one command.
+# MemoryStand -- bring up everything locally, from nothing, with one command.
 #
 #   ./scripts/run-local.sh          start the database, apply the schema, seed it
 #   ./scripts/run-local.sh --fresh  wipe and rebuild from scratch
@@ -16,11 +16,11 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-CONTAINER="${STANDING_CONTAINER:-crdb-standing}"
-VOLUME="${STANDING_VOLUME:-crdb-standing-data}"
-SQL_PORT="${STANDING_SQL_PORT:-26257}"
-UI_PORT="${STANDING_UI_PORT:-8080}"
-API_PORT="${STANDING_LOCAL_PORT:-8077}"
+CONTAINER="${MEMORYSTAND_CONTAINER:-crdb-memorystand}"
+VOLUME="${MEMORYSTAND_VOLUME:-crdb-memorystand-data}"
+SQL_PORT="${MEMORYSTAND_SQL_PORT:-26257}"
+UI_PORT="${MEMORYSTAND_UI_PORT:-8080}"
+API_PORT="${MEMORYSTAND_LOCAL_PORT:-8077}"
 IMAGE="cockroachdb/cockroach:latest"
 DSN="postgresql://root@localhost:${SQL_PORT}/defaultdb?sslmode=disable"
 
@@ -100,9 +100,9 @@ fi
 [[ -f requirements-dev.txt ]] && .venv/bin/pip install --quiet -r requirements-dev.txt
 echo "    dependencies installed"
 
-export STANDING_DSN="$DSN"
+export MEMORYSTAND_DSN="$DSN"
 export COCKROACH_DSN="$DSN"
-export STANDING_EMBED_STUB=1
+export MEMORYSTAND_EMBED_STUB=1
 
 say "3/5  Schema"
 docker exec -i "$CONTAINER" ./cockroach sql --insecure < db/schema.sql 2>&1 \
@@ -121,8 +121,8 @@ cat <<EOF
 ------------------------------------------------------------------
 Ready. Everything below runs with no AWS account.
 
-  export STANDING_DSN='$DSN'
-  export STANDING_EMBED_STUB=1
+  export MEMORYSTAND_DSN='$DSN'
+  export MEMORYSTAND_EMBED_STUB=1
 
 Watch the whole story end to end (this is the video's shot list):
   ./scripts/demo.sh
@@ -131,10 +131,10 @@ Run the tests:
   .venv/bin/python -m pytest -q
 
 Ask the memory something:
-  .venv/bin/python cli/standing.py recall --query "payments failover"
+  .venv/bin/python cli/memorystand.py recall --query "payments failover"
 
 Cross-examine a past decision:
-  .venv/bin/python cli/standing.py cross-examine --decision-id <id>
+  .venv/bin/python cli/memorystand.py cross-examine --decision-id <id>
 
 Re-measure the benchmark:
   .venv/bin/python scripts/loadtest.py --rows 10000 --tenants 50
@@ -148,5 +148,5 @@ if [[ "$SERVE" == "1" ]]; then
   echo "    API:       http://127.0.0.1:${API_PORT}"
   echo "    Dashboard: open frontend/index.html?api=http://127.0.0.1:${API_PORT}"
   echo "    Ctrl-C to stop."
-  STANDING_LOCAL_PORT="$API_PORT" exec .venv/bin/python backend/handler.py
+  MEMORYSTAND_LOCAL_PORT="$API_PORT" exec .venv/bin/python backend/handler.py
 fi

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
 #
-# Standing -- provision the CockroachDB Cloud memory layer with the agent-ready ccloud CLI.
+# MemoryStand -- provision the CockroachDB Cloud memory layer with the agent-ready ccloud CLI.
 #
 # Every flag here was confirmed against `ccloud 0.8.23 --help` on 2026-08-03
 # (see SPIKE-RESULTS.md, spike 6). Nothing is invented.
@@ -62,14 +62,14 @@ ccloud cluster connection-string "${CLUSTER_NAME}" --sql-user "${SQL_USER}" --da
 cat <<'EOF'
 
 Next:
-  1. aws ssm put-parameter --name /standing/dsn --type SecureString --value '<dsn-from-above>'
+  1. aws ssm put-parameter --name /memorystand/dsn --type SecureString --value '<dsn-from-above>'
   2. export COCKROACH_DSN='<dsn>' && python scripts/spike_db.py
   3. cockroach sql --url "$COCKROACH_DSN" -f db/schema.sql
 
 Least privilege (do this before the app goes public), via `ccloud cluster sql`:
   GRANT SELECT, INSERT, UPDATE ON agent_memories, agent_decisions,
         belief_snapshots, tool_audit TO standing_app;
-  -- deliberately no DELETE: Standing supersedes, it never deletes.
+  -- deliberately no DELETE: MemoryStand supersedes, it never deletes.
 
 Org-level audit trail:
   ccloud audit list -o json

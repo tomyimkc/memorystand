@@ -23,7 +23,7 @@ Design notes for the demo:
     NOT per-subcommand flags. They default to stable, deterministic demo
     IDs (see DEFAULT_TENANT_ID / DEFAULT_AGENT_ID) so the six commands
     below work with zero setup; --tenant-id / --agent-id or the
-    STANDING_TENANT_ID / STANDING_AGENT_ID env vars override them for a
+    MEMORYSTAND_TENANT_ID / MEMORYSTAND_AGENT_ID env vars override them for a
     real multi-tenant run.
   - House style bans three words in USER-FACING TEXT (they are already
     load-bearing terms in competing papers): "quarantine", "supersede",
@@ -47,7 +47,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-# `python cli/standing.py` puts cli/ on sys.path[0], not the repo root, so `import
+# `python cli/memorystand.py` puts cli/ on sys.path[0], not the repo root, so `import
 # backend` fails with "No module named 'backend'". Same footgun as db/seed/seed.py.
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
@@ -58,12 +58,15 @@ if str(REPO_ROOT) not in sys.path:
 # who "the agent" is across separate process invocations with zero flags --
 # the point of a CLI a judge can type without first minting UUIDs on camera.
 # ---------------------------------------------------------------------------
-DEFAULT_TENANT_ID = uuid.uuid5(uuid.NAMESPACE_URL, "standing:demo-tenant")
-DEFAULT_AGENT_ID = uuid.uuid5(uuid.NAMESPACE_URL, "standing:demo-agent")
+# Must match db/seed/seed.py's DEFAULT_TENANT_ID. If these drift, the first command
+# a new reader types after seeding ("memorystand recall ...") returns nothing at all,
+# which reads as "the product is broken" rather than "you are looking at an empty tenant".
+DEFAULT_TENANT_ID = uuid.UUID("9c8f6e5a-9d1a-4a1c-8f2e-3b6d1c7a4e10")
+DEFAULT_AGENT_ID = uuid.UUID("1a2b3c4d-5e6f-4708-9a0b-1c2d3e4f5061")
 
 DSN_ENV = "COCKROACH_DSN"
-TENANT_ENV = "STANDING_TENANT_ID"
-AGENT_ENV = "STANDING_AGENT_ID"
+TENANT_ENV = "MEMORYSTAND_TENANT_ID"
+AGENT_ENV = "MEMORYSTAND_AGENT_ID"
 
 VERDICT_LABELS = {"accepted": "accepted", "quarantined": "held for review"}
 OUTCOME_LABELS = {
@@ -175,8 +178,8 @@ def _handle_backend_unavailable(err: BackendUnavailable, args: argparse.Namespac
     print(f"       ({err.exc})")
     print()
     print("Run this from the repository root, or install the package:")
-    print("    pip install -r requirements.txt && python cli/standing.py ...")
-    print("and make sure COCKROACH_DSN (or STANDING_DSN) points at your cluster.")
+    print("    pip install -r requirements.txt && python cli/memorystand.py ...")
+    print("and make sure COCKROACH_DSN (or MEMORYSTAND_DSN) points at your cluster.")
     return EXIT_BACKEND_MISSING
 
 
@@ -535,7 +538,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(
         prog="standing",
-        description="Standing -- a memory layer for on-call agents that only trusts what actually worked.",
+        description="MemoryStand -- a memory layer for on-call agents that only trusts what actually worked.",
         parents=[common],
     )
     sub = parser.add_subparsers(dest="command", required=True)

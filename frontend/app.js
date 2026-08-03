@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// Standing dashboard — no framework, no build step, no external CDN or font.
+// MemoryStand dashboard — no framework, no build step, no external CDN or font.
 // Deployable to AWS Amplify Hosting as a static site exactly as it sits in this
 // directory. Talks to the backend over four JSON endpoints; see the API CONTRACT
 // block below for exactly what this file sends and expects back.
@@ -15,7 +15,7 @@
 // This is a live contract, taken from backend/handler.py's ROUTES table and its
 // docstring (not guessed) as of the last time this file was updated:
 //
-//   POST {API_BASE}/decide     — requires header x-standing-secret
+//   POST {API_BASE}/decide     — requires header x-memorystand-secret
 //     body: { tenant_id, agent_id, action, rationale, query, k, task_id,
 //             produced_memory_ids: string[], requires_approval }
 //     -> backend.memory.recall(tenant_id, agent_id, query, k) for "consulted",
@@ -30,7 +30,7 @@
 //                 attribute_value, trust_tier, confidence, source, distance,
 //                 verdict } ] }
 //
-//   POST {API_BASE}/ingest     — requires header x-standing-secret
+//   POST {API_BASE}/ingest     — requires header x-memorystand-secret
 //     body: { tenant_id, agent_id, content, entity, attribute_key,
 //             attribute_value, memory_type, source, task_id }
 //     -> backend.memory.remember(...)
@@ -63,7 +63,7 @@
 // present, else the raw body.
 //
 // Auth: /ingest and /decide are gated behind a shared secret compared with
-// hmac.compare_digest server-side (STANDING_SHARED_SECRET). This dashboard
+// hmac.compare_digest server-side (MEMORYSTAND_SHARED_SECRET). This dashboard
 // never hardcodes it -- the operator pastes it into the top bar, and it is
 // sent only on those two routes, only in memory, never persisted to storage.
 //
@@ -299,7 +299,7 @@
   }
   function secretHeaders() {
     var s = sharedSecret();
-    return s ? { "x-standing-secret": s } : {};
+    return s ? { "x-memorystand-secret": s } : {};
   }
 
   // ============================================================ Panel 1
@@ -500,7 +500,7 @@
   }
 
   // ============================================================ Panel 3
-  // Standing (outcome gate) -> POST /confirm_outcome
+  // MemoryStand (outcome gate) -> POST /confirm_outcome
 
   var confirmForm = $("form-confirm");
   var confirmResult = $("confirmResult");

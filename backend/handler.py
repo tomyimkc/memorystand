@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""AWS Lambda entry point for Standing, behind a Function URL.
+"""AWS Lambda entry point for MemoryStand, behind a Function URL.
 
 Routes (API Gateway v2 / Function URL payload shape):
 
@@ -59,7 +59,7 @@ from typing import Any, Callable
 
 # `python backend/handler.py` puts backend/ on sys.path[0], not the repo root, so
 # `from backend import ...` fails with "No module named 'backend'" unless the repo root
-# is put on sys.path first. Same footgun, same fix, as cli/standing.py and db/seed/seed.py.
+# is put on sys.path first. Same footgun, same fix, as cli/memorystand.py and db/seed/seed.py.
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -74,18 +74,18 @@ from backend import audit, db, decisions, embeddings, memory, replay, trust  # n
 # ---------------------------------------------------------------------------
 AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 
-KILL_SWITCH_ENV = "STANDING_KILL_SWITCH"
-KILL_SWITCH_SSM_PARAM = os.environ.get("STANDING_KILL_SWITCH_SSM_PARAM", "/standing/kill_switch")
+KILL_SWITCH_ENV = "MEMORYSTAND_KILL_SWITCH"
+KILL_SWITCH_SSM_PARAM = os.environ.get("MEMORYSTAND_KILL_SWITCH_SSM_PARAM", "/memorystand/kill_switch")
 _KILL_SWITCH_TRUE = {"1", "true", "on", "yes", "engaged"}
 
-SHARED_SECRET_ENV = "STANDING_SHARED_SECRET"
-SHARED_SECRET_SSM_PARAM = os.environ.get("STANDING_SHARED_SECRET_SSM_PARAM", "/standing/shared_secret")
-SHARED_SECRET_HEADER = "x-standing-secret"
+SHARED_SECRET_ENV = "MEMORYSTAND_SHARED_SECRET"
+SHARED_SECRET_SSM_PARAM = os.environ.get("MEMORYSTAND_SHARED_SECRET_SSM_PARAM", "/memorystand/shared_secret")
+SHARED_SECRET_HEADER = "x-memorystand-secret"
 
 WRITE_PATHS = {"/ingest", "/decide", "/confirm_outcome"}
 SECRET_GATED_PATHS = {"/ingest", "/decide"}
 
-CHAT_MODEL_ID = os.environ.get("STANDING_CHAT_MODEL", "anthropic.claude-3-5-haiku-20241022-v1:0")
+CHAT_MODEL_ID = os.environ.get("MEMORYSTAND_CHAT_MODEL", "anthropic.claude-3-5-haiku-20241022-v1:0")
 
 SSM_CACHE_TTL_S = 60.0
 _ssm_client: Any = None
@@ -594,8 +594,8 @@ if __name__ == "__main__":
     class _DevServer(http.server.HTTPServer):
         allow_reuse_address = True
 
-    host = os.environ.get("STANDING_LOCAL_HOST", "127.0.0.1")
-    port = int(os.environ.get("STANDING_LOCAL_PORT", "8000"))
+    host = os.environ.get("MEMORYSTAND_LOCAL_HOST", "127.0.0.1")
+    port = int(os.environ.get("MEMORYSTAND_LOCAL_PORT", "8000"))
     with _DevServer((host, port), _DevHandler) as httpd:
         print(
             f"[handler] local dev server on http://{host}:{port}  "

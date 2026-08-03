@@ -27,8 +27,8 @@ flowchart TB
 
     Bedrock["Amazon Bedrock<br/>Converse (Claude 3.5 Haiku) for reasoning<br/>Titan Text Embeddings V2 for embeddings"]
     CRDB[("CockroachDB<br/>agent_memories - agent_decisions<br/>belief_snapshots - tool_audit")]
-    SSM["AWS SSM Parameter Store<br/>/standing/dsn (SecureString)<br/>/standing/shared_secret (SecureString)<br/>/standing/kill_switch (String)"]
-    CW["Amazon CloudWatch Logs<br/>/aws/lambda/standing, 14-day retention<br/>one structured JSON line per request"]
+    SSM["AWS SSM Parameter Store<br/>/memorystand/dsn (SecureString)<br/>/memorystand/shared_secret (SecureString)<br/>/memorystand/kill_switch (String)"]
+    CW["Amazon CloudWatch Logs<br/>/aws/lambda/memorystand, 14-day retention<br/>one structured JSON line per request"]
     EB["Amazon EventBridge Scheduler<br/>keep-warm: GET /health every 5 min<br/>(infra/keepwarm.sh, ends 2026-09-16)"]
     MCP["CockroachDB Cloud<br/>Managed MCP Server<br/>mcp:read service account, READ-ONLY"]
 
@@ -66,7 +66,7 @@ structurally at the top of every `grant_standing()` call. That is the product's 
 enforced in code a judge can read, not asserted in a docstring.
 
 Two things worth calling out that a first read of the diagram will not show. First, this
-counts **seven** HTTP routes, not the six `standing` CLI subcommands (`remember`, `recall`,
+counts **seven** HTTP routes, not the six `memorystand` CLI subcommands (`remember`, `recall`,
 `decide`, `confirm`, `cross-examine`, `audit`) -- `/health` has no CLI equivalent, and `audit`
 has no HTTP route at all, on purpose (see `backend/audit.py`'s own docstring: the audit trail is
 meant to be read with the same read-only credential used everywhere else, including through the
@@ -260,7 +260,7 @@ project exists to prevent.
 
 - **Admission control is a filter, not a truth oracle.** A false claim that contradicts nothing
   already admitted is still admitted. This bounds persisted error; it does not eliminate it.
-- **Standing is granted to memories a decision *produced*, not merely *consulted*.** Re-examining
+- **MemoryStand is granted to memories a decision *produced*, not merely *consulted*.** Re-examining
   consulted memories after a failed decision is a roadmap item, not a shipped one.
 - **A confirmed outcome is evidence, not proof.** An incident can resolve for reasons unrelated to
   the action taken; standing means "survived contact with reality once", not "true".

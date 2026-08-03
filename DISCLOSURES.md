@@ -21,7 +21,7 @@ The author has previously worked on a personal, unrelated Apache-2.0 project tha
 
 1. **A memory store whose writes must clear a check before they become readable.** That earlier
    project was SQLite-based and used a two-table accepted/quarantine split with an application-level
-   verifier. Standing does not reuse that structure. It uses a *single* table whose own MVCC history is
+   verifier. MemoryStand does not reuse that structure. It uses a *single* table whose own MVCC history is
    the audit trail, adjudication inside a serializable transaction, and CockroachDB's
    `AS OF SYSTEM TIME` for replay — mechanisms that did not exist in the earlier work and are
    specific to CockroachDB.

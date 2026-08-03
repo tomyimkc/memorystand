@@ -1,4 +1,4 @@
-# Standing runtime dependencies.
+# MemoryStand runtime dependencies.
 #
 # psycopg2-binary is deliberately a floor, not an exact pin. An exact pin (==2.9.10) has
 # no wheel for newer interpreters, so pip silently falls back to building from source and

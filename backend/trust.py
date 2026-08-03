@@ -1,14 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
 """The outcome gate: granting standing to memories that survived contact with reality.
 
-This is the one thing Standing does that shipped agent-memory products do not.
+This is the one thing MemoryStand does that shipped agent-memory products do not.
 
 Every mainstream system decides how much to trust a stored memory using one of three
 signals: recency (the newest write wins), source authority (a runbook outranks Slack), or
 model self-consistency (ask the model whether it still believes itself). All three are
 the system grading its own homework.
 
-Standing uses a fourth: did acting on this memory actually work? A memory produced by a
+MemoryStand uses a fourth: did acting on this memory actually work? A memory produced by a
 decision is promoted to ``verified`` only when an external, non-model signal confirms the
 decision succeeded -- PagerDuty resolving the incident, a monitored metric recovering, or
 a named human signing off. If the action was rolled back or turned out to be a false

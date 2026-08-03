@@ -1,4 +1,4 @@
-# Standing — which memories have standing
+# MemoryStand — memory that has to stand up
 
 > **A memory layer for on-call AI agents that refuses to call a belief "verified" until something
 > outside the model corroborates it** — a resolved incident, a recovered metric, a human's
@@ -15,15 +15,19 @@
 
 ## The idea
 
-In law, **standing** is the recognised right to have your claim heard and credited. Not every
-claim gets it. You have to earn it.
+A witness statement is worth something only if it **stands up** — if it survives being checked
+against what else is known, and then against what actually happened. Most of what an agent
+"remembers" has never been through either test.
+
+MemoryStand makes a memory stand up twice before an agent is allowed to rely on it: once when it
+is written, against everything already believed, and once afterwards, against reality.
 
 Every agent-memory system on the market decides what to trust using one of three signals:
 **recency** (newest fact wins), **source authority** (trust the runbook over Slack), or
 **self-consistency** (ask the model whether it believes itself). All three are the agent grading
 its own homework.
 
-Standing uses a fourth signal that none of them use: **did it actually work?**
+MemoryStand uses a fourth signal that none of them use: **did it actually work?**
 
 A memory is promoted to `verified` only when a real external event confirms the decision it
 produced was right — PagerDuty resolving the incident, a latency metric recovering, an on-call
@@ -47,7 +51,7 @@ you, and diff that against now. (CockroachDB rejects `AS OF SYSTEM TIME` inside 
 the diff is two pinned reads rather than one self-join — see [SPIKE-RESULTS.md](SPIKE-RESULTS.md).)
 
 ```
-$ standing cross-examine --decision-id <id>
+$ memorystand cross-examine --decision-id <id>
 ```
 
 ## Prior art, stated honestly
@@ -90,7 +94,7 @@ Everything marked ✅ was run against a real CockroachDB v26.2.5 cluster, not ju
 | Benchmark harness (`scripts/loadtest.py`) | ✅ 10k rows, numbers below |
 | Lambda handler, 7 routes, kill switch, degraded mode | ✅ exercised over HTTP |
 | Bedrock agent loop + deterministic fallback | ✅ fallback path verified |
-| `standing` CLI (6 subcommands) | ✅ |
+| `memorystand` CLI (6 subcommands) | ✅ |
 | Static dashboard (`frontend/`) | ✅ 4 panels, no build step |
 | Tamper-evident checkpoints (`backend/snapshots.py`) | ✅ |
 | Authored CockroachDB Agent Skill | ✅ upstream format |
@@ -147,7 +151,7 @@ One command. No AWS account, no CockroachDB Cloud account, no Postgres install �
 and Python.
 
 ```bash
-git clone <this-repo> && cd standing
+git clone <this-repo> && cd memorystand
 ./scripts/run-local.sh            # database + schema + seed data, ~1 minute
 ./scripts/demo.sh                 # watch the whole story end to end
 ```
@@ -159,7 +163,7 @@ Then:
 
 ```bash
 .venv/bin/python -m pytest -q                                   # 19 tests
-.venv/bin/python cli/standing.py recall --query "payments failover"
+.venv/bin/python cli/memorystand.py recall --query "payments failover"
 .venv/bin/python scripts/loadtest.py --rows 10000 --tenants 50  # reproduce the numbers below
 ```
 
@@ -202,10 +206,10 @@ project exists to prevent.
 - **Admission control is a filter, not a truth oracle.** A false statement that contradicts
   nothing already stored can still be admitted. This bounds persisted error; it does not
   eliminate it.
-- **Standing is granted to memories a decision *produced*,** not memories it merely *consulted*.
+- **MemoryStand is granted to memories a decision *produced*,** not memories it merely *consulted*.
   Re-examining consulted memories after a failed decision is a roadmap item, not a shipped one.
 - **A confirmed outcome is evidence, not proof.** An incident can resolve for reasons unrelated
-  to the action taken. Standing means "survived contact with reality once", not "true".
+  to the action taken. MemoryStand means "survived contact with reality once", not "true".
 - **Time travel is bounded by the cluster's garbage-collection window.** The measured bound is
   recorded in [SPIKE-RESULTS.md](SPIKE-RESULTS.md).
 - **Multi-region survival is an architectural property here, not a demonstrated one** — unless

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
 #
-# Standing -- end-to-end demo. This IS the rehearsal harness and the spine of the
+# MemoryStand -- end-to-end demo. This IS the rehearsal harness and the spine of the
 # under-3-minute submission video: every section below is a beat in that video, in
-# order, using the real `standing` CLI wherever the beat does not need a full UUID
+# order, using the real `memorystand` CLI wherever the beat does not need a full UUID
 # fed into the next command (a few steps use `--json` for that reason and print a
 # formatted summary instead of the CLI's own colour table -- noted inline).
 #
@@ -11,14 +11,14 @@
 #   scripts/demo.sh            # run straight through, no stops (what CI runs)
 #   scripts/demo.sh --pause    # stop after every section for narration while filming
 #
-# Idempotent: every run resets ONE deterministic demo tenant (the `standing` CLI's
+# Idempotent: every run resets ONE deterministic demo tenant (the `memorystand` CLI's
 # own built-in demo identity, so the commands below never need --tenant-id) to empty
 # and replays the identical scripted arc against it. Re-run as many times as you like.
 #
 # What this script deliberately does NOT do: seed the demo tenant with the large
 # 101-row incident fixture (db/seed/incidents.jsonl). That fixture is real and used
 # elsewhere (db/seed/seed.py, the ~104-memory tenant already sitting in this cluster),
-# but STANDING_EMBED_STUB's embeddings are a deterministic hash of the input text with
+# but MEMORYSTAND_EMBED_STUB's embeddings are a deterministic hash of the input text with
 # NO semantic meaning (see backend/embeddings.py's own docstring) -- mixing 100+
 # unrelated stub vectors into the recall step below would make which memory comes
 # back a coin flip dressed up as "semantic search". A small, hand-authored backdrop
@@ -48,7 +48,7 @@ done
 
 # ---------------------------------------------------------------------------
 # Presentation helpers -- degrade to plain text off a TTY / piped into a log,
-# same rule cli/standing.py uses for its own output.
+# same rule cli/memorystand.py uses for its own output.
 # ---------------------------------------------------------------------------
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
   BOLD=$'\033[1m'; CYAN=$'\033[1;36m'; DIM=$'\033[2m'; RESET=$'\033[0m'
@@ -84,28 +84,28 @@ fi
 command -v docker >/dev/null 2>&1 || { echo "error: docker not found on PATH" >&2; exit 1; }
 command -v jq >/dev/null 2>&1 || { echo "error: jq not found on PATH (brew install jq)" >&2; exit 1; }
 
-if ! docker ps --filter "name=^crdb-standing$" --filter "status=running" --format '{{.Names}}' \
-     | grep -qx crdb-standing; then
-  echo "error: the crdb-standing container is not running (docker ps shows no match)." >&2
+if ! docker ps --filter "name=^crdb-memorystand$" --filter "status=running" --format '{{.Names}}' \
+     | grep -qx crdb-memorystand; then
+  echo "error: the crdb-memorystand container is not running (docker ps shows no match)." >&2
   echo "       This script talks to an already-running cluster; it does not start one." >&2
   exit 1
 fi
 
-: "${STANDING_DSN:=postgresql://root@localhost:26257/defaultdb?sslmode=disable}"
-export STANDING_DSN
-export COCKROACH_DSN="$STANDING_DSN"
-export STANDING_EMBED_STUB="${STANDING_EMBED_STUB:-1}"
+: "${MEMORYSTAND_DSN:=postgresql://root@localhost:26257/defaultdb?sslmode=disable}"
+export MEMORYSTAND_DSN
+export COCKROACH_DSN="$MEMORYSTAND_DSN"
+export MEMORYSTAND_EMBED_STUB="${MEMORYSTAND_EMBED_STUB:-1}"
 export PYTHONPATH="$REPO_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 
-CLI=("$PYTHON" "$REPO_ROOT/cli/standing.py")
+CLI=("$PYTHON" "$REPO_ROOT/cli/memorystand.py")
 
 DB_VERSION="$("$PYTHON" -c 'from backend import db; print(db.server_version())')"
 
-# The CLI's own deterministic demo identity (uuid5, defined in cli/standing.py) --
+# The CLI's own deterministic demo identity (uuid5, defined in cli/memorystand.py) --
 # using it means every command below can omit --tenant-id/--agent-id entirely,
 # which is what actually gets typed on camera.
 read -r DEMO_TENANT DEMO_AGENT < <(
-  "$PYTHON" -c 'from cli.standing import DEFAULT_TENANT_ID, DEFAULT_AGENT_ID; print(DEFAULT_TENANT_ID, DEFAULT_AGENT_ID)'
+  "$PYTHON" -c 'from cli.memorystand import DEFAULT_TENANT_ID, DEFAULT_AGENT_ID; print(DEFAULT_TENANT_ID, DEFAULT_AGENT_ID)'
 )
 # The fixture tenant db/seed/seed.py already loaded ~104 memories into (see
 # CLAUDE.md-style environment notes) -- imported, not hardcoded, so this script
@@ -113,9 +113,9 @@ read -r DEMO_TENANT DEMO_AGENT < <(
 FIXTURE_TENANT="$("$PYTHON" -c 'from db.seed.seed import DEFAULT_TENANT_ID; print(DEFAULT_TENANT_ID)')"
 TASK_ID="$("$PYTHON" -c "import uuid; print(uuid.uuid5(uuid.NAMESPACE_URL, 'standing:demo-inc-7734'))")"
 
-echo "DSN:              $STANDING_DSN"
+echo "DSN:              $MEMORYSTAND_DSN"
 echo "CockroachDB:      $DB_VERSION"
-echo "Embeddings:       deterministic local stub, no AWS account used (STANDING_EMBED_STUB=$STANDING_EMBED_STUB)"
+echo "Embeddings:       deterministic local stub, no AWS account used (MEMORYSTAND_EMBED_STUB=$MEMORYSTAND_EMBED_STUB)"
 echo "Demo tenant:      $DEMO_TENANT  (agent $DEMO_AGENT)"
 echo "Fixture tenant:   $FIXTURE_TENANT  (~104 pre-seeded memories, used only in step 7)"
 pause
@@ -127,7 +127,7 @@ pause
 banner "Reset: clear the demo tenant, then seed a small deterministic backdrop"
 
 for t in tool_audit agent_decisions belief_snapshots agent_memories; do
-  docker exec -i crdb-standing ./cockroach sql --insecure \
+  docker exec -i crdb-memorystand ./cockroach sql --insecure \
     -e "DELETE FROM ${t} WHERE tenant_id = '${DEMO_TENANT}';" >/dev/null
 done
 echo "cleared agent_memories, agent_decisions, belief_snapshots, tool_audit for $DEMO_TENANT"
@@ -187,7 +187,7 @@ say "it is corrected. The Slack claim from step 2 is still just held; nobody has
 
 echo
 say "What checkout-api.circuit_breaker_timeout_ms looks like now, oldest first:"
-docker exec -i crdb-standing ./cockroach sql --insecure --format=table \
+docker exec -i crdb-memorystand ./cockroach sql --insecure --format=table \
   -e "SELECT source, attribute_value AS value, verdict FROM agent_memories \
       WHERE tenant_id = '${DEMO_TENANT}' AND entity = 'checkout-api' \
         AND attribute_key = 'circuit_breaker_timeout_ms' \

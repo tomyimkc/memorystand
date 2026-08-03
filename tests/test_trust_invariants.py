@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The outcome gate (backend/trust.py): Standing's one novel claim.
+"""The outcome gate (backend/trust.py): MemoryStand's one novel claim.
 
 Promotion to 'verified' must happen with zero model calls, must require
 externally-attributable evidence, and must never be recorded twice for the

@@ -12,16 +12,16 @@
       ]
     },
     {
-      "Sid": "ReadStandingParametersOnly",
+      "Sid": "ReadMemoryStandParametersOnly",
       "Effect": "Allow",
       "Action": [
         "ssm:GetParameter",
         "ssm:GetParameters"
       ],
-      "Resource": "arn:aws:ssm:REGION:ACCOUNT_ID:parameter/standing/*"
+      "Resource": "arn:aws:ssm:REGION:ACCOUNT_ID:parameter/memorystand/*"
     },
     {
-      "Sid": "DecryptStandingSecureStringsOnly",
+      "Sid": "DecryptMemoryStandSecureStringsOnly",
       "Effect": "Allow",
       "Action": "kms:Decrypt",
       "Resource": "KMS_KEY_ARN_PLACEHOLDER",
@@ -39,7 +39,7 @@
         "logs:CreateLogStream",
         "logs:PutLogEvents"
       ],
-      "Resource": "arn:aws:logs:REGION:ACCOUNT_ID:log-group:/aws/lambda/standing:*"
+      "Resource": "arn:aws:logs:REGION:ACCOUNT_ID:log-group:/aws/lambda/memorystand:*"
     }
   ]
 }
