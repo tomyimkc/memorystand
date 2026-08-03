@@ -25,3 +25,6 @@ dist/
 
 # local dev
 .venv/
+
+# internal agent process logs — not part of the submission
+.claude/
