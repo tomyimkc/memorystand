@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "standing"
+name = "memorystand"
 version = "0.1.0"
 description = "A memory layer for on-call AI agents that only trusts what actually worked."
 readme = "README.md"
@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 [project.scripts]
-standing = "cli.standing:main"
+memorystand = "cli.memorystand:main"
 
 [tool.setuptools]
 packages = ["cli", "backend"]
