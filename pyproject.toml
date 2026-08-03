@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "standing"
+version = "0.1.0"
+description = "A memory layer for on-call AI agents that only trusts what actually worked."
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.13"
+dependencies = [
+    "psycopg2-binary==2.9.10",
+    "boto3==1.35.99",
+]
+
+[project.scripts]
+standing = "cli.standing:main"
+
+[tool.setuptools]
+# Only cli/ is packaged here -- backend/ is a separate deliverable (see
+# CLAUDE.md task assignment) and gets added to this list once it lands.
+packages = ["cli"]
