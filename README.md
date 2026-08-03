@@ -143,32 +143,33 @@ guard doing its job under real serializable conflict, not a mocked test.
 
 ## Quickstart
 
+One command. No AWS account, no CockroachDB Cloud account, no Postgres install — just Docker
+and Python.
+
 ```bash
-pip install -r requirements.txt
-
-# 1. Provision the memory layer (CockroachDB Basic, on AWS)
-./infra/provision.sh
-
-# 2. Verify the platform assumptions before building on them
-export COCKROACH_DSN='postgresql://...'
-python scripts/spike_db.py
-AWS_REGION=us-east-1 python scripts/spike_bedrock.py
-
-# 3. Apply the schema
-cockroach sql --url "$COCKROACH_DSN" -f db/schema.sql
-
-# 4. Run the test suite (skips cleanly, not a failure, if no cluster is reachable)
-pip install -r requirements-dev.txt
-STANDING_DSN="$COCKROACH_DSN" STANDING_EMBED_STUB=1 python -m pytest -v
+git clone <this-repo> && cd standing
+./scripts/run-local.sh            # database + schema + seed data, ~1 minute
+./scripts/demo.sh                 # watch the whole story end to end
 ```
 
-Each test gets its own fresh, random `tenant_id` and cleans up after itself, so the suite
-never touches the seeded demo tenant. One test is a known, real failure, not a test bug:
-`test_recall_as_of_composes_aost_with_a_vector_order_by` reproduces
-`psycopg2.errors.FeatureNotSupported: inconsistent AS OF SYSTEM TIME timestamp` from
-`backend/replay.py::recall_as_of`, which embeds `AS OF SYSTEM TIME` directly in a `FROM`
-clause. `belief_state_at` avoids this by using `SET TRANSACTION AS OF SYSTEM TIME` instead
-(exactly what the error's own hint recommends) and is unaffected.
+`run-local.sh --serve` also starts the API and prints the dashboard URL.
+`run-local.sh --fresh` wipes and rebuilds from nothing.
+
+Then:
+
+```bash
+.venv/bin/python -m pytest -q                                   # 19 tests
+.venv/bin/python cli/standing.py recall --query "payments failover"
+.venv/bin/python scripts/loadtest.py --rows 10000 --tenants 50  # reproduce the numbers below
+```
+
+Deploying to real infrastructure instead (needs accounts):
+
+```bash
+./infra/provision.sh              # CockroachDB Basic cluster, on AWS, via ccloud
+./infra/ssm_setup.sh              # secrets as SSM SecureStrings
+./infra/deploy.sh                 # Lambda + Function URL
+```
 
 ## CockroachDB tools used
 

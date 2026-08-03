@@ -1,6 +1,9 @@
-# AsOf runtime + tooling dependencies.
-# Lambda packages must be built against Python 3.13 (the newest Lambda runtime),
-# not the host interpreter -- see SPIKE-RESULTS.md environment notes.
-
-psycopg2-binary==2.9.10   # CockroachDB is PostgreSQL wire-compatible
-boto3==1.35.99            # Bedrock (Converse + Titan embeddings), SSM, CloudWatch
+# Standing runtime dependencies.
+#
+# psycopg2-binary is deliberately a floor, not an exact pin. An exact pin (==2.9.10) has
+# no wheel for newer interpreters, so pip silently falls back to building from source and
+# fails with "pg_config executable not found" — which reads like a missing Postgres
+# install rather than what it is. 2.9.12 ships wheels through CPython 3.14.
+# Install with --only-binary=:all: so a source build is never attempted silently.
+psycopg2-binary>=2.9.12   # CockroachDB speaks the PostgreSQL wire protocol
+boto3>=1.35.0             # Amazon Bedrock (Converse + Titan embeddings), SSM, CloudWatch
