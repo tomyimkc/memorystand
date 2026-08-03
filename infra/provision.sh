@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
 #
-# AsOf -- provision the CockroachDB Cloud memory layer with the agent-ready ccloud CLI.
+# Standing -- provision the CockroachDB Cloud memory layer with the agent-ready ccloud CLI.
 #
 # Every flag here was confirmed against `ccloud 0.8.23 --help` on 2026-08-03
 # (see SPIKE-RESULTS.md, spike 6). Nothing is invented.
@@ -10,14 +10,14 @@
 # in front of it.
 #
 #   ./infra/provision.sh                    # create
-#   CLUSTER_NAME=asof-demo ./infra/provision.sh
+#   CLUSTER_NAME=standing-demo ./infra/provision.sh
 #
 set -euo pipefail
 
-CLUSTER_NAME="${CLUSTER_NAME:-asof}"
+CLUSTER_NAME="${CLUSTER_NAME:-standing}"
 REGION="${REGION:-us-east-1}"
 CLOUD="${CLOUD:-AWS}"
-SQL_USER="${SQL_USER:-asof_app}"
+SQL_USER="${SQL_USER:-standing_app}"
 RU_LIMIT="${RU_LIMIT:-50000000}"     # stay inside the free monthly allowance
 STORAGE_LIMIT="${STORAGE_LIMIT:-10}" # GiB
 
@@ -62,14 +62,14 @@ ccloud cluster connection-string "${CLUSTER_NAME}" --sql-user "${SQL_USER}" --da
 cat <<'EOF'
 
 Next:
-  1. aws ssm put-parameter --name /asof/dsn --type SecureString --value '<dsn-from-above>'
+  1. aws ssm put-parameter --name /standing/dsn --type SecureString --value '<dsn-from-above>'
   2. export COCKROACH_DSN='<dsn>' && python scripts/spike_db.py
   3. cockroach sql --url "$COCKROACH_DSN" -f db/schema.sql
 
 Least privilege (do this before the app goes public), via `ccloud cluster sql`:
   GRANT SELECT, INSERT, UPDATE ON agent_memories, agent_decisions,
-        belief_snapshots, tool_audit TO asof_app;
-  -- deliberately no DELETE: AsOf supersedes, it never deletes.
+        belief_snapshots, tool_audit TO standing_app;
+  -- deliberately no DELETE: Standing supersedes, it never deletes.
 
 Org-level audit trail:
   ccloud audit list -o json

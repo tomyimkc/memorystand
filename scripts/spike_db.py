@@ -4,7 +4,7 @@
 
 Each spike answers one go/no-go question that gates a downstream week of work.
 Nothing here is destructive: every object created is dropped, and the script
-never touches the real AsOf tables.
+never touches the real Standing tables.
 
     export COCKROACH_DSN='postgresql://user:pass@host:26257/defaultdb?sslmode=verify-full'
     python scripts/spike_db.py
@@ -300,7 +300,7 @@ def main() -> int:
         return psycopg2.connect(dsn)
 
     print("=" * 70)
-    print("AsOf -- Day-1 CockroachDB spikes")
+    print("Standing -- Day-1 CockroachDB spikes")
     print("=" * 70 + "\n")
 
     conn = factory()

@@ -171,7 +171,7 @@ def spike_7_quota() -> None:
 
 def main() -> int:
     print("=" * 70)
-    print(f"AsOf -- Day-1 Bedrock spikes (region {REGION})")
+    print(f"Standing -- Day-1 Bedrock spikes (region {REGION})")
     print("=" * 70 + "\n")
 
     if not spike_identity():

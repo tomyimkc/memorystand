@@ -21,7 +21,7 @@ The author has previously worked on a personal, unrelated Apache-2.0 project tha
 
 1. **A memory store whose writes must clear a check before they become readable.** That earlier
    project was SQLite-based and used a two-table accepted/quarantine split with an application-level
-   verifier. AsOf does not reuse that structure. It uses a *single* table whose own MVCC history is
+   verifier. Standing does not reuse that structure. It uses a *single* table whose own MVCC history is
    the audit trail, adjudication inside a serializable transaction, and CockroachDB's
    `AS OF SYSTEM TIME` for replay — mechanisms that did not exist in the earlier work and are
    specific to CockroachDB.
@@ -34,10 +34,30 @@ The author has previously worked on a personal, unrelated Apache-2.0 project tha
 No file, function body, schema string, or configuration from that project was reused verbatim.
 The earlier project is not a CockroachDB project and not an AWS project.
 
-**What is genuinely new in AsOf**, and what the originality of this submission rests on:
-using `AS OF SYSTEM TIME` as a *user-facing product feature* — so an agent's memory can be
-cross-examined about what it believed at the instant it acted — combined with a trust tier that
-is promoted only by a confirmed real-world outcome rather than by a model's opinion of itself.
+## What is and is not novel here
+
+Stated narrowly on purpose. A survey of the 2026 agent-memory landscape (Mem0, Zep/Graphiti,
+Letta/MemGPT, Cognee, LangMem, OpenAI's and Anthropic's memory features) and the related
+literature found that two of this project's three mechanics already exist elsewhere:
+
+- **Bitemporal / time-travel replay of an agent's belief state is prior art.** It is Zep/Graphiti's
+  shipped headline feature, is the subject of multiple 2026 papers (TOKI; Memento; graph-native
+  bitemporal memory stores), and descends from SQL:2011's `FOR SYSTEM_TIME AS OF`. Using
+  CockroachDB's native `AS OF SYSTEM TIME` instead of an application-level version table is an
+  engineering choice, **not** a novelty claim.
+- **Write-time contradiction checking is prior art.** Mem0's ADD/UPDATE/DELETE/NONE pipeline,
+  Graphiti's ingest-time conflict detection, and MemTX's multi-step commit gate all do a version
+  of it, in places with the same vocabulary this schema uses.
+
+**The one claim this submission makes to originality** is narrower: promoting a stored memory's
+trust tier only on a *verified external real-world outcome* — a resolved incident, a recovered
+metric, a human sign-off — with no model call anywhere in the promotion path. Every shipped
+product surveyed uses recency, source authority, or model self-consistency instead. Academic work
+(GLOVE; "Supersede") identifies this specific gap as open. The application of that idea to on-call
+incident response, on CockroachDB, is what is new.
+
+This scoping is deliberate: an overstated novelty claim that a judge could disprove with one
+search would undermine the entire submission, which is itself about not trusting unverified claims.
 
 ## Third-party dependencies
 
