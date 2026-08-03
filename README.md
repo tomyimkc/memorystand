@@ -43,10 +43,11 @@ corrected fact supersedes the old one rather than deleting it.
 
 **3. Cross-examination.** `SELECT … AS OF SYSTEM TIME '<t>'` re-runs the agent's *identical*
 recall query pinned to a past instant, so you can ask what it believed at the moment it paged
-you, and diff that against now.
+you, and diff that against now. (CockroachDB rejects `AS OF SYSTEM TIME` inside a subquery, so
+the diff is two pinned reads rather than one self-join — see [SPIKE-RESULTS.md](SPIKE-RESULTS.md).)
 
 ```
-$ standing show <decision-id> --as-of page-time
+$ standing cross-examine --decision-id <id>
 ```
 
 ## Prior art, stated honestly
@@ -72,21 +73,65 @@ anyway and the omission would read worse than the admission:
 | Capability | Single-node Postgres + pgvector | CockroachDB |
 |---|---|---|
 | Replay belief state at time T | Hand-build `valid_from`/`valid_to` + triggers, or bolt on CDC | `AS OF SYSTEM TIME` on the same table |
-| Diff two instants | Two self-maintained snapshots + app-level diff | One `FULL OUTER JOIN` against the same table |
+| Consistent multi-table snapshot at time T | Not available without hand-built history on every table | `SET TRANSACTION AS OF SYSTEM TIME` pins a whole transaction |
 | Check-then-commit under concurrency | SERIALIZABLE exists but is opt-in and often left off | SERIALIZABLE is the *only* isolation level |
 | Per-tenant ANN that scales | One shared HNSW index; cost grows with everyone's data | C-SPANN prefix-partitioned on `tenant_id` |
 
 ## Status
 
+Everything marked ✅ was run against a real CockroachDB v26.2.5 cluster, not just written.
+
 | Piece | State |
 |---|---|
-| Repo, license, schema, spike harness | ✅ 2026-08-03 |
-| ccloud provisioning (`infra/provision.sh`) | ✅ written against a verified command surface |
-| Live cluster + Day-1 spikes | ⏳ blocked on account creation |
-| `grant_standing()` + external verifier webhook | ⬜ |
-| Admission control, cross-examination | ⬜ |
-| Lambda + Bedrock backend | ⬜ |
-| Dashboard, benchmarks, video | ⬜ |
+| Schema, admission control, outcome gate, cross-examination | ✅ working end to end |
+| Incident fixtures (101 records, 2 designed conflicts) | ✅ 99 admitted, 2 held |
+| Concurrency + TOCTOU proof (`scripts/race_demo.py`) | ✅ passes, real `40001` captured |
+| Benchmark harness (`scripts/loadtest.py`) | ✅ 10k rows, numbers below |
+| `standing` CLI (6 subcommands) | ✅ |
+| ccloud provisioning (`infra/provision.sh`) | ✅ flags verified against `ccloud 0.8.23` |
+| Bedrock (Claude + Titan) wiring | ⏳ blocked on an AWS account; stub covers local runs |
+| Lambda / Amplify deploy, MCP server, Agent Skill, video | ⬜ |
+
+## Measured results
+
+10,000 memories across 50 tenants, CockroachDB v26.2.5, single node in Docker on an M-series
+Mac. Single-run measurement on a laptop, not a controlled benchmark environment — reproduce
+with `python scripts/loadtest.py --rows 10000 --tenants 50`.
+
+| Recall latency | p50 | p95 | p99 |
+|---|---|---|---|
+| **Vector-indexed** (`agent_memories`) | **1.60 ms** | **1.86 ms** | **2.01 ms** |
+| Brute-force, same data, no vector index | 15.05 ms | 18.09 ms | 25.20 ms |
+
+**~9.4× faster at p50, ~12.5× at p99.** Write throughput during seeding: 4,093 rows/sec.
+
+The plan for the exact query `recall()` issues:
+
+```
+└── • lookup join
+    │ table: agent_memories@agent_memories_pkey
+    │
+    └── • vector search
+          table: agent_memories@agent_memories_tenant_idx
+          target count: 5
+          prefix spans: [/'ed2c4a30-…'/'accepted' - /'ed2c4a30-…'/'accepted']
+```
+
+That `prefix spans` line is the whole argument for criterion 1: ANN search is scoped to one
+tenant's *admitted* memories, so cost scales with that tenant's own data rather than the
+platform's. Drop the `verdict` filter and the same EXPLAIN shows three spans — one per
+verdict — which is the partition pruning made visible.
+
+Concurrency, from `scripts/race_demo.py`:
+
+```
+N=10 concurrent writers, 10/10 updates landed, 0 lost updates, 9 retries observed (SQLSTATE 40001)
+[Part 2] concurrent contradictory writes -> accepted=1 quarantined=1 -> PASS
+```
+
+Part 2 is the one a hostile reviewer should probe: two agents submitting contradictory
+memories for the same entity at the same instant. Exactly one wins. That is the TOCTOU
+guard doing its job under real serializable conflict, not a mocked test.
 
 ## Quickstart
 
@@ -108,7 +153,9 @@ cockroach sql --url "$COCKROACH_DSN" -f db/schema.sql
 ## CockroachDB tools used
 
 - **Distributed Vector Indexing** — `agent_memories.embedding` is a native `VECTOR(512)` column
-  with a prefix-partitioned `VECTOR INDEX (tenant_id, embedding vector_cosine_ops)`.
+  with a prefix-partitioned `VECTOR INDEX (tenant_id, verdict, embedding vector_cosine_ops)`.
+  `verdict` is in the prefix deliberately: it is what makes the optimizer use the index at
+  all, and it makes the ANN partition *be* "admitted memories of this tenant".
 - **Cloud Managed MCP Server** — a read-only (`mcp:read`) service account, used from Claude Code
   as the judge- and operator-facing inspection surface. Never in the write path, by design.
 - **ccloud CLI** — `infra/provision.sh` provisions the cluster, SQL user and connection string

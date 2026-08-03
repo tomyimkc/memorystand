@@ -15,10 +15,16 @@ a named human signing off. If the action was rolled back or turned out to be a f
 positive, the memories it produced are demoted to ``disputed``.
 
 INVARIANT, and it is load-bearing: **no model call may occur on this path.** This module
-imports no model client, and ``ASSERT_NO_MODEL_CALLS`` verifies at runtime that none of
-the model-carrying modules were even imported into the process by this code path. If a
-model could influence promotion, the claim above would be false and the product would
-collapse into the self-consistency bucket with everything else.
+imports no model client -- its entire import list is ``typing``, ``psycopg2.extras`` and
+``. db`` -- and ``assert_no_model_calls()`` is invoked at the top of every
+``grant_standing()`` call, so the invariant is checked on the live path rather than
+asserted in prose. If a model could influence promotion, the claim above would be false
+and the product would collapse into the self-consistency bucket with everything else.
+
+The check is structural and deliberately modest: it proves no model client is reachable
+through this module's own namespace. It cannot prove the absence of a call in every
+conceivable import graph. It does catch the realistic regression -- somebody "improving"
+promotion by asking a model to weigh the evidence.
 
 What standing does and does not mean. It means "acting on this produced a confirmed good
 outcome at least once". It does not mean "true". An incident can resolve for reasons
@@ -176,6 +182,7 @@ def grant_standing(decision_id: str, evidence: dict[str, Any]) -> dict:
     is required when ``source='metric'``. Returns which memories were promoted or
     demoted, and ``model_calls``, which is always 0.
     """
+    assert_no_model_calls()  # checked on the live path, not merely documented
     outcome, source, delta, ref = _validate(evidence)
     result = db.retry_serializable(_apply, decision_id, outcome, source, delta, ref)
     assert result["model_calls"] == 0, "the promotion path must never call a model"
@@ -185,15 +192,17 @@ def grant_standing(decision_id: str, evidence: dict[str, Any]) -> dict:
 def assert_no_model_calls() -> None:
     """Fail loudly if anything model-shaped became reachable from this module.
 
-    Cheap structural check, run by the test suite and by the CLI before the demo: this
-    module's own globals must contain no model client. It cannot prove the absence of a
-    call in every possible import graph, but it does catch the realistic regression --
-    somebody 'improving' promotion by asking a model to weigh the evidence.
+    Called at the top of every ``grant_standing()``. Cheap enough to run on the live
+    path (a set intersection over module globals), which is the point: a safeguard that
+    only runs in a test nobody runs is not a safeguard.
     """
-    forbidden = {"boto3", "embeddings", "bedrock", "converse", "invoke_model", "openai"}
+    forbidden = {"boto3", "embeddings", "bedrock", "converse", "invoke_model", "openai", "anthropic"}
     found = sorted(name for name in globals() if name.lower() in forbidden)
     if found:
-        raise AssertionError(f"model-carrying names reachable from trust.py: {found}")
+        raise AssertionError(
+            f"model-carrying names reachable from trust.py: {found}. "
+            "The outcome gate must stay model-free; that is the product's central claim."
+        )
 
 
 def model_calls() -> int:

@@ -44,7 +44,14 @@ import json
 import os
 import sys
 import uuid
+from pathlib import Path
 from typing import Any
+
+# `python cli/standing.py` puts cli/ on sys.path[0], not the repo root, so `import
+# backend` fails with "No module named 'backend'". Same footgun as db/seed/seed.py.
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 # ---------------------------------------------------------------------------
 # Demo identity. Deterministic (uuid5), so `remember` and `recall` agree on
@@ -57,12 +64,6 @@ DEFAULT_AGENT_ID = uuid.uuid5(uuid.NAMESPACE_URL, "standing:demo-agent")
 DSN_ENV = "COCKROACH_DSN"
 TENANT_ENV = "STANDING_TENANT_ID"
 AGENT_ENV = "STANDING_AGENT_ID"
-
-# gc.ttlseconds measured against the local cluster (see SPIKE-RESULTS.md /
-# top-of-repo verified facts). Used only to phrase a friendly error -- never
-# to decide behaviour, since the live cluster's actual setting is what
-# matters and this is purely a message hint.
-MEASURED_GC_WINDOW = "4 hours (gc.ttlseconds=14400)"
 
 VERDICT_LABELS = {"accepted": "accepted", "quarantined": "held for review"}
 OUTCOME_LABELS = {
@@ -173,39 +174,25 @@ def _handle_backend_unavailable(err: BackendUnavailable, args: argparse.Namespac
     print(c(f"error: backend.{err.module} is not importable in this checkout.", "red", "bold"))
     print(f"       ({err.exc})")
     print()
-    print("This command line is fully wired against the frozen backend API")
-    print("(backend.db / backend.memory / backend.decisions / backend.trust /")
-    print("backend.replay). Once that package lands in this checkout, every")
-    print("subcommand below runs against the live cluster with no CLI changes.")
+    print("Run this from the repository root, or install the package:")
+    print("    pip install -r requirements.txt && python cli/standing.py ...")
+    print("and make sure COCKROACH_DSN (or STANDING_DSN) points at your cluster.")
     return EXIT_BACKEND_MISSING
-
-
-def _friendly_gc_window_error(exc: Exception) -> str | None:
-    """Translate a likely GC-threshold / AOST failure into plain English.
-
-    Returns a friendly message if `exc` looks like an AS OF SYSTEM TIME /
-    garbage-collection-threshold failure, else None (caller re-raises).
-    """
-    msg = str(exc).lower()
-    hints = ("as of system time", "gc threshold", "batch timestamp", "garbage collect")
-    if any(h in msg for h in hints):
-        return (
-            "That instant is older than this cluster keeps history for.\n"
-            f"       Measured retention on this cluster: {MEASURED_GC_WINDOW}.\n"
-            "       Pick a more recent decision, or rely on a belief_snapshots\n"
-            "       checkpoint (a verified digest, not a content replay) for\n"
-            "       anything further back."
-        )
-    return None
 
 
 # ---------------------------------------------------------------------------
 # Shared setup
 # ---------------------------------------------------------------------------
-def _resolve_ids(args: argparse.Namespace) -> tuple[uuid.UUID, uuid.UUID]:
+def _resolve_ids(args: argparse.Namespace) -> tuple[str, str]:
+    """Return (tenant_id, agent_id) as plain strings -- every backend function is
+    typed ``tenant_id: str`` / ``agent_id: str``, and psycopg2 has no adapter for
+    Python's uuid.UUID registered, so a UUID object here fails at the SQL layer.
+    Validated by round-tripping through uuid.UUID() before stringifying, so a
+    malformed --tenant-id / --agent-id fails fast with a clear error.
+    """
     tenant = args.tenant_id or os.environ.get(TENANT_ENV) or str(DEFAULT_TENANT_ID)
     agent = args.agent_id or os.environ.get(AGENT_ENV) or str(DEFAULT_AGENT_ID)
-    return uuid.UUID(str(tenant)), uuid.UUID(str(agent))
+    return str(uuid.UUID(str(tenant))), str(uuid.UUID(str(agent)))
 
 
 def _apply_dsn(args: argparse.Namespace) -> None:
@@ -218,7 +205,7 @@ def _apply_dsn(args: argparse.Namespace) -> None:
         os.environ[DSN_ENV] = args.dsn
 
 
-def _identity_line(tenant_id: uuid.UUID, agent_id: uuid.UUID) -> str:
+def _identity_line(tenant_id: str, agent_id: str) -> str:
     return c(f"tenant {short(tenant_id)} - agent {short(agent_id)}", "dim")
 
 
@@ -368,7 +355,7 @@ def cmd_decide(args: argparse.Namespace) -> int:
     print(f"  consulted: {len(consulted_ids)} memory(ies) from recall({args.query!r})")
     for row in consulted:
         print(f"    - {short(row['memory_id'])}  [{row.get('trust_tier', '?')}]  {(row.get('content') or '')[:50]}")
-    if args.requires_approval:
+    if result.get("status") == "held_for_approval":
         print(c("  status: escalated - held for a human sign-off before it runs", "yellow"))
     else:
         print(c("  status: cleared to proceed", "green"))
@@ -422,76 +409,57 @@ def cmd_confirm(args: argparse.Namespace) -> int:
 
 # ---------------------------------------------------------------------------
 # cross-examine -- the headline command.
+#
+# backend.replay.cross_examine(tenant_id, decision_id) already does the whole
+# job: looks up the decision, pins a transaction to its decided_at instant
+# with BEGIN/SET TRANSACTION AS OF SYSTEM TIME, and diffs that snapshot
+# against the live one. There is nothing left for this CLI to reimplement --
+# it renders the result and translates replay.GCWindowExceeded into on-call
+# English instead of a raw SQLSTATE.
 # ---------------------------------------------------------------------------
-def _fetch_decision(decision_id: str) -> dict[str, Any] | None:
-    """Direct, read-only lookup. Not part of the frozen API: no backend
-    module exposes "fetch one decision row", and this needs decided_at /
-    tenant_id / agent_id before it can call backend.replay at all.
-    """
-    db = _import_backend("db")
-    conn = db.get_conn()
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT tenant_id, agent_id, decided_at, action, rationale "
-            "FROM agent_decisions WHERE decision_id = %s",
-            (decision_id,),
-        )
-        row = cur.fetchone()
-    if row is None:
-        return None
-    tenant_id, agent_id, decided_at, action, rationale = row
-    return {
-        "tenant_id": tenant_id,
-        "agent_id": agent_id,
-        "decided_at": decided_at,
-        "action": action,
-        "rationale": rationale,
-    }
-
-
 def cmd_cross_examine(args: argparse.Namespace) -> int:
-    try:
-        decision = _fetch_decision(args.decision_id)
-    except BackendUnavailable as err:
-        return _handle_backend_unavailable(err, args)
-    except Exception as exc:  # noqa: BLE001
-        print(c(f"error: could not look up decision {args.decision_id}: {exc}", "red"))
-        return EXIT_RUNTIME
-
-    if decision is None:
-        print(c(f"error: no decision with id {args.decision_id}", "red"))
-        return EXIT_RUNTIME
-
+    tenant_id, _agent_id = _resolve_ids(args)
     try:
         replay = _import_backend("replay")
     except BackendUnavailable as err:
         return _handle_backend_unavailable(err, args)
 
     try:
-        diff = replay.belief_diff(decision["tenant_id"], decision["agent_id"], decision["decided_at"])
-    except Exception as exc:  # noqa: BLE001
-        friendly = _friendly_gc_window_error(exc)
-        if friendly:
+        result = replay.cross_examine(tenant_id, args.decision_id)
+    except replay.GCWindowExceeded as exc:
+        if args.json:
+            print_json({"error": "gc_window_exceeded", "detail": str(exc)})
+        else:
             print(c("error: can't reach that far back.", "red", "bold"))
-            print(f"       {friendly}")
-            return EXIT_RUNTIME
+            print(f"       {exc}")
+        return EXIT_RUNTIME
+    except ValueError as exc:  # "no such decision: ..."
+        if args.json:
+            print_json({"error": "not_found", "detail": str(exc)})
+        else:
+            print(c(f"error: {exc}", "red"))
+        return EXIT_RUNTIME
+    except Exception as exc:  # noqa: BLE001
         print(c(f"error: cross-examine failed: {exc}", "red"))
         return EXIT_RUNTIME
 
     if args.json:
-        print_json({"decision": decision, "diff": diff})
+        print_json(result)
         return EXIT_OK
 
-    print(f"decision {short(args.decision_id)}  action={decision['action']!r}  at {decision['decided_at']}")
-    print(f"rationale: {decision['rationale']}")
+    decision = result["decision"]
+    print(f"decision {short(decision['decision_id'])}  action={decision['action']!r}  at {decision['decided_at']}")
+    print(f"rationale: {decision.get('rationale')}")
+    print(f"outcome so far: {decision.get('outcome') or 'not yet confirmed'}")
     print()
-    print(f"What the agent believed then, compared with what it believes now:")
-    if not diff:
+    print("What the agent believed then, compared with what it believes now:")
+    changes = result.get("changed_since") or []
+    if not changes:
         print(c("  nothing changed since that instant", "dim"))
         return EXIT_OK
 
     rows = []
-    for row in diff:
+    for row in changes:
         delta = row.get("delta", "?")
         style = {"added": "green", "removed": "red", "changed": "yellow"}.get(delta, "cyan")
         attr = f"{row.get('entity') or '-'}.{row.get('attribute_key') or '-'}"
@@ -511,39 +479,20 @@ def cmd_cross_examine(args: argparse.Namespace) -> int:
 # audit
 # ---------------------------------------------------------------------------
 def cmd_audit(args: argparse.Namespace) -> int:
+    tenant_id, _agent_id = _resolve_ids(args)
     try:
-        db = _import_backend("db")
+        audit = _import_backend("audit")
     except BackendUnavailable as err:
         return _handle_backend_unavailable(err, args)
 
     try:
-        conn = db.get_conn()
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT ts, actor, tool_name, tool_kind, risk, result_kind, request_id "
-                "FROM tool_audit WHERE decision_id = %s ORDER BY ts ASC",
-                (args.decision_id,),
-            )
-            rows = cur.fetchall()
+        rows = audit.trail(tenant_id, decision_id=args.decision_id)
     except Exception as exc:  # noqa: BLE001
         print(c(f"error: audit lookup failed: {exc}", "red"))
         return EXIT_RUNTIME
 
     if args.json:
-        print_json(
-            [
-                {
-                    "ts": ts,
-                    "actor": actor,
-                    "tool_name": tool_name,
-                    "tool_kind": tool_kind,
-                    "risk": risk,
-                    "result_kind": result_kind,
-                    "request_id": request_id,
-                }
-                for ts, actor, tool_name, tool_kind, risk, result_kind, request_id in rows
-            ]
-        )
+        print_json(rows)
         return EXIT_OK
 
     print(f"audit trail for decision {short(args.decision_id)}")
@@ -552,20 +501,21 @@ def cmd_audit(args: argparse.Namespace) -> int:
         return EXIT_OK
 
     table_rows = []
-    for ts, actor, tool_name, tool_kind, risk, result_kind, request_id in rows:
+    for row in rows:
+        risk = row.get("risk", "low")
+        result_kind = row.get("result_kind") or "-"
         risk_style = {"high": "red", "medium": "yellow"}.get(risk, "green")
         result_style = {"denied": "red", "held": "yellow"}.get(result_kind, "green")
         table_rows.append(
             [
-                str(ts),
-                actor,
-                f"{tool_name} ({tool_kind})",
+                str(row.get("ts")),
+                row.get("actor", "-"),
+                f"{row.get('tool_name', '-')} ({row.get('tool_kind', '-')})",
                 c(risk, risk_style),
-                c(result_kind or "-", result_style),
-                short(request_id),
+                c(result_kind, result_style),
             ]
         )
-    print_table(["time", "actor", "tool", "risk", "result", "request"], table_rows)
+    print_table(["time", "actor", "tool", "risk", "result"], table_rows)
     return EXIT_OK
 
 
@@ -574,13 +524,13 @@ def cmd_audit(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 def _build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--dsn", default=None, help=f"CockroachDB DSN (default: ${DSN_ENV})")
-    common.add_argument("--json", action="store_true", help="print machine-readable JSON instead of a table")
+    common.add_argument("--dsn", default=argparse.SUPPRESS, help=f"CockroachDB DSN (default: ${DSN_ENV})")
+    common.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="print machine-readable JSON instead of a table")
     common.add_argument(
-        "--tenant-id", default=None, help=f"tenant UUID (default: ${TENANT_ENV}, else a fixed demo tenant)"
+        "--tenant-id", default=argparse.SUPPRESS, help=f"tenant UUID (default: ${TENANT_ENV}, else a fixed demo tenant)"
     )
     common.add_argument(
-        "--agent-id", default=None, help=f"agent UUID (default: ${AGENT_ENV}, else a fixed demo agent)"
+        "--agent-id", default=argparse.SUPPRESS, help=f"agent UUID (default: ${AGENT_ENV}, else a fixed demo agent)"
     )
 
     parser = argparse.ArgumentParser(
@@ -655,6 +605,17 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+
+    # The shared global options carry argparse.SUPPRESS defaults so a subparser's unset
+    # copy cannot silently overwrite a value parsed before the subcommand. Previously
+    # `standing --tenant-id X recall ...` -- the order the tool's own --help documents --
+    # fell back to the demo tenant with no warning, which on a multi-tenant memory
+    # product means quietly showing the wrong tenant's memories. SUPPRESS means the
+    # attribute can be absent, so backfill the real defaults exactly once, here.
+    for _name, _default in (("dsn", None), ("json", False), ("tenant_id", None), ("agent_id", None)):
+        if not hasattr(args, _name):
+            setattr(args, _name, _default)
+
     _apply_dsn(args)
     try:
         return args.func(args)

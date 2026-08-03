@@ -31,6 +31,16 @@ backend decision inside backend/, where it belongs, per the frozen API.
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# `python db/seed/seed.py` puts db/seed/ on sys.path[0], not the repo root, so
+# `import backend` fails. scripts/loadtest.py and scripts/race_demo.py both do this;
+# this file did not, which made the usage printed in its own docstring unrunnable.
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 import argparse
 import json
 import os
@@ -79,17 +89,28 @@ def load_fixtures(path: Path, limit: int | None) -> list[dict]:
 
 
 def existing_row_count(tenant_id: str) -> int:
-    """How many agent_memories rows this tenant already has, via backend.db."""
-    from backend.db import get_conn
+    """How many agent_memories rows this tenant already has, via backend.db.
 
-    conn = get_conn()
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT count(*) FROM agent_memories WHERE tenant_id = %s",
-            (tenant_id,),
-        )
-        (count,) = cur.fetchone()
-    return int(count)
+    The try/finally is not optional. backend.db pools with maxconn=1 (correct for
+    Lambda, where a container serves one request at a time), so a connection borrowed
+    and not returned starves every later call in the process -- this function ran
+    first, leaked the only connection, and every one of the 101 remember() calls
+    afterwards failed with "connection pool exhausted".
+    """
+    from backend import db as _db
+
+    conn = _db.get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT count(*) FROM agent_memories WHERE tenant_id = %s",
+                (tenant_id,),
+            )
+            (count,) = cur.fetchone()
+        conn.commit()
+        return int(count)
+    finally:
+        _db.put_conn(conn)
 
 
 def seed(rows: list[dict], tenant_id: str, agent_id: str) -> dict:

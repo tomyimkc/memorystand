@@ -10,14 +10,19 @@ readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.13"
 dependencies = [
-    "psycopg2-binary==2.9.10",
-    "boto3==1.35.99",
+    # requirements.txt pins these exactly for the Lambda build (see its header
+    # comment: built against Python 3.13, not the host interpreter). This file
+    # is the local dev/demo install path instead, so it floors the same
+    # versions without an exact pin -- an exact pin with no wheel for a given
+    # host's Python/arch forces a from-source build that fails without
+    # pg_config installed, which is a packaging footgun, not a version choice
+    # worth failing the demo over.
+    "psycopg2-binary>=2.9.10",
+    "boto3>=1.35.99",
 ]
 
 [project.scripts]
 standing = "cli.standing:main"
 
 [tool.setuptools]
-# Only cli/ is packaged here -- backend/ is a separate deliverable (see
-# CLAUDE.md task assignment) and gets added to this list once it lands.
-packages = ["cli"]
+packages = ["cli", "backend"]

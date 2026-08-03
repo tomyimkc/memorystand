@@ -166,7 +166,7 @@ def recall_as_of(tenant_id: str, agent_id: str | None, query: str, instant: Any,
                        attribute_value, trust_tier, confidence,
                        embedding <=> %s AS distance
                 FROM agent_memories AS OF SYSTEM TIME '{literal}'
-                WHERE tenant_id = %s AND verdict = 'accepted' AND embedding IS NOT NULL
+                WHERE tenant_id = %s AND verdict = 'accepted'
                 ORDER BY embedding <=> %s
                 LIMIT %s
                 """,

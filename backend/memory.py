@@ -70,7 +70,7 @@ def _neighbours(conn, tenant_id: str, vec_literal: str, k: int) -> list[dict]:
                    attribute_value, trust_tier, confidence,
                    embedding <=> %s AS distance
             FROM agent_memories
-            WHERE tenant_id = %s AND verdict = 'accepted' AND embedding IS NOT NULL
+            WHERE tenant_id = %s AND verdict = 'accepted'
             ORDER BY embedding <=> %s
             LIMIT %s
             """,
@@ -304,7 +304,7 @@ def recall(tenant_id: str, agent_id: str | None, query: str, k: int = 5) -> list
                        attribute_value, trust_tier, confidence, source, verdict,
                        embedding <=> %s AS distance
                 FROM agent_memories
-                WHERE tenant_id = %s AND verdict = 'accepted' AND embedding IS NOT NULL
+                WHERE tenant_id = %s AND verdict = 'accepted'
                 ORDER BY embedding <=> %s
                 LIMIT %s
                 """,

@@ -49,13 +49,25 @@ CREATE TABLE IF NOT EXISTS agent_memories (
     created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
     verdict_set_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
 
-    VECTOR INDEX agent_memories_tenant_idx (tenant_id, embedding vector_cosine_ops)
+    -- The prefix is (tenant_id, verdict), NOT (tenant_id) alone. Measured, not guessed:
+    -- with a (tenant_id, embedding) prefix, every recall query -- which must also filter
+    -- verdict='accepted' -- fell back to a FULL TABLE SCAN, because the optimizer cannot
+    -- satisfy a predicate outside the index prefix while still honouring LIMIT k.
+    -- Observed at 4,000 rows on CockroachDB v26.2.5:
+    --   (tenant_id, embedding)          -> "scan agent_memories@..._pkey"   [index unused]
+    --   (tenant_id, verdict, embedding) -> "vector search" + "prefix spans" [correct]
+    VECTOR INDEX agent_memories_tenant_idx (tenant_id, verdict, embedding vector_cosine_ops)
         WITH (min_partition_size = 16, max_partition_size = 128)
 );
 -- WHY, one line each:
 --  memory_id UUID PK ......... no hot last-value key under concurrent writers.
---  tenant_id first in vector index: the ONLY column C-SPANN prunes on, so it
---                                   must be an equality predicate in EVERY recall query.
+--  (tenant_id, verdict) prefix: the columns C-SPANN prunes on, so BOTH must appear as
+--                              equality predicates in every recall query. It also makes
+--                              the physical layout enforce the product's central
+--                              invariant -- the searched ANN partition IS "admitted
+--                              memories of this tenant", so a held or superseded memory
+--                              is not merely filtered out of recall, it is not in the
+--                              partition being searched at all.
 --  verdict vs trust_tier ..... two independent axes. verdict = "is this recallable at all"
 --                              (write-time adjudication). trust_tier = "has reality since
 --                              confirmed it" (outcome gate). Conflating them would make the
