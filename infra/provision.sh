@@ -99,7 +99,7 @@ cat <<'EOF'
 Next:
   1. aws ssm put-parameter --name /memorystand/dsn --type SecureString --value '<dsn-from-above>'
   2. export COCKROACH_DSN='<dsn>' && python scripts/spike_db.py
-  3. cockroach sql --url "$COCKROACH_DSN" -f db/schema.sql
+  3. python db/migrate.py --schema        (no CockroachDB CLI required)
 
 Least privilege (do this before the app goes public), via `ccloud cluster sql`:
   GRANT SELECT, INSERT, UPDATE ON agent_memories, agent_decisions,

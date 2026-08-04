@@ -21,10 +21,18 @@ imports no model client -- its entire import list is ``typing``, ``psycopg2.extr
 asserted in prose. If a model could influence promotion, the claim above would be false
 and the product would collapse into the self-consistency bucket with everything else.
 
-The check is structural and deliberately modest: it proves no model client is reachable
-through this module's own namespace. It cannot prove the absence of a call in every
-conceivable import graph. It does catch the realistic regression -- somebody "improving"
-promotion by asking a model to weigh the evidence.
+The check is structural: it proves no model client is reachable through this module's own
+namespace, and it now also walks one level into the modules this one imports, so a model
+client cannot be smuggled in behind a helper. It does not prove the absence of a call in
+every conceivable import graph. It does catch the realistic regression -- somebody
+"improving" promotion by asking a model to weigh the evidence.
+
+Note what is NOT forbidden: calling Amazon CloudWatch to re-check a claimed metric change
+(``backend/evidence.py``). The claim is not that this path makes no network calls -- that
+would be a strange thing to want, since the entire thesis is that trust must come from
+*outside*. The claim is that no MODEL decides whether a memory is true. Asking a metrics
+store what a number actually did is the thesis working; asking an LLM whether a memory
+seems right is the thing being refused.
 
 What standing does and does not mean. It means "acting on this produced a confirmed good
 outcome at least once". It does not mean "true". An incident can resolve for reasons
@@ -38,11 +46,13 @@ from typing import Any
 from psycopg2.extras import RealDictCursor
 
 from . import db
+from . import evidence as evidence_check
 
 VALID_OUTCOMES = {"success", "rollback", "false_positive"}
 VALID_SOURCES = {"pagerduty", "metric", "human"}
 
 VERIFIED = "verified"
+ATTESTED = "attested"
 DISPUTED = "disputed"
 UNCONFIRMED = "unconfirmed"
 
@@ -88,26 +98,45 @@ def _validate(evidence: dict[str, Any]) -> tuple[str, str, float | None, str]:
     return outcome, source, delta, str(external_ref).strip()
 
 
-def _apply(conn, decision_id: str, outcome: str, source: str, delta: float | None, ref: str) -> dict:
+def _apply(
+    conn,
+    tenant_id: str,
+    decision_id: str,
+    outcome: str,
+    source: str,
+    delta: float | None,
+    ref: str,
+    verification: "evidence_check.Verification",
+) -> dict:
     """Record the outcome and move trust tiers, atomically with it.
 
     Recording the outcome and re-tiering the memories it produced happen in ONE
     serializable transaction. If they could drift apart, a memory could carry standing
     that no recorded outcome justifies -- which is precisely the failure this project is
     about.
+
+    ``tenant_id`` is required and is part of the lookup predicate. This query used to match
+    on ``decision_id`` alone, which made it the one query in the codebase without tenant
+    scoping -- and it happened to be the query that GRANTS TRUST. A caller holding any
+    decision id could promote another tenant's memories to ``verified``, which is precisely
+    the outcome the whole project claims to prevent. A decision belonging to another tenant
+    is now indistinguishable from one that does not exist.
     """
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
             """
             SELECT decision_id::string AS decision_id, tenant_id::string AS tenant_id,
                    produced_memory_ids::STRING[] AS produced_memory_ids,
-                   outcome AS existing_outcome
-            FROM agent_decisions WHERE decision_id = %s
+                   outcome AS existing_outcome, decided_at
+            FROM agent_decisions WHERE decision_id = %s AND tenant_id = %s
             """,
-            (decision_id,),
+            (decision_id, tenant_id),
         )
         row = cur.fetchone()
         if row is None:
+            # Deliberately the same message whether the decision does not exist or belongs to
+            # someone else -- distinguishing them turns this into an oracle for enumerating
+            # other tenants' decision ids.
             raise OutcomeRejected(f"no such decision: {decision_id}")
         if row["existing_outcome"] is not None:
             raise OutcomeRejected(
@@ -134,14 +163,23 @@ def _apply(conn, decision_id: str, outcome: str, source: str, delta: float | Non
         demoted: list[str] = []
 
         if produced:
-            new_tier = VERIFIED if outcome == "success" else DISPUTED
+            # The rung a memory reaches depends on who checked, not on who asserted.
+            # A success nobody could re-check is 'attested'; only a claim the external
+            # system of record independently agreed with reaches 'verified'.
+            if outcome != "success":
+                new_tier = DISPUTED
+            elif verification.grants_verified_tier:
+                new_tier = VERIFIED
+            else:
+                new_tier = ATTESTED
             cur.execute(
                 """
                 UPDATE agent_memories
                 SET trust_tier = %s,
-                    confidence = CASE WHEN %s = 'verified'
-                                      THEN least(1.0, confidence + 0.3)
-                                      ELSE greatest(0.0, confidence - 0.3) END,
+                    confidence = CASE %s
+                                   WHEN 'verified' THEN least(1.0, confidence + 0.3)
+                                   WHEN 'attested' THEN least(1.0, confidence + 0.1)
+                                   ELSE greatest(0.0, confidence - 0.3) END,
                     verdict_set_at = now()
                 WHERE memory_id = ANY(%s::UUID[]) AND trust_tier = %s
                 RETURNING memory_id::string
@@ -169,14 +207,44 @@ def _apply(conn, decision_id: str, outcome: str, source: str, delta: float | Non
         "source": source,
         "external_ref": ref,
         "metric_delta": delta,
+        "trust_tier": new_tier if produced else None,
+        "verification": verification.as_dict(),
         "promoted": promoted,
         "demoted": demoted,
         "model_calls": _model_calls,
     }
 
 
-def grant_standing(decision_id: str, evidence: dict[str, Any]) -> dict:
+def _decided_at(tenant_id: str, decision_id: str):
+    """Read just the decision's timestamp, so evidence can be checked before the write txn.
+
+    Deliberately a separate small read rather than doing the external check inside
+    ``_apply``: ``_apply`` runs under ``retry_serializable``, and a CloudWatch round trip
+    inside a retry loop would be re-issued on every serialization conflict -- slow, and
+    rude to the API being polled. The external world does not change based on whether our
+    transaction conflicted, so checking it once outside is both cheaper and more correct.
+    """
+    conn = db.get_conn()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT decided_at FROM agent_decisions WHERE decision_id = %s AND tenant_id = %s",
+                (decision_id, tenant_id),
+            )
+            row = cur.fetchone()
+        conn.commit()
+        return row["decided_at"] if row else None
+    finally:
+        db.put_conn(conn)
+
+
+def grant_standing(tenant_id: str, decision_id: str, evidence: dict[str, Any]) -> dict:
     """Apply an external outcome to a decision and re-tier the memories it produced.
+
+    ``tenant_id`` scopes the decision lookup; a decision belonging to another tenant is
+    reported as not existing. It is a required positional argument rather than an optional
+    keyword on purpose -- an authorisation check that a caller can omit is one a caller
+    will eventually omit, and every existing call site is updated in the same change.
 
     ``evidence`` requires ``outcome``, ``source`` and ``external_ref``; ``metric_delta``
     is required when ``source='metric'``. Returns which memories were promoted or
@@ -184,7 +252,20 @@ def grant_standing(decision_id: str, evidence: dict[str, Any]) -> dict:
     """
     assert_no_model_calls()  # checked on the live path, not merely documented
     outcome, source, delta, ref = _validate(evidence)
-    result = db.retry_serializable(_apply, decision_id, outcome, source, delta, ref)
+
+    # Re-check the claim against the external system of record BEFORE recording it. This is
+    # the half of the central claim that used to be missing: _validate only ever confirmed
+    # that external_ref was a non-empty string, so "an external signal said so" was
+    # something the caller asserted rather than something anyone checked.
+    verification = evidence_check.verify(source, ref, delta, _decided_at(tenant_id, decision_id))
+    if verification.status == evidence_check.CONTRADICTED:
+        raise OutcomeRejected(
+            f"the external system of record disagrees: {verification.detail}"
+        )
+
+    result = db.retry_serializable(
+        _apply, tenant_id, decision_id, outcome, source, delta, ref, verification
+    )
     assert result["model_calls"] == 0, "the promotion path must never call a model"
     return result
 
@@ -192,11 +273,24 @@ def grant_standing(decision_id: str, evidence: dict[str, Any]) -> dict:
 def assert_no_model_calls() -> None:
     """Fail loudly if anything model-shaped became reachable from this module.
 
-    Called at the top of every ``grant_standing()``. Cheap enough to run on the live
-    path (a set intersection over module globals), which is the point: a safeguard that
+    Called at the top of every ``grant_standing()``. Cheap enough to run on the live path
+    (a couple of set intersections over module dicts), which is the point: a safeguard that
     only runs in a test nobody runs is not a safeguard.
+
+    Two levels, because one was not enough. The original version checked only this module's
+    own globals -- which meant the invariant could be defeated by moving a Bedrock client
+    one import away and calling it from here. It now also inspects the modules this one
+    imports.
+
+    The rule is about MODELS, not about network calls or AWS. ``backend/evidence.py``
+    deliberately imports boto3 to ask CloudWatch what a metric actually did, and that is the
+    thesis working as designed: trust arriving from outside the system. So the guard bans
+    model *clients* and model *entry points*, and separately asserts that any boto3 client
+    reachable from here is not a Bedrock one.
     """
-    forbidden = {"boto3", "embeddings", "bedrock", "converse", "invoke_model", "openai", "anthropic"}
+    forbidden = {"bedrock", "bedrock_client", "converse", "invoke_model", "openai", "anthropic",
+                 "embeddings", "agent"}
+
     found = sorted(name for name in globals() if name.lower() in forbidden)
     if found:
         raise AssertionError(
@@ -204,12 +298,33 @@ def assert_no_model_calls() -> None:
             "The outcome gate must stay model-free; that is the product's central claim."
         )
 
+    import types
 
-def model_calls() -> int:
-    return _model_calls
+    for name, value in list(globals().items()):
+        if not isinstance(value, types.ModuleType):
+            continue
+        if not getattr(value, "__name__", "").startswith("backend."):
+            continue
+        leaked = sorted(n for n in vars(value) if n.lower() in forbidden)
+        if leaked:
+            raise AssertionError(
+                f"module {value.__name__!r}, imported by trust.py, exposes model-carrying "
+                f"names {leaked}. A model client one import away is still a model client on "
+                "the promotion path."
+            )
+        # A boto3 client is fine here only if it is not a model runtime. This is the check
+        # that lets CloudWatch verification exist without weakening the claim.
+        service = getattr(getattr(value, "_client", None), "meta", None)
+        service_name = getattr(getattr(service, "service_model", None), "service_name", "")
+        if "bedrock" in str(service_name).lower():
+            raise AssertionError(
+                f"module {value.__name__!r} holds a Bedrock client ({service_name!r}); the "
+                "promotion path must never be able to reach a model."
+            )
 
 
 __all__ = [
+    "ATTESTED",
     "DISPUTED",
     "OutcomeRejected",
     "UNCONFIRMED",

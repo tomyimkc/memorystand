@@ -254,12 +254,13 @@ def main() -> int:
         "tenant_id": TENANT_ID,
         "agent_id": AGENT_ID,
         "query": query,
-        "action": "raise_circuit_breaker_timeout",
-        "rationale": (
-            f"p99 latency spike on the payments gateway ({external_ref}); temporarily "
-            "raising checkout-api's breaker timeout to cut false trips while the gateway "
-            "recovers."
-        ),
+        # Deliberately NO "action" and NO "rationale".
+        #
+        # Supplying them makes /decide skip reasoning entirely and just record what it
+        # was handed -- which looked identical in the captured output, so the video
+        # would have shown "the agent decided" while the agent had done nothing. The
+        # capture now exercises the real loop and reports reasoning_source, so a viewer
+        # can see whether a model or the deterministic fallback chose the action.
         "k": 5,
         "task_id": task_id,
     }
@@ -275,11 +276,15 @@ def main() -> int:
             "POST",
             "/confirm_outcome",
             body={
+                # tenant_id is required and the route is secret-gated now: granting
+                # standing used to need only a decision id, from anyone.
+                "tenant_id": TENANT_ID,
                 "decision_id": decision_id,
                 "outcome": "success",
                 "source": "pagerduty",
                 "external_ref": external_ref,
             },
+            secret=secret,
         )
         steps["timemachine"] = _call(
             "timemachine",

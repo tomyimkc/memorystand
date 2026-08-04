@@ -380,8 +380,11 @@ def cmd_confirm(args: argparse.Namespace) -> int:
         "metric_delta": args.metric_delta,
         "external_ref": args.ref,
     }
+    # Tenant-scoped: granting standing now requires saying whose decision it is, so a
+    # decision id on its own is no longer sufficient to promote a memory.
+    tenant_id, _ = _resolve_ids(args)
     try:
-        result = trust.grant_standing(args.decision_id, evidence)
+        result = trust.grant_standing(tenant_id, args.decision_id, evidence)
     except Exception as exc:  # noqa: BLE001
         print(c(f"error: confirm failed: {exc}", "red"))
         return EXIT_RUNTIME

@@ -25,6 +25,7 @@ than leaking a raw SQLSTATE.
 from __future__ import annotations
 
 import datetime as _dt
+import re as _re
 from typing import Any, Sequence
 
 from psycopg2.extras import RealDictCursor
@@ -36,19 +37,50 @@ class GCWindowExceeded(RuntimeError):
     """The requested instant is older than the cluster's garbage-collection window."""
 
 
-def _as_aost_literal(instant: Any) -> str:
-    """Render an instant for AS OF SYSTEM TIME.
+class InvalidInstant(ValueError):
+    """The requested instant is not a form this module is willing to put into SQL."""
 
-    Accepts a datetime, an HLC decimal string from ``cluster_logical_timestamp()``, or a
-    relative string like '-30s'. Interval strings pass through untouched.
+
+# AS OF SYSTEM TIME takes a literal -- it cannot be parameterised -- so the rendered value is
+# interpolated directly into the statement. That makes this function the project's only
+# string-to-SQL boundary and therefore its only injection sink, and the value reaches it from
+# an UNAUTHENTICATED query string (`GET /diff?instant=...`). "The caller passes something
+# sensible" is not a defence available here.
+#
+# Allow-list rather than escaping. Escaping asks "have I neutralised every hostile input?",
+# which is unbounded and one oversight from failing. An allow-list asks "is this one of the
+# three shapes CockroachDB documents?", which is finite and checkable by reading it. Anything
+# else is refused outright rather than sanitised and hoped about.
+_HLC_RE = _re.compile(r"\A\d{1,20}(\.\d{1,10})?\Z")
+_INTERVAL_RE = _re.compile(r"\A-\d{1,9}(ns|us|ms|s|m|h)\Z")
+_TIMESTAMP_RE = _re.compile(
+    r"\A\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d{1,9})?([+-]\d{2}:?\d{2}|Z)?\Z"
+)
+
+
+def _as_aost_literal(instant: Any) -> str:
+    """Render an instant for AS OF SYSTEM TIME, refusing anything not obviously safe.
+
+    Accepts a datetime, an HLC decimal from ``cluster_logical_timestamp()``, a negative
+    interval like ``-30s``, or an ISO-8601 timestamp. Everything else raises
+    ``InvalidInstant``.
+
+    A ``datetime`` is formatted here rather than by the caller, so that path cannot carry
+    attacker-controlled text at all; only the string path needs checking.
     """
-    if isinstance(instant, str):
-        return instant
     if isinstance(instant, _dt.datetime):
         if instant.tzinfo is None:
             instant = instant.replace(tzinfo=_dt.timezone.utc)
         return instant.astimezone(_dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f+00:00")
-    return str(instant)
+
+    text = (instant if isinstance(instant, str) else str(instant)).strip()
+    if _HLC_RE.match(text) or _INTERVAL_RE.match(text) or _TIMESTAMP_RE.match(text):
+        return text
+    raise InvalidInstant(
+        f"{text!r} is not a usable instant. Expected an HLC decimal "
+        "(e.g. 1785840000.0000000001), a negative interval (e.g. '-30s'), or an "
+        "ISO-8601 timestamp (e.g. '2026-08-04 10:00:00+00:00')."
+    )
 
 
 def _is_history_horizon_error(exc: BaseException) -> bool:

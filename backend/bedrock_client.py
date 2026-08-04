@@ -31,6 +31,8 @@ import random
 import time
 from typing import Any
 
+from . import breaker
+
 # MEMORYSTAND_CHAT_MODEL overrides this. The default below is a safe *starting point*,
 # not a guarantee: it is the id used in scripts/spike_bedrock.py, but Bedrock model
 # access is granted per AWS account and per region, so the account actually running
@@ -45,6 +47,15 @@ REGION = os.environ.get("AWS_REGION", "us-west-2")
 # backend/db.py's retry budget is small: a caller waiting on this is an on-call
 # agent loop, not a batch job, and it has its own fallback to fall back to.
 MAX_ATTEMPTS = 5
+
+# Hard ceiling on total time spent trying, regardless of attempts left.
+#
+# The attempt budget alone is not a latency budget: 5 attempts with backoff up to
+# MAX_BACKOFF_S can exceed the 30s Lambda timeout, and when /decide started genuinely
+# calling the model it began returning 502 after a full 30s hang instead of falling back
+# in a few hundred milliseconds. backend/embeddings.py learned this first; a throttled
+# dependency must never be able to consume the caller's whole budget.
+DEADLINE_S = float(os.environ.get("MEMORYSTAND_MODEL_DEADLINE_S", "8"))
 BASE_BACKOFF_S = 0.5
 MAX_BACKOFF_S = 8.0
 
@@ -77,9 +88,23 @@ def _get_client():
     if _client is None:
         try:
             import boto3
+            from botocore.config import Config as BotocoreConfig
         except ImportError as exc:  # boto3 is a declared dependency, but be honest anyway
             raise ModelUnavailable(f"boto3 is not installed: {exc}") from exc
-        _client = boto3.client("bedrock-runtime", region_name=REGION)
+        _client = boto3.client(
+            "bedrock-runtime",
+            region_name=REGION,
+            # Bound EACH attempt, not just the loop around them. botocore retries
+            # internally by default, so a single converse() can spend many seconds
+            # before raising -- which is how a supposedly 8s deadline took 18s. This
+            # module does its own bounded retry with jitter; botocore doing a second,
+            # invisible layer of it underneath is the bug.
+            config=BotocoreConfig(
+                retries={"max_attempts": 1, "mode": "standard"},
+                connect_timeout=3,
+                read_timeout=5,
+            ),
+        )
     return _client
 
 
@@ -118,16 +143,10 @@ def converse(
     Raises ``ModelUnavailable`` -- never a raw botocore/boto3 exception -- if
     the account has no usable credentials, is denied access to ``MODEL_ID``,
     the endpoint cannot be reached, or throttling does not clear within
-    ``MAX_ATTEMPTS`` retries.
+    ``MAX_ATTEMPTS`` retries **or** ``DEADLINE_S`` seconds, whichever comes
+    first. The time bound is the load-bearing one: attempts alone are not a
+    latency budget, and this call sits inside a 30s Lambda timeout.
     """
-    global _call_count
-
-    from botocore.exceptions import (
-        ClientError,
-        EndpointConnectionError,
-        NoCredentialsError,
-    )
-
     try:
         client = _get_client()
     except ModelUnavailable:
@@ -145,11 +164,42 @@ def converse(
     if tools:
         kwargs["toolConfig"] = {"tools": tools}
 
+    # Refuse instantly if the model has been failing: rediscovering that costs the
+    # caller the full DEADLINE_S, and the answer does not change second to second.
+    try:
+        breaker.chat.check()
+    except breaker.CircuitOpen as exc:
+        raise ModelUnavailable(str(exc)) from exc
+
+    try:
+        return _converse_attempts(client, kwargs)
+    except ModelUnavailable:
+        breaker.chat.record_failure()
+        raise
+
+
+def _converse_attempts(client, kwargs: dict[str, Any]) -> dict:
+    """The bounded retry loop itself. Split out so the breaker wraps every exit path."""
+    global _call_count
+
+    from botocore.exceptions import (
+        ClientError,
+        EndpointConnectionError,
+        NoCredentialsError,
+    )
+
     last_exc: Exception | None = None
+    started = time.monotonic()
     for attempt in range(1, MAX_ATTEMPTS + 1):
+        if time.monotonic() - started > DEADLINE_S:
+            raise ModelUnavailable(
+                f"Bedrock did not answer within {DEADLINE_S}s ({attempt - 1} attempts); "
+                "falling back rather than holding the request open"
+            ) from last_exc
         try:
             response = client.converse(**kwargs)
             _call_count += 1
+            breaker.chat.record_success()
             return response
         except NoCredentialsError as exc:
             raise ModelUnavailable(f"no AWS credentials available: {exc}") from exc
@@ -163,7 +213,12 @@ def converse(
                 # retries across concurrent callers are what turn one throttle
                 # response into a pile of them.
                 backoff = min(MAX_BACKOFF_S, BASE_BACKOFF_S * (2 ** (attempt - 1)))
-                time.sleep(random.uniform(0, backoff))
+                remaining = DEADLINE_S - (time.monotonic() - started)
+                if remaining <= 0:
+                    raise ModelUnavailable(
+                        f"Bedrock still throttling at the {DEADLINE_S}s deadline ({code})"
+                    ) from exc
+                time.sleep(min(random.uniform(0, backoff), remaining))
                 continue
             if code in _THROTTLING_CODES:
                 raise ModelUnavailable(

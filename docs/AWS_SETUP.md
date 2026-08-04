@@ -137,7 +137,7 @@ you at month end.
 ./infra/ssm_setup.sh          # DSN + shared secret as SSM SecureStrings
 ./infra/deploy.sh             # Lambda + Function URL
 ./infra/deploy_frontend.sh    # dashboard on Amplify
-./infra/mcp_setup.sh          # read-only MCP service account
+./infra/mcp_setup.sh          # MCP service account (write-capable -- see docs/MCP.md)
 ```
 
 `infra/provision.sh` and `infra/mcp_setup.sh` need a separate `ccloud auth login` — that is

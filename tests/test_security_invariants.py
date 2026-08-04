@@ -1,0 +1,184 @@
+# SPDX-License-Identifier: Apache-2.0
+"""Three security holes found by an adversarial review of the deployed system.
+
+All three were real, all three were reachable from the public Function URL, and none of them
+would have been caught by the existing suite -- which tested that the system does the right
+thing for a well-behaved caller, not that it refuses a hostile one.
+
+  1. SQL injection in the time-travel route. ``AS OF SYSTEM TIME`` cannot be parameterised,
+     so the instant is interpolated into the statement. ``GET /diff?instant=`` is
+     unauthenticated, and the value went in unvalidated.
+
+  2. Missing tenant scoping on the trust grant. ``trust._apply`` matched on ``decision_id``
+     alone -- the only query in the codebase without a tenant predicate, and the one that
+     promotes memories to ``verified``. Combined with (3) it let any caller grant standing
+     to any tenant's memories, falsifying the project's central claim from the outside.
+
+  3. ``/confirm_outcome`` was not behind the shared secret, while ``/ingest`` and ``/decide``
+     were. It is the route that grants trust.
+
+The lesson worth keeping: the routes that were gated were the ones that obviously *write
+content*. The route that writes *trust* was not, because it reads as a callback rather than a
+mutation. Classifying routes by how they feel instead of by what they change is how this gap
+opened.
+"""
+
+from __future__ import annotations
+
+import uuid
+
+import pytest
+
+from backend import decisions, handler, memory, replay, trust
+
+
+# --- 1. The injection sink ---------------------------------------------------------------
+
+HOSTILE_INSTANTS = [
+    "-1s'; DROP TABLE agent_memories; --",
+    "' OR '1'='1",
+    "-1s' UNION SELECT NULL --",
+    "2026-08-04 10:00:00'; SELECT pg_sleep(10); --",
+    "'; SET CLUSTER SETTING sql.defaults.distsql = 'off'; --",
+    "\\'; DROP TABLE agent_decisions; --",
+    "-1s\x00",
+    "; SHOW DATABASES",
+]
+
+
+@pytest.mark.parametrize("hostile", HOSTILE_INSTANTS)
+def test_hostile_instants_are_refused_before_reaching_sql(hostile: str) -> None:
+    """Nothing that is not an instant may reach the AS OF SYSTEM TIME literal."""
+    with pytest.raises(replay.InvalidInstant):
+        replay._as_aost_literal(hostile)
+
+
+LEGITIMATE_INSTANTS = [
+    "-30s",
+    "-1h",
+    "-500ms",
+    "1785840000.0000000001",
+    "1785840000",
+    "2026-08-04 10:00:00+00:00",
+    "2026-08-04T10:00:00Z",
+    "2026-08-04 10:00:00.123456+00:00",
+]
+
+
+@pytest.mark.parametrize("ok", LEGITIMATE_INSTANTS)
+def test_real_instants_still_work(ok: str) -> None:
+    """The allow-list must not be so tight that it breaks the actual feature.
+
+    A validator that rejects hostile input by rejecting everything is not a fix; the
+    time-travel demo has to keep working, so both halves are asserted.
+    """
+    assert replay._as_aost_literal(ok) == ok.strip()
+
+
+def test_datetimes_are_formatted_not_passed_through() -> None:
+    """The datetime path cannot carry attacker text, and must stay that way."""
+    import datetime as dt
+
+    rendered = replay._as_aost_literal(dt.datetime(2026, 8, 4, 10, 0, 0, tzinfo=dt.timezone.utc))
+    assert rendered.startswith("2026-08-04 10:00:00")
+    assert "'" not in rendered and ";" not in rendered
+
+
+# --- 2. Tenant scoping on the trust grant -------------------------------------------------
+
+
+def test_one_tenant_cannot_grant_standing_to_another_tenants_decision(
+    tenant_id: str, agent_id: str
+) -> None:
+    """The attack this project's own thesis says must be impossible.
+
+    Memory trust is supposed to be grantable only by a real external outcome. If a caller
+    can confirm an outcome against another tenant's decision, they can manufacture
+    ``verified`` memories in someone else's agent -- and the promotion path being free of
+    model calls is irrelevant if it can be driven by the wrong person.
+    """
+    mem = memory.remember(
+        tenant_id, agent_id, "restarting payments-service before ledger-worker resolved it"
+    )
+    memory_id = mem["memory_id"]
+
+    decision = decisions.decide(
+        tenant_id,
+        agent_id,
+        action="restart_service",
+        rationale="because the runbook says so",
+        consulted_memory_ids=[memory_id],
+        produced_memory_ids=[memory_id],
+    )
+    decision_id = decision["decision_id"]
+
+    attacker_tenant = str(uuid.uuid4())
+    with pytest.raises(trust.OutcomeRejected) as exc:
+        trust.grant_standing(
+            attacker_tenant,
+            decision_id,
+            {"outcome": "success", "source": "pagerduty", "external_ref": "INC-9999"},
+        )
+
+    # The error must not confirm that the decision exists -- otherwise it is an oracle for
+    # enumerating other tenants' decision ids.
+    assert "already has outcome" not in str(exc.value)
+
+    # And the real owner must still be able to do it, or the fix broke the feature.
+    result = trust.grant_standing(
+        tenant_id,
+        decision_id,
+        {"outcome": "success", "source": "pagerduty", "external_ref": "INC-9999"},
+    )
+    assert result["model_calls"] == 0
+    assert memory_id in [str(m) for m in result["promoted"]]
+
+
+def test_grant_standing_requires_tenant_positionally() -> None:
+    """An authorisation argument a caller can forget is one a caller will forget."""
+    import inspect
+
+    params = list(inspect.signature(trust.grant_standing).parameters.values())
+    assert params[0].name == "tenant_id"
+    assert params[0].default is inspect.Parameter.empty
+
+
+# --- 3. The gate on the route that grants trust -------------------------------------------
+
+
+def test_confirm_outcome_is_behind_the_shared_secret() -> None:
+    """It mutates trust, so it belongs with the other mutating routes."""
+    assert "/confirm_outcome" in handler.SECRET_GATED_PATHS
+
+
+def test_every_mutating_route_is_gated() -> None:
+    """Guard against the next route being classified by feel rather than by effect.
+
+    /confirm_outcome was left open because it reads like a callback rather than a write.
+    This asserts the rule directly: if it is a POST, it changes something, so it is gated.
+    """
+    mutating = {path for (method, path) in handler.ROUTES if method == "POST"}
+    ungated = mutating - handler.SECRET_GATED_PATHS
+    assert not ungated, f"POST routes reachable without the shared secret: {sorted(ungated)}"
+
+
+# --- 4. Fail-closed kill switch -----------------------------------------------------------
+
+
+def test_kill_switch_fails_closed_when_ssm_is_unreadable(monkeypatch) -> None:
+    """An unreadable kill switch must stop writes, not wave them through.
+
+    The failure mode this prevents: SSM is throttled or IAM regresses during an incident,
+    the switch reads as absent, and it defaults to 'off' -- so writes continue at exactly
+    the moment an operator was trying to stop them.
+    """
+    monkeypatch.delenv(handler.KILL_SWITCH_ENV, raising=False)
+    monkeypatch.setattr(handler, "_get_ssm_param", lambda *a, **k: None)
+    assert handler.kill_switch_engaged() is True
+
+
+def test_kill_switch_off_still_means_off(monkeypatch) -> None:
+    """Failing closed must not mean permanently closed."""
+    monkeypatch.delenv(handler.KILL_SWITCH_ENV, raising=False)
+    monkeypatch.setattr(handler, "_get_ssm_param", lambda *a, **k: "off")
+    assert handler.kill_switch_engaged() is False

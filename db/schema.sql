@@ -1,7 +1,12 @@
 -- MemoryStand — agentic memory on CockroachDB
 -- SPDX-License-Identifier: Apache-2.0
 --
--- Apply with:  cockroach sql --url "$COCKROACH_DSN" -f db/schema.sql
+-- Apply with:  python db/migrate.py --schema
+--
+-- (`cockroach sql --url ... -f ...` also works, but only if you have the CockroachDB CLI
+-- installed -- a plain developer machine has neither it nor psql. db/migrate.py uses the
+-- psycopg2 driver this repo already depends on. Locally, ./scripts/run-local.sh applies
+-- this for you via the CLI inside the container.)
 --          or: psql "$COCKROACH_DSN" -f db/schema.sql
 --
 -- DESIGN NOTE (the one that matters): there is ONE memory table, not a
@@ -42,7 +47,17 @@ CREATE TABLE IF NOT EXISTS agent_memories (
     verdict_reasons  STRING[],               -- why quarantined / what was checked at write time
     checked_against  UUID[],                 -- neighbour memory_ids compared before commit
     trust_tier       STRING NOT NULL DEFAULT 'unconfirmed'
-                       CHECK (trust_tier IN ('unconfirmed','verified','disputed')),
+                       CHECK (trust_tier IN ('unconfirmed','attested','verified','disputed')),
+                     -- Four rungs, because 'someone reported this worked' and 'we re-queried
+                     -- the system of record and it agreed' are not the same claim, and a
+                     -- schema that cannot tell them apart forces the application to lie.
+                     --   unconfirmed : no outcome has been reported yet
+                     --   attested    : an external outcome was reported, but this deployment
+                     --                 could not independently re-check it (no PagerDuty
+                     --                 token; a human sign-off has no system of record)
+                     --   verified    : re-queried against the external system of record,
+                     --                 which agreed. See backend/evidence.py
+                     --   disputed    : the outcome was a rollback or false positive
     confidence       FLOAT8 NOT NULL DEFAULT 0.5 CHECK (confidence BETWEEN 0 AND 1),
     supersedes       UUID REFERENCES agent_memories(memory_id),  -- lineage; never a delete
     embedding        VECTOR(512),            -- Titan Text Embeddings V2, dims=512

@@ -38,13 +38,23 @@
 //                 verdict_reasons: string[], checked_against: string[],
 //                 superseded: string|null }
 //
-//   POST {API_BASE}/confirm_outcome     — no secret required (read-adjacent)
-//     body: { decision_id, outcome ("success" | "rollback" | "false_positive"),
+//   POST {API_BASE}/confirm_outcome     — requires header x-memorystand-secret
+//     body: { tenant_id, decision_id,
+//             outcome ("success" | "rollback" | "false_positive"),
 //             source ("pagerduty" | "metric" | "human"), external_ref,
 //             metric_delta: number|null }
-//     -> backend.trust.grant_standing(decision_id, evidence)
+//     -> backend.trust.grant_standing(tenant_id, decision_id, evidence)
+//     NOTE: this was once ungated and documented here as "read-adjacent". It is not:
+//     it is the route that grants a memory its standing. Ungated, it let any caller
+//     promote any tenant's memories to 'verified'.
 //     response: { decision_id, outcome, source, external_ref, metric_delta,
-//                 promoted: string[], demoted: string[], model_calls: number }
+//                 promoted: string[], demoted: string[], model_calls: number,
+//                 trust_tier: "attested"|"verified"|"disputed"|null,
+//                 verification: { status, detail, observed, claimed } }
+//     `verification.status` is one of confirmed | contradicted | unavailable |
+//     not_verifiable. Only "confirmed" earns trust_tier "verified" -- everything else
+//     that succeeded lands on "attested", meaning an outcome was reported but nobody
+//     independently re-checked it.
 //
 //   GET {API_BASE}/timemachine?tenant_id=...&decision_id=...     — open route
 //     -> backend.replay.cross_examine(tenant_id, decision_id)
@@ -62,7 +72,7 @@
 // handler.py's centralised error mapping); this file renders `detail` when
 // present, else the raw body.
 //
-// Auth: /ingest and /decide are gated behind a shared secret compared with
+// Auth: /ingest, /decide and /confirm_outcome are gated behind a shared secret compared with
 // hmac.compare_digest server-side (MEMORYSTAND_SHARED_SECRET). This dashboard
 // never hardcodes it -- the operator pastes it into the top bar, and it is
 // sent only on those two routes, only in memory, never persisted to storage.
@@ -647,6 +657,10 @@
 
     var deltaRaw = $("confirmDelta").value;
     var body = {
+      // tenant_id is required now: the server scopes the decision lookup by it, so a
+      // decision id alone can no longer promote a memory (it previously could, for ANY
+      // tenant).
+      tenant_id: tenantId(),
       decision_id: $("confirmDecisionId").value.trim(),
       outcome: $("confirmOutcome").value,
       source: confirmSourceSelect.value,
@@ -665,7 +679,11 @@
     clear(confirmResult);
     confirmResult.appendChild(placeholder("waiting for response…"));
 
-    apiPost("/confirm_outcome", body).then(function (result) {
+    // Sends the shared secret. This route used to be described here as "read-adjacent"
+    // and was left ungated -- but it is the route that GRANTS TRUST, and an ungated one
+    // let anyone promote memories to 'verified'. Classifying a route by how it reads
+    // rather than by what it changes is how that gap opened.
+    apiPost("/confirm_outcome", body, secretHeaders()).then(function (result) {
       confirmSubmit.disabled = false;
       confirmSubmit.textContent = "Confirm outcome";
 

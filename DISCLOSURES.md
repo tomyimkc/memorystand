@@ -49,12 +49,44 @@ literature found that two of this project's three mechanics already exist elsewh
   Graphiti's ingest-time conflict detection, and MemTX's multi-step commit gate all do a version
   of it, in places with the same vocabulary this schema uses.
 
-**The one claim this submission makes to originality** is narrower: promoting a stored memory's
-trust tier only on a *verified external real-world outcome* — a resolved incident, a recovered
-metric, a human sign-off — with no model call anywhere in the promotion path. Every shipped
-product surveyed uses recency, source authority, or model self-consistency instead. Academic work
-(GLOVE; "Supersede") identifies this specific gap as open. The application of that idea to on-call
-incident response, on CockroachDB, is what is new.
+**Correction, and it is the kind this document exists for.** An earlier version of this
+paragraph claimed that academic work (GLOVE; "Supersede") "identifies this specific gap as open".
+Both citations were checked and **neither supports the claim**:
+
+- [GLOVE](https://arxiv.org/abs/2601.19249) says the opposite of what it was cited for. It
+  describes memory validity as being established "either through external task-success signals
+  ... or through internal model cognition" — so grounding memory validity in external task
+  success is presented as one of *two existing assumptions*, not an unfilled gap. GLOVE's actual
+  contribution is that **both** assumptions break under environment drift.
+- [Supersede](https://arxiv.org/abs/2606.27472) concerns the memory-update gap — agents failing
+  to prefer current facts over stale ones — and reduces it by RL training against a benchmark.
+  It never frames external real-world outcome verification as an open problem.
+
+Using a paper as evidence for a claim it does not make is exactly the failure mode this project
+argues against, and it appeared in the document about honesty. It is recorded rather than
+quietly deleted.
+
+**The claim this submission actually makes**, stated so it can be checked:
+
+> Trust is granted only by an external non-model signal, on a promotion path that makes zero
+> model calls, with credit assigned through the decision that produced the memory — and where
+> the signal is machine-checkable, it is re-checked against the system of record before it counts.
+
+That is a claim about **enforcement, not about priority of idea**. The idea is old:
+[Doyle's JTMS (1979)](https://cse.buffalo.edu/~rapaport/Papers/Papers.by.Others/NONMONOTONIC/doyle79.pdf)
+retracts a belief when its justification fails, and
+[CHEF (1986)](https://aaai.org/papers/00267-aaai86-044-chef-a-model-of-case-based-planning/)
+retains cases indexed by whether the plan worked. Even the trust ladder has precedent —
+[NELL](https://cdn.aaai.org/ojs/7519/7519-13-11049-1-2-20201228.pdf) promoted candidate beliefs
+to a trusted KB above a 0.9 confidence threshold, though on its own extractors corroborating each
+other, which is self-consistency at scale (74% precision) rather than external grounding.
+
+What is unusual is a 2026 memory system that refuses to let a model grade its own memory and
+makes the refusal structural — while every shipping system does the opposite: Mem0 has no
+per-memory confidence score at all, Zep's validity windows are LLM-set and documented by Zep as
+"not authoritative", and AWS Bedrock AgentCore performs extraction, consolidation and reflection
+with LLM prompts and exposes no verification API. See the README's comparison table for the
+per-vendor citations.
 
 This scoping is deliberate: an overstated novelty claim that a judge could disprove with one
 search would undermine the entire submission, which is itself about not trusting unverified claims.

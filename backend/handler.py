@@ -19,9 +19,12 @@ Design decisions that matter for a judge reading this file:
     "recall still works" and away from "silently drop a write" -- those are not
     symmetric failures, so the switch is not symmetric either.
 
-  * Shared secret on the two Bedrock-calling routes only. ``/ingest`` and ``/decide``
-    spend real money and quota on every call, so they require a shared secret compared
-    with ``hmac.compare_digest``. The four read routes (``/recall``, ``/timemachine``,
+  * Shared secret on every route that changes something -- ``/ingest``, ``/decide`` and
+    ``/confirm_outcome`` -- compared with ``hmac.compare_digest``. It originally gated only
+    the first two, on the reasoning that those spend real money and quota. That reasoning
+    left the route which GRANTS TRUST wide open, and anyone with a decision id could promote
+    memories to ``verified``. Gate by what a route changes, not by what it costs. The four
+    read routes (``/recall``, ``/timemachine``,
     ``/diff``, ``/health``) stay open on purpose: they are index-backed, cheap, and a
     judge needs to be able to poke them directly from a browser or curl without first
     being handed a secret. Gating reads the same way would just be security theatre
@@ -67,7 +70,7 @@ if str(REPO_ROOT) not in sys.path:
 # Imported at module level, once per container, so the connection pool in backend.db
 # (and the lazily-created boto3 clients in backend.embeddings) are reused across warm
 # invocations rather than rebuilt per request.
-from backend import audit, db, decisions, embeddings, memory, replay, trust  # noqa: E402
+from backend import agent, audit, breaker, db, decisions, embeddings, memory, replay, trust  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Configuration: kill switch and shared secret, each SSM-backed with an env override.
@@ -83,7 +86,7 @@ SHARED_SECRET_SSM_PARAM = os.environ.get("MEMORYSTAND_SHARED_SECRET_SSM_PARAM", 
 SHARED_SECRET_HEADER = "x-memorystand-secret"
 
 WRITE_PATHS = {"/ingest", "/decide", "/confirm_outcome"}
-SECRET_GATED_PATHS = {"/ingest", "/decide"}
+SECRET_GATED_PATHS = {"/ingest", "/decide", "/confirm_outcome"}
 
 CHAT_MODEL_ID = os.environ.get("MEMORYSTAND_CHAT_MODEL", "amazon.nova-lite-v1:0")
 
@@ -123,12 +126,29 @@ def _get_ssm_param(name: str, *, decrypt: bool = False, default: str | None = No
 
 
 def kill_switch_engaged() -> bool:
-    """True if writes should be refused. Env override wins so local tests need no SSM."""
+    """True if writes should be refused. Env override wins so local tests need no SSM.
+
+    Fails CLOSED. If the SSM read errors -- throttling, an IAM regression, an SSM outage --
+    ``_get_ssm_param`` returns its default, and defaulting to "off" meant writes proceeded
+    precisely when the switch's own read path was unhealthy. An operator flipping this
+    parameter is, by definition, already in an incident; "we could not check, so we carried
+    on writing" is the wrong answer in exactly that moment.
+
+    A ``None`` return means the read failed, which is different from reading the value
+    "off". The two are distinguished here rather than collapsed.
+    """
     env_value = os.environ.get(KILL_SWITCH_ENV)
     if env_value is not None:
         return env_value.strip().lower() in _KILL_SWITCH_TRUE
-    value = _get_ssm_param(KILL_SWITCH_SSM_PARAM, default="off")
-    return (value or "off").strip().lower() in _KILL_SWITCH_TRUE
+    value = _get_ssm_param(KILL_SWITCH_SSM_PARAM, default=None)
+    if value is None:
+        print(
+            f"[handler] could not read {KILL_SWITCH_SSM_PARAM}; treating the kill switch as "
+            "ENGAGED and refusing writes. This fails closed on purpose.",
+            flush=True,
+        )
+        return True
+    return value.strip().lower() in _KILL_SWITCH_TRUE
 
 
 def _configured_shared_secret() -> str | None:
@@ -215,61 +235,6 @@ def _get_bedrock_runtime() -> Any:
     return _bedrock_runtime_client
 
 
-def _reason(situation: str, consulted: list[dict[str, Any]]) -> tuple[str, str, bool, str]:
-    """Ask the configured chat model (Bedrock Converse; Amazon Nova by default -- see
-    docs/BEDROCK_QUOTA.md for why not Claude) what the agent should do next.
-
-    Returns ``(action, rationale, requires_approval, reasoning_source)``. On any Bedrock
-    failure -- no credentials, no model access, throttling -- falls back to a
-    deterministic heuristic that always requires human approval, and says so in
-    ``reasoning_source`` rather than silently passing off a guess as a reasoned decision.
-    This mirrors ``embeddings.py``'s stub-fallback pattern: degrade honestly, never
-    silently.
-    """
-    context_lines = [f"- ({row.get('trust_tier', '?')}) {row.get('content', '')}" for row in consulted]
-    if not context_lines:
-        context_lines = ["- (nothing on file yet for this query)"]
-    prompt = (
-        "You are the reasoning step of an on-call agent. Given the situation and what it "
-        "recalls from memory, propose exactly one next action.\n\n"
-        f"Situation: {situation}\n\nRecalled memories:\n" + "\n".join(context_lines) + "\n\n"
-        "Reply with ONLY a JSON object, no other text: "
-        '{"action": "<short verb phrase>", "rationale": "<one sentence>", '
-        '"requires_approval": <true or false>}'
-    )
-    try:
-        resp = _get_bedrock_runtime().converse(
-            modelId=CHAT_MODEL_ID,
-            messages=[{"role": "user", "content": [{"text": prompt}]}],
-            inferenceConfig={"maxTokens": 200, "temperature": 0.0},
-        )
-        text = resp["output"]["message"]["content"][0]["text"].strip()
-        parsed = json.loads(text)
-        return (
-            str(parsed["action"]),
-            str(parsed.get("rationale", "")),
-            bool(parsed.get("requires_approval", False)),
-            f"bedrock:{CHAT_MODEL_ID}",
-        )
-    except Exception as exc:  # noqa: BLE001 - a reasoning failure must fall back, not crash /decide
-        print(
-            json.dumps({"event": "reasoning_fallback", "reason": f"{type(exc).__name__}: {exc}"}),
-            flush=True,
-        )
-        if consulted:
-            top = consulted[0]
-            rationale = (
-                "Bedrock reasoning unavailable; deterministic fallback escalates to a human "
-                f"based on the top recalled memory: {(top.get('content') or '')[:80]!r}"
-            )
-        else:
-            rationale = "Bedrock reasoning unavailable and nothing relevant was recalled; escalating by default."
-        return "escalate_to_human", rationale, True, "fallback_heuristic"
-
-
-# ---------------------------------------------------------------------------
-# Route handlers. Each returns (status_code, response_body).
-# ---------------------------------------------------------------------------
 def _route_ingest(body: dict[str, Any], headers: dict[str, str], request_id: str) -> tuple[int, dict]:
     _check_shared_secret(headers)
     tenant_id = _require(body, "tenant_id")
@@ -306,13 +271,20 @@ def _route_decide(body: dict[str, Any], headers: dict[str, str], request_id: str
     rationale = body.get("rationale")
     requires_approval = bool(body.get("requires_approval", False))
     if action:
-        # Caller supplied its own action/rationale (e.g. a scripted demo, or a caller
-        # with its own reasoning loop) -- skip the Bedrock round trip rather than
-        # overriding an explicit instruction.
+        # A caller MAY supply its own action -- another agent driving this as a memory
+        # service, for instance. But it is no longer the demo path: letting the demo
+        # hand /decide a pre-chosen action made the agent look like it was reasoning
+        # when it was only recording, and that hid the fact that the deployed loop was
+        # never exercised. Callers who do this are labelled, loudly, as not-the-agent.
         reasoning_source = "caller_supplied"
+        model_calls = 0
     else:
-        action, rationale, model_requires_approval, reasoning_source = _reason(query, consulted)
-        requires_approval = requires_approval or model_requires_approval
+        proposed = agent.propose(query, consulted)
+        action = proposed["action"]
+        rationale = proposed["rationale"]
+        requires_approval = requires_approval or proposed["requires_approval"]
+        reasoning_source = proposed["reasoning_source"]
+        model_calls = proposed["model_calls"]
 
     produced = tuple(str(m) for m in (body.get("produced_memory_ids") or ()))
     result = decisions.decide(
@@ -332,10 +304,23 @@ def _route_decide(body: dict[str, Any], headers: dict[str, str], request_id: str
         action=action,
         reasoning_source=reasoning_source,
     )
-    return 201, {**result, "consulted": consulted, "reasoning_source": reasoning_source}
+    return 201, {
+        **result,
+        "consulted": consulted,
+        "rationale": rationale,
+        "reasoning_source": reasoning_source,
+        "model_calls": model_calls,
+    }
 
 
 def _route_confirm_outcome(body: dict[str, Any], headers: dict[str, str], request_id: str) -> tuple[int, dict]:
+    # This is the route that GRANTS TRUST, and it was reachable without the shared secret
+    # while /ingest and /decide were gated. Anyone who learned or guessed a decision id could
+    # promote memories to 'verified' -- the exact outcome this project exists to prevent, on
+    # the one path whose integrity the whole submission rests on. It is now gated like every
+    # other mutating route, and scoped to a tenant.
+    _check_shared_secret(headers)
+    tenant_id = _require(body, "tenant_id")
     decision_id = _require(body, "decision_id")
     evidence = {
         "source": body.get("source"),
@@ -343,7 +328,7 @@ def _route_confirm_outcome(body: dict[str, Any], headers: dict[str, str], reques
         "external_ref": body.get("external_ref"),
         "metric_delta": body.get("metric_delta"),
     }
-    result = trust.grant_standing(decision_id, evidence)
+    result = trust.grant_standing(tenant_id, decision_id, evidence)
     _log(
         "outcome_confirmed",
         request_id,
@@ -352,6 +337,8 @@ def _route_confirm_outcome(body: dict[str, Any], headers: dict[str, str], reques
         model_calls=result.get("model_calls"),
         promoted=len(result.get("promoted") or []),
         demoted=len(result.get("demoted") or []),
+        trust_tier=result.get("trust_tier"),
+        verification=(result.get("verification") or {}).get("status"),
     )
     return 200, result
 
@@ -389,6 +376,11 @@ def _route_health(qs: dict[str, Any], headers: dict[str, str], request_id: str) 
     body: dict[str, Any] = {
         "kill_switch": kill_switch_engaged(),
         "embedding_provenance": embeddings.provenance(),
+        # An open circuit is not an error -- it is the system deliberately answering fast
+        # on the fallback path. But it changes what the answers mean (stub embeddings
+        # rank by lexical accident, not semantics), so it has to be visible rather than
+        # inferred from suspiciously good latency.
+        "circuit_breakers": breaker.snapshot(),
     }
     # Health must report a database outage, not be taken down by one -- so its own DB
     # probes are caught locally instead of falling through to the 503 degraded path.
@@ -517,6 +509,12 @@ def lambda_handler(event: dict[str, Any], context: Any = None) -> dict[str, Any]
         return _response(404, {"error": "not_found", "detail": str(exc)}, cors=True)
     except trust.OutcomeRejected as exc:
         return _response(400, {"error": "outcome_rejected", "detail": str(exc)}, cors=True)
+    except replay.InvalidInstant as exc:
+        # A refused instant is the caller's fault, not the server's. Returning 500 here
+        # would report a rejected injection attempt as "MemoryStand crashed", which both
+        # reads as a bug and hands an attacker a signal that they moved something.
+        _log("invalid_instant", request_id, level="warn", method=method, path=path)
+        return _response(400, {"error": "bad_request", "detail": str(exc)}, cors=True)
     except replay.GCWindowExceeded as exc:
         return _response(409, {"error": "gc_window_exceeded", "detail": str(exc)}, cors=True)
     except db.RetryBudgetExhausted as exc:
