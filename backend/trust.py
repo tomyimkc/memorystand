@@ -88,13 +88,28 @@ def _validate(evidence: dict[str, Any]) -> tuple[str, str, float | None, str]:
     return outcome, source, delta, str(external_ref).strip()
 
 
-def _apply(conn, decision_id: str, outcome: str, source: str, delta: float | None, ref: str) -> dict:
+def _apply(
+    conn,
+    tenant_id: str,
+    decision_id: str,
+    outcome: str,
+    source: str,
+    delta: float | None,
+    ref: str,
+) -> dict:
     """Record the outcome and move trust tiers, atomically with it.
 
     Recording the outcome and re-tiering the memories it produced happen in ONE
     serializable transaction. If they could drift apart, a memory could carry standing
     that no recorded outcome justifies -- which is precisely the failure this project is
     about.
+
+    ``tenant_id`` is required and is part of the lookup predicate. This query used to match
+    on ``decision_id`` alone, which made it the one query in the codebase without tenant
+    scoping -- and it happened to be the query that GRANTS TRUST. A caller holding any
+    decision id could promote another tenant's memories to ``verified``, which is precisely
+    the outcome the whole project claims to prevent. A decision belonging to another tenant
+    is now indistinguishable from one that does not exist.
     """
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
@@ -102,12 +117,15 @@ def _apply(conn, decision_id: str, outcome: str, source: str, delta: float | Non
             SELECT decision_id::string AS decision_id, tenant_id::string AS tenant_id,
                    produced_memory_ids::STRING[] AS produced_memory_ids,
                    outcome AS existing_outcome
-            FROM agent_decisions WHERE decision_id = %s
+            FROM agent_decisions WHERE decision_id = %s AND tenant_id = %s
             """,
-            (decision_id,),
+            (decision_id, tenant_id),
         )
         row = cur.fetchone()
         if row is None:
+            # Deliberately the same message whether the decision does not exist or belongs to
+            # someone else -- distinguishing them turns this into an oracle for enumerating
+            # other tenants' decision ids.
             raise OutcomeRejected(f"no such decision: {decision_id}")
         if row["existing_outcome"] is not None:
             raise OutcomeRejected(
@@ -175,8 +193,13 @@ def _apply(conn, decision_id: str, outcome: str, source: str, delta: float | Non
     }
 
 
-def grant_standing(decision_id: str, evidence: dict[str, Any]) -> dict:
+def grant_standing(tenant_id: str, decision_id: str, evidence: dict[str, Any]) -> dict:
     """Apply an external outcome to a decision and re-tier the memories it produced.
+
+    ``tenant_id`` scopes the decision lookup; a decision belonging to another tenant is
+    reported as not existing. It is a required positional argument rather than an optional
+    keyword on purpose -- an authorisation check that a caller can omit is one a caller
+    will eventually omit, and every existing call site is updated in the same change.
 
     ``evidence`` requires ``outcome``, ``source`` and ``external_ref``; ``metric_delta``
     is required when ``source='metric'``. Returns which memories were promoted or
@@ -184,7 +207,7 @@ def grant_standing(decision_id: str, evidence: dict[str, Any]) -> dict:
     """
     assert_no_model_calls()  # checked on the live path, not merely documented
     outcome, source, delta, ref = _validate(evidence)
-    result = db.retry_serializable(_apply, decision_id, outcome, source, delta, ref)
+    result = db.retry_serializable(_apply, tenant_id, decision_id, outcome, source, delta, ref)
     assert result["model_calls"] == 0, "the promotion path must never call a model"
     return result
 

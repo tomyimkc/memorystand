@@ -137,6 +137,7 @@ def test_a_memory_that_has_earned_standing_is_not_silently_overridden_by_a_contr
         produced_memory_ids=[original["memory_id"]],
     )
     grant = trust.grant_standing(
+        tenant_id,
         decision["decision_id"],
         evidence={"source": "human", "outcome": "success", "external_ref": "postmortem-123"},
     )

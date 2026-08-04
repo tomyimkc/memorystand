@@ -471,7 +471,7 @@ try {
     throw new Error("Panel 1's decide response did not populate a decision id.");
   }
 
-  // ---- Panel 3: the outcome gate (POST /confirm_outcome, no auth required) -----
+  // ---- Panel 3: the outcome gate (POST /confirm_outcome, secret-gated) --------
   await page.locator("#confirmRef").fill("INC-4471");
 
   await submitAndAwaitApiResponse(page, {

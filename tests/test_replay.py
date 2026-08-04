@@ -55,6 +55,7 @@ def test_belief_diff_marks_added_and_changed_correctly(tenant_id, agent_id, db_n
         produced_memory_ids=[to_be_promoted["memory_id"]],
     )
     trust.grant_standing(
+        tenant_id,
         decision["decision_id"],
         evidence={"source": "pagerduty", "outcome": "success", "external_ref": "INC-7"},
     )

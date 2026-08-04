@@ -83,7 +83,7 @@ SHARED_SECRET_SSM_PARAM = os.environ.get("MEMORYSTAND_SHARED_SECRET_SSM_PARAM", 
 SHARED_SECRET_HEADER = "x-memorystand-secret"
 
 WRITE_PATHS = {"/ingest", "/decide", "/confirm_outcome"}
-SECRET_GATED_PATHS = {"/ingest", "/decide"}
+SECRET_GATED_PATHS = {"/ingest", "/decide", "/confirm_outcome"}
 
 CHAT_MODEL_ID = os.environ.get("MEMORYSTAND_CHAT_MODEL", "amazon.nova-lite-v1:0")
 
@@ -123,12 +123,29 @@ def _get_ssm_param(name: str, *, decrypt: bool = False, default: str | None = No
 
 
 def kill_switch_engaged() -> bool:
-    """True if writes should be refused. Env override wins so local tests need no SSM."""
+    """True if writes should be refused. Env override wins so local tests need no SSM.
+
+    Fails CLOSED. If the SSM read errors -- throttling, an IAM regression, an SSM outage --
+    ``_get_ssm_param`` returns its default, and defaulting to "off" meant writes proceeded
+    precisely when the switch's own read path was unhealthy. An operator flipping this
+    parameter is, by definition, already in an incident; "we could not check, so we carried
+    on writing" is the wrong answer in exactly that moment.
+
+    A ``None`` return means the read failed, which is different from reading the value
+    "off". The two are distinguished here rather than collapsed.
+    """
     env_value = os.environ.get(KILL_SWITCH_ENV)
     if env_value is not None:
         return env_value.strip().lower() in _KILL_SWITCH_TRUE
-    value = _get_ssm_param(KILL_SWITCH_SSM_PARAM, default="off")
-    return (value or "off").strip().lower() in _KILL_SWITCH_TRUE
+    value = _get_ssm_param(KILL_SWITCH_SSM_PARAM, default=None)
+    if value is None:
+        print(
+            f"[handler] could not read {KILL_SWITCH_SSM_PARAM}; treating the kill switch as "
+            "ENGAGED and refusing writes. This fails closed on purpose.",
+            flush=True,
+        )
+        return True
+    return value.strip().lower() in _KILL_SWITCH_TRUE
 
 
 def _configured_shared_secret() -> str | None:
@@ -294,6 +311,13 @@ def _route_decide(body: dict[str, Any], headers: dict[str, str], request_id: str
 
 
 def _route_confirm_outcome(body: dict[str, Any], headers: dict[str, str], request_id: str) -> tuple[int, dict]:
+    # This is the route that GRANTS TRUST, and it was reachable without the shared secret
+    # while /ingest and /decide were gated. Anyone who learned or guessed a decision id could
+    # promote memories to 'verified' -- the exact outcome this project exists to prevent, on
+    # the one path whose integrity the whole submission rests on. It is now gated like every
+    # other mutating route, and scoped to a tenant.
+    _check_shared_secret(headers)
+    tenant_id = _require(body, "tenant_id")
     decision_id = _require(body, "decision_id")
     evidence = {
         "source": body.get("source"),
@@ -301,7 +325,7 @@ def _route_confirm_outcome(body: dict[str, Any], headers: dict[str, str], reques
         "external_ref": body.get("external_ref"),
         "metric_delta": body.get("metric_delta"),
     }
-    result = trust.grant_standing(decision_id, evidence)
+    result = trust.grant_standing(tenant_id, decision_id, evidence)
     _log(
         "outcome_confirmed",
         request_id,

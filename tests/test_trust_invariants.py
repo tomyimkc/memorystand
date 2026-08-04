@@ -29,6 +29,7 @@ def test_grant_standing_reports_model_calls_equal_zero(tenant_id, agent_id):
     decision = _produced_decision(tenant_id, agent_id, produced=[produced["memory_id"]])
 
     result = trust.grant_standing(
+        tenant_id,
         decision["decision_id"],
         evidence={"source": "pagerduty", "outcome": "success", "external_ref": "INC-42"},
     )
@@ -50,7 +51,10 @@ def test_evidence_lacking_external_ref_is_refused(tenant_id, agent_id):
     decision = _produced_decision(tenant_id, agent_id, produced=[produced["memory_id"]])
 
     with pytest.raises(trust.OutcomeRejected):
-        trust.grant_standing(decision["decision_id"], evidence={"source": "human", "outcome": "success"})
+        trust.grant_standing(
+            tenant_id, decision["decision_id"],
+            evidence={"source": "human", "outcome": "success"},
+        )
 
     # Refused evidence must not have moved the memory's trust tier.
     assert memory.get(tenant_id, produced["memory_id"])["trust_tier"] == trust.UNCONFIRMED
@@ -62,6 +66,7 @@ def test_model_is_not_an_accepted_evidence_source(tenant_id, agent_id):
 
     with pytest.raises(trust.OutcomeRejected):
         trust.grant_standing(
+            tenant_id,
             decision["decision_id"],
             evidence={"source": "model", "outcome": "success", "external_ref": "self-assessment"},
         )
@@ -73,6 +78,7 @@ def test_an_outcome_cannot_be_recorded_twice_for_the_same_decision(tenant_id, ag
     decision = _produced_decision(tenant_id, agent_id, produced=[produced["memory_id"]])
 
     first = trust.grant_standing(
+        tenant_id,
         decision["decision_id"],
         evidence={"source": "metric", "outcome": "success", "external_ref": "error_rate_p99", "metric_delta": -0.4},
     )
@@ -80,6 +86,7 @@ def test_an_outcome_cannot_be_recorded_twice_for_the_same_decision(tenant_id, ag
 
     with pytest.raises(trust.OutcomeRejected):
         trust.grant_standing(
+            tenant_id,
             decision["decision_id"],
             evidence={"source": "human", "outcome": "success", "external_ref": "second-attempt"},
         )
@@ -93,6 +100,7 @@ def test_only_produced_memories_are_retiered_never_merely_consulted_ones(tenant_
     )
 
     result = trust.grant_standing(
+        tenant_id,
         decision["decision_id"],
         evidence={"source": "pagerduty", "outcome": "success", "external_ref": "INC-99"},
     )

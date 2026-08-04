@@ -276,11 +276,15 @@ def main() -> int:
             "POST",
             "/confirm_outcome",
             body={
+                # tenant_id is required and the route is secret-gated now: granting
+                # standing used to need only a decision id, from anyone.
+                "tenant_id": TENANT_ID,
                 "decision_id": decision_id,
                 "outcome": "success",
                 "source": "pagerduty",
                 "external_ref": external_ref,
             },
+            secret=secret,
         )
         steps["timemachine"] = _call(
             "timemachine",
