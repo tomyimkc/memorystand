@@ -28,3 +28,6 @@ dist/
 
 # internal agent process logs — not part of the submission
 .claude/
+
+# lambda build artifacts
+infra/build/

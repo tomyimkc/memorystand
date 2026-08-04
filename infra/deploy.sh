@@ -31,7 +31,7 @@ REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." >/dev/null 2>&1 && pwd)"
 
 FUNCTION_NAME="${FUNCTION_NAME:-memorystand}"
 REGION="${REGION:-${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}}"
-ROLE_NAME="${ROLE_NAME:-standing-lambda-role}"
+ROLE_NAME="${ROLE_NAME:-memorystand-lambda-role}"
 RUNTIME="python3.13"
 HANDLER="backend.handler.handler"
 TIMEOUT_SECONDS=30
@@ -42,7 +42,7 @@ BUILD_IMAGE="public.ecr.aws/lambda/python:3.13"
 
 BUILD_DIR="$REPO_ROOT/infra/build"
 PACKAGE_DIR="$BUILD_DIR/package"
-ZIP_PATH="$BUILD_DIR/standing-lambda.zip"
+ZIP_PATH="$BUILD_DIR/memorystand-lambda.zip"
 LOG_GROUP="/aws/lambda/${FUNCTION_NAME}"
 
 echo "==> Checking required tools"
@@ -52,6 +52,22 @@ need docker
 need zip
 need python3
 
+# --package-only builds and verifies the deployment package without touching AWS.
+# Worth having: the highest-risk part of this deploy is whether psycopg2's compiled
+# extension loads inside the Lambda runtime, and that is checkable with nothing but
+# Docker. Run this before you have credentials, not after.
+PACKAGE_ONLY=0
+for _arg in "$@"; do
+  case "$_arg" in
+    --package-only) PACKAGE_ONLY=1 ;;
+    -h|--help) sed -n '3,26p' "$0"; exit 0 ;;
+    *) echo "unknown option: $_arg" >&2; exit 2 ;;
+  esac
+done
+
+if [[ "$PACKAGE_ONLY" == "1" ]]; then
+  echo "    --package-only: skipping all AWS calls"
+else
 echo "==> Checking AWS credentials"
 if ! caller_identity="$(aws sts get-caller-identity --region "$REGION" --output json 2>&1)"; then
   echo "No usable AWS credentials in this environment. This script cannot deploy without them." >&2
@@ -60,6 +76,7 @@ if ! caller_identity="$(aws sts get-caller-identity --region "$REGION" --output 
 fi
 ACCOUNT_ID="$(echo "$caller_identity" | python3 -c 'import json,sys; print(json.load(sys.stdin)["Account"])')"
 echo "    ok (account $ACCOUNT_ID, region $REGION)"
+fi
 
 echo "==> Checking docker daemon is reachable"
 if ! docker info >/dev/null 2>&1; then
@@ -96,6 +113,9 @@ EOF
   exit 1
 fi
 
+if [[ "$PACKAGE_ONLY" == "1" ]]; then
+  echo "==> Skipping IAM / KMS / SSM / log-group setup (--package-only)"
+else
 echo "==> Resolving the KMS key backing SSM SecureString (alias/aws/ssm)"
 if ! KMS_KEY_ARN="$(aws kms describe-key --key-id alias/aws/ssm --region "$REGION" \
       --query 'KeyMetadata.Arn' --output text 2>&1)"; then
@@ -167,6 +187,8 @@ echo "     retention keeps a demo left running past the hackathon from growing u
 aws logs create-log-group --log-group-name "$LOG_GROUP" --region "$REGION" 2>/dev/null || true
 aws logs put-retention-policy --log-group-name "$LOG_GROUP" --retention-in-days "$LOG_RETENTION_DAYS" --region "$REGION"
 
+fi
+
 echo "==> Building the deployment package inside $BUILD_IMAGE"
 echo "    (image pull is free from public.ecr.aws; nothing here costs money until deploy)"
 rm -rf "$PACKAGE_DIR"
@@ -190,9 +212,29 @@ find "$PACKAGE_DIR" -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null ||
 echo "==> Zipping package"
 rm -f "$ZIP_PATH"
 ( cd "$PACKAGE_DIR" && zip -r9q "$ZIP_PATH" . -x '*.pyc' )
+echo "==> Verifying the package imports inside the Lambda runtime image"
+# This is the check that catches the classic failure: a psycopg2 built for the wrong
+# platform or Python version, which does not surface until the first live invocation.
+docker run --rm --platform linux/amd64 --entrypoint /bin/sh \
+  -v "$PACKAGE_DIR":/var/task:ro "$BUILD_IMAGE" -c \
+  'cd /var/task && python -c "
+import sys; sys.path.insert(0, \"/var/task\")
+import psycopg2, boto3
+from backend import handler
+assert hasattr(handler, \"handler\"), \"no handler entrypoint\"
+print(\"    psycopg2\", psycopg2.__version__.split()[0], \"| boto3\", boto3.__version__, \"| handler OK\")
+"' || { echo "ERROR: the package does not import in the Lambda runtime. Do not deploy this." >&2; exit 1; }
+
 ZIP_BYTES="$(wc -c < "$ZIP_PATH" | tr -d ' ')"
 ZIP_MB=$(( ZIP_BYTES / 1024 / 1024 ))
 echo "    $ZIP_PATH (${ZIP_MB} MB)"
+
+if [[ "$PACKAGE_ONLY" == "1" ]]; then
+  echo
+  echo "Package built and verified. No AWS resources were touched."
+  echo "Re-run without --package-only once 'aws sts get-caller-identity' works."
+  exit 0
+fi
 if (( ZIP_BYTES > 50 * 1024 * 1024 )); then
   echo "ERROR: package is over the 50 MB direct zip-upload limit for UpdateFunctionCode/CreateFunction." >&2
   echo "This script only supports the small direct-upload path; an S3-staged upload is out of scope here." >&2

@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# AWS Amplify Hosting build spec for the MemoryStand dashboard (frontend/).
+#
+# This is a static site: two files (index.html, app.js), no framework, no package.json,
+# no npm install, no bundler. The "build" phase is therefore empty on purpose -- there is
+# nothing to compile. Amplify still requires a build spec shape even when a phase does
+# nothing, so `commands: []` is not a placeholder for something to fill in later.
+#
+# WHEN THIS FILE ACTUALLY GETS READ: only if the Amplify app is connected to this Git
+# repository (Amplify Hosting's "continuous deployment" mode), which reads amplify.yml
+# from the repo root on every push. This repo's own deploy path,
+# infra/deploy_frontend.sh, uses Amplify's *manual* deployment API instead (create-app /
+# create-branch / create-deployment with a hand-built zip of frontend/) precisely because
+# there is no AWS account connected to this GitHub repo yet -- manual deployment needs no
+# repo access token. If the project owner later connects this repo to Amplify Hosting
+# through the console instead, this file is what tells Amplify "frontend/ is the whole
+# site, do not run a build step."
+#
+# artifacts.baseDirectory MUST be "frontend" (not "." or "frontend/dist") -- there is no
+# dist/build output directory, the source files ARE the deployable artifact.
+version: 1
+frontend:
+  phases:
+    # No dependencies to install and nothing to compile -- index.html and app.js are
+    # served exactly as committed.
+    preBuild:
+      commands: []
+    build:
+      commands: []
+  artifacts:
+    baseDirectory: frontend
+    files:
+      - '**/*'
+  cache:
+    # Nothing to cache: no node_modules, no build output.
+    paths: []
