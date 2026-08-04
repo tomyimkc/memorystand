@@ -183,6 +183,33 @@ property of the managed server, not a choice this project made. Reproduce it all
 `scripts/verify_mcp.py`. Its write probe is opt-in and has not been run, so whether a write
 would actually be refused is **untested**.
 
+## Pending: the attested/verified migration
+
+`db/migrations/001_attested_trust_tier.sql` has **not** been applied to the live cluster, and
+the code that writes `attested` is therefore **committed but not deployed**. That ordering is
+deliberate: the live `CHECK` constraint still permits only three tiers, so a Lambda deployed
+ahead of the migration would fail every `/confirm_outcome` that lands on the attested path.
+
+    cockroach sql --url "$MEMORYSTAND_DSN" -f db/migrations/001_attested_trust_tier.sql
+    REGION=us-west-2 ./infra/deploy.sh
+
+The migration rewrites one CHECK constraint. No rows are read, written or moved, every existing
+value stays valid, and re-running it is a no-op.
+
+Also pending, and the reason `verified` is currently unreachable in production: the Lambda role
+and the deployer user both lack `cloudwatch:GetMetricStatistics`. Verified live — the check
+degrades exactly as designed rather than failing open:
+
+    claims duration FELL -> unavailable
+    AccessDenied when calling GetMetricStatistics
+
+`unavailable` grants nothing, so an unchecked claim cannot reach `verified`. The policy JSON in
+`infra/iam_policy.json` and `infra/deployer_policy.json` is already updated; applying it is:
+
+    AWS_PROFILE=memorystand ./infra/update_deployer_policy.sh
+    aws iam put-role-policy --role-name memorystand-lambda-role \
+      --policy-name memorystand-lambda --policy-document file://infra/iam_policy.json
+
 ## Not yet run
 
 Nothing in the deploy path. `provision.sh`, `ssm_setup.sh`, `deploy.sh` and `deploy_frontend.sh`
