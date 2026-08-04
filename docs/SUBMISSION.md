@@ -22,7 +22,18 @@ then **Technical Implementation**. Prizes: 1st $5,000, 2nd $2,500, 3rd $1,250.
 
 ### Tagline (one line, ≤ ~70 chars for Devpost's card view)
 
-> Agent memory that earns trust from outcomes, not from asking itself.
+> Memory that asks CloudWatch, not a model, whether it's true.
+
+Longer form, for the description field where the character budget allows it:
+
+> Every agent-memory system asks a model whether its own memory is true.
+> MemoryStand asks CloudWatch — and refuses the promotion when CloudWatch disagrees.
+
+**Why this framing and not "we invented outcome-gated trust".** The idea is decades old
+(Doyle's JTMS, 1979; CHEF, 1986; NELL's promoted beliefs, 2010; EigenTrust, 2003), and a judge
+who knows the field would puncture a novelty claim in one search. What is defensible and
+checkable is the *enforcement*: every shipping system delegates "is this memory true?" to a
+model, and this one structurally cannot. Lead with the comparison, concede the idea.
 
 ### Opening three paragraphs (long description)
 
@@ -107,6 +118,22 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 
 ### Field 5 — Which CockroachDB tools (pick ≥2; all four apply here)
 
+> **Cloud Managed MCP Server.** Wired to the live cluster and verified end to end with
+> `scripts/verify_mcp.py`: handshake to `cockroachdb-cloud` v1.0.0, a trust-ladder read
+> returning `{"unconfirmed":118,"verified":5}`, and an `explain_query` showing the `vector
+> search` node — all through the managed server, no custom proxy.
+>
+> **State this plainly rather than let a judge find it.** The hackathon page describes the MCP
+> server as "safe by default: read-only mode". In practice there is **no read-only role that
+> works**: under `CLUSTER_DEVELOPER`, `select_query` returns `executing select query:
+> unauthorized`, and Cockroach Labs' own docs require Cluster Admin or Cluster Operator. This
+> project therefore granted `CLUSTER_OPERATOR_WRITER`, and **the identity is write-capable**.
+> Read tools are the only ones invoked, but that is a property of what this project chooses to
+> call, not of what the credential is permitted to do. Whether a write would actually be
+> refused is **untested** — `verify_mcp.py`'s write probe is opt-in and was not run. See
+> field 11.
+
+
 > **Distributed Vector Indexing.** `agent_memories.embedding` is a native `VECTOR(512)` column
 > with `VECTOR INDEX agent_memories_tenant_idx (tenant_id, verdict, embedding vector_cosine_ops)`
 > (`db/schema.sql`). `verdict` sits in the index prefix deliberately, not as an afterthought: a
@@ -182,6 +209,34 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > on Bedrock capacity. Full detail is in `docs/BEDROCK_QUOTA.md`.
 
 ### Field 7 — How meaningfully integrated
+
+> **Amazon CloudWatch is not observability here — it is the trust oracle.** This is the part
+> that makes the headline literally true rather than rhetorical. When an outcome arrives with
+> `source='metric'`, `backend/evidence.py` re-queries CloudWatch for what the metric actually
+> did in the windows either side of the decision and compares it against what was claimed —
+> direction first, magnitude second. Confirmed → the memory reaches `verified`. Contradicted →
+> **the outcome is refused outright**, not quietly downgraded. Unavailable → `attested`, because
+> an outage in the checker is not evidence in either direction.
+>
+> Verified live on the deployed Lambda, `model_calls: 0` on every one:
+>
+> | Claim submitted | CloudWatch showed | Result |
+> |---|---|---|
+> | −11,000 ms | −11,452.66 ms | **confirmed** → `verified` |
+> | −10 ms | −11,452.66 ms | refused, magnitude |
+> | +500 ms | −11,452.66 ms | refused, opposite direction |
+>
+> The Lambda's IAM role carries exactly two CloudWatch actions, both read-only
+> (`infra/iam_policy.json`).
+>
+> **A property worth stating because it constrains the demo:** verification is inherently
+> delayed. Confirming an outcome the instant a decision is made returns `unavailable` — the
+> "after" window is in the future and has no datapoints yet. That is correct, not broken: an
+> outcome is something the world reports back later. A memory sits at `attested` until the
+> metric has had time to move. Anything that promoted instantly would not be measuring an
+> outcome at all.
+
+
 
 > Argued by what breaks if each piece is removed, since that is a harder bar than listing what was
 > used.
