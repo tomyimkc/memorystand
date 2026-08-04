@@ -337,6 +337,8 @@ def _route_confirm_outcome(body: dict[str, Any], headers: dict[str, str], reques
         model_calls=result.get("model_calls"),
         promoted=len(result.get("promoted") or []),
         demoted=len(result.get("demoted") or []),
+        trust_tier=result.get("trust_tier"),
+        verification=(result.get("verification") or {}).get("status"),
     )
     return 200, result
 

@@ -111,20 +111,34 @@ def _adjudicate(
 
     A new claim that contradicts an admitted one is held for review, unless the admitted
     claim is merely 'unconfirmed' and the new one comes from a higher-authority source --
-    in which case the new claim supersedes it. A memory that has earned standing
-    (trust_tier='verified') is never silently overridden: reality has already backed it,
-    so a contradicting claim is held for a human instead.
+    in which case the new claim supersedes it. A memory that has earned standing is never
+    silently overridden: something in the real world has already backed it, so a
+    contradicting claim is held for a human instead.
+
+    "Earned standing" means ``attested`` OR ``verified``. Both had an external outcome
+    reported against the decision that produced them; they differ in whether this
+    deployment could independently re-check that outcome (see backend/evidence.py). The
+    protection is about an outcome having been reported at all, so both rungs get it --
+    but the held-for-review message names which rung it was, because "a human said it
+    worked" and "CloudWatch confirmed it" are different strengths of reason and the
+    reviewer should not have to guess which one they are looking at.
     """
     checked = [c["memory_id"] for c in conflicts] + [n["memory_id"] for n in neighbours]
 
-    verified_conflicts = [c for c in conflicts if c["trust_tier"] == "verified"]
-    if verified_conflicts:
+    standing_conflicts = [c for c in conflicts if c["trust_tier"] in ("verified", "attested")]
+    if standing_conflicts:
+        held = standing_conflicts[0]
+        how = (
+            "independently confirmed against the external system of record"
+            if held["trust_tier"] == "verified"
+            else "reported by an external outcome, but not independently re-checked"
+        )
         return Verdict(
             HELD,
             [
                 "contradicts a memory that has earned standing "
-                f"(memory {verified_conflicts[0]['memory_id']} asserts "
-                f"{verified_conflicts[0]['attribute_value']!r}, confirmed by a real outcome)"
+                f"(memory {held['memory_id']} asserts {held['attribute_value']!r}; "
+                f"trust_tier={held['trust_tier']}, {how})"
             ],
             checked,
         )

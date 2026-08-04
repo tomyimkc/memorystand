@@ -142,7 +142,7 @@ def test_a_memory_that_has_earned_standing_is_not_silently_overridden_by_a_contr
         evidence={"source": "human", "outcome": "success", "external_ref": "postmortem-123"},
     )
     assert original["memory_id"] in grant["promoted"]
-    assert memory.get(tenant_id, original["memory_id"])["trust_tier"] == trust.VERIFIED
+    assert memory.get(tenant_id, original["memory_id"])["trust_tier"] == trust.ATTESTED
 
     # Even a HIGHER-authority contradiction cannot silently override it now.
     contradiction = memory.remember(

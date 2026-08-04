@@ -109,5 +109,9 @@ def test_only_produced_memories_are_retiered_never_merely_consulted_ones(tenant_
     assert consulted_only["memory_id"] not in result["promoted"]
     assert consulted_only["memory_id"] not in result["demoted"]
 
-    assert memory.get(tenant_id, produced["memory_id"])["trust_tier"] == trust.VERIFIED
+    # ATTESTED, not VERIFIED: the evidence here is a PagerDuty incident id, and this
+    # deployment has no PagerDuty token to re-check it with. An outcome nobody could
+    # independently confirm must not reach the top of the ladder -- that distinction is
+    # the whole point of backend/evidence.py.
+    assert memory.get(tenant_id, produced["memory_id"])["trust_tier"] == trust.ATTESTED
     assert memory.get(tenant_id, consulted_only["memory_id"])["trust_tier"] == trust.UNCONFIRMED

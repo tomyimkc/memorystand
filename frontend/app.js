@@ -48,7 +48,13 @@
 //     it is the route that grants a memory its standing. Ungated, it let any caller
 //     promote any tenant's memories to 'verified'.
 //     response: { decision_id, outcome, source, external_ref, metric_delta,
-//                 promoted: string[], demoted: string[], model_calls: number }
+//                 promoted: string[], demoted: string[], model_calls: number,
+//                 trust_tier: "attested"|"verified"|"disputed"|null,
+//                 verification: { status, detail, observed, claimed } }
+//     `verification.status` is one of confirmed | contradicted | unavailable |
+//     not_verifiable. Only "confirmed" earns trust_tier "verified" -- everything else
+//     that succeeded lands on "attested", meaning an outcome was reported but nobody
+//     independently re-checked it.
 //
 //   GET {API_BASE}/timemachine?tenant_id=...&decision_id=...     — open route
 //     -> backend.replay.cross_examine(tenant_id, decision_id)

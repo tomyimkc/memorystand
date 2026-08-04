@@ -63,20 +63,61 @@ $ memorystand cross-examine --decision-id <id>
 ## Prior art, stated honestly
 
 Being precise about what is and is not new here, because a five-minute search would surface this
-anyway and the omission would read worse than the admission:
+anyway and the omission would read worse than the admission.
 
-- **Bitemporal / time-travel memory is not new.** [Zep/Graphiti](https://arxiv.org/abs/2501.13956)
-  ships it as a headline feature, and 2026 papers ([TOKI](https://arxiv.org/pdf/2606.06240),
-  Memento, graph-native bitemporal stores) build on SQL:2011's `FOR SYSTEM_TIME AS OF`. Here it is
-  an *implementation choice* — CockroachDB's native MVCC means no separate version table and no
-  second store — not a claim of novelty.
-- **Write-time contradiction checking is not new.** Mem0, Graphiti, and
-  [MemTX](https://arxiv.org/html/2607.23929v2) all do a version of it; MemTX's paper uses much the
-  same lifecycle vocabulary this schema does.
-- **What is new** is using a *verified real-world outcome* as the promotion signal for memory
-  trust, in the on-call domain. Research flags this as an open gap
-  ([GLOVE](https://arxiv.org/html/2601.19249v1), [Supersede](https://arxiv.org/html/2606.27472v1));
-  no shipped agent-memory product does it.
+**The core idea is 47 years old.** Doyle's
+[Truth Maintenance System (1979)](https://cse.buffalo.edu/~rapaport/Papers/Papers.by.Others/NONMONOTONIC/doyle79.pdf)
+labels a belief `IN` only while a valid justification supports it, and retracts it when no
+justification remains — and justifications are never deleted, only invalidated, which is also
+this schema's append-only outcome model. Hammond's
+[CHEF (1986)](https://aaai.org/papers/00267-aaai86-044-chef-a-model-of-case-based-planning/) and
+the wider case-based-reasoning literature index retained cases by whether the plan actually
+worked, and tune index strengths on observed success or failure. **"Ground memory trust in
+external outcomes" is not a new idea, and this project does not claim it as one.**
+
+**Bitemporal / time-travel memory is not new either.** [Zep/Graphiti](https://arxiv.org/abs/2501.13956)
+ships it as a headline feature, and 2026 work ([TOKI](https://arxiv.org/pdf/2606.06240), Memento)
+builds on SQL:2011's `FOR SYSTEM_TIME AS OF`. Here it is an *implementation choice* — CockroachDB's
+native MVCC means no separate version table and no second store — not a claim of novelty.
+**Write-time contradiction checking is not new**: Mem0, Graphiti and
+[MemTX](https://arxiv.org/html/2607.23929v2) all do a version of it.
+
+### So what is actually different: who is allowed to decide a memory is true
+
+Every shipping agent-memory system answers "is this memory still true?" by asking a model.
+
+| System | Who decides truth | Evidence |
+|---|---|---|
+| [Mem0](https://arxiv.org/html/2504.19413v1) | An LLM chooses `ADD`/`UPDATE`/`DELETE` per fact. There is **no per-memory confidence score at all**. The 2026 rewrite dropped the reconciliation pass, so contradictory memories now accumulate | [mem0#5867](https://github.com/mem0ai/mem0/issues/5867) — "ADD-only memory extraction can create conflicting memories" |
+| [Zep / Graphiti](https://arxiv.org/pdf/2501.13956) | An LLM sets `valid_at` / `invalid_at`. Zep's own guidance is to treat these as **model-inferred, not authoritative** | [graphiti#1666](https://github.com/getzep/graphiti/issues/1666) — on a non-reasoning model, contradiction detection scored 1 of 9, so "temporal invalidation silently underperforms and stale facts survive their own contradiction" |
+| [AWS Bedrock AgentCore Memory](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/built-in-strategies.html) | Extraction, consolidation and reflection are each **an LLM system prompt**. No verification or confidence API is exposed | AWS docs |
+| **MemoryStand** | A non-model signal, re-checked against the system of record. `backend/trust.py` imports no model client and asserts that on every call | `tests/test_evidence_verification.py` |
+
+The narrow claim, stated so it can be checked rather than admired:
+
+> Trust is granted only by an external non-model signal, on a promotion path that makes zero
+> model calls, with credit assigned through the decision that produced the memory — and where
+> the signal is machine-checkable, it is re-checked before it counts.
+
+That is a claim about **enforcement**, not about having had the idea first. Doyle had the idea.
+What is unusual is a 2026 memory system that refuses to let a model grade its own memory, and
+that makes the refusal structural instead of a convention — including a guard that fails if a
+model client becomes reachable even one import away
+([`assert_no_model_calls`](backend/trust.py)).
+
+### Four rungs, because "someone said so" is not "we checked"
+
+| `trust_tier` | Meaning |
+|---|---|
+| `unconfirmed` | No outcome reported yet |
+| `attested` | An external outcome was reported, but this deployment could not independently re-check it — no PagerDuty token; a human sign-off has no system of record |
+| `verified` | Re-queried against the external system of record, which agreed ([`backend/evidence.py`](backend/evidence.py)) |
+| `disputed` | The outcome was a rollback or a false positive |
+
+A claim the system of record **contradicts** is refused outright, not quietly downgraded: a memory
+must gain nothing from a disproved claim. A claim that could not be checked because CloudWatch was
+unreachable is recorded as `attested` — an outage in the checker is not evidence in either
+direction, which is why there are four verification states and not a boolean.
 
 ## Why CockroachDB, specifically
 
