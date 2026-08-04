@@ -153,9 +153,14 @@ def spike_2_aost_window(conn) -> bool:
                 conn.rollback()
                 gc_line = "zone configuration not readable on this tier"
 
-            for lag in ("-10s", "-5m", "-1h", "-6h", "-24h", "-72h"):
+            # AOST must be the first statement of the transaction under psycopg2, which
+            # opens one implicitly. A bare "SELECT 1 AS OF SYSTEM TIME" after any prior
+            # statement raises "inconsistent AS OF SYSTEM TIME timestamp".
+            for lag in ("-10s", "-5m", "-30m", "-1h", "-6h", "-24h"):
                 try:
-                    cur.execute(f"SELECT 1 AS OF SYSTEM TIME '{lag}'")
+                    conn.rollback()
+                    cur.execute(f"SET TRANSACTION AS OF SYSTEM TIME '{lag}'")
+                    cur.execute("SELECT 1")
                     cur.fetchone()
                     reach.append(lag)
                 except Exception as exc:  # noqa: BLE001
@@ -210,8 +215,10 @@ def spike_2b_aost_with_vector(conn, vector_ok: bool) -> None:
             cur.execute("INSERT INTO _spike_aost_vec (tenant_id, v) VALUES (%s, %s)", (tenant, "[1,0,0]"))
             conn.commit()
             time.sleep(2)
+            conn.rollback()
+            cur.execute("SET TRANSACTION AS OF SYSTEM TIME '-1s'")
             cur.execute(
-                "SELECT id FROM _spike_aost_vec AS OF SYSTEM TIME '-1s' "
+                "SELECT id FROM _spike_aost_vec "
                 "WHERE tenant_id = %s ORDER BY v <=> %s LIMIT 1",
                 (tenant, "[1,0,0]"),
             )
@@ -246,10 +253,9 @@ def spike_3_serializable_retry(conn_factory) -> None:
             ca.execute("INSERT INTO _spike_race VALUES (1, 0)")
             a.commit()
 
-            ca.execute("BEGIN")
+            a.rollback(); b.rollback()
             ca.execute("SELECT n FROM _spike_race WHERE id = 1")
             ca.fetchone()
-            cb.execute("BEGIN")
             cb.execute("SELECT n FROM _spike_race WHERE id = 1")
             cb.fetchone()
             ca.execute("UPDATE _spike_race SET n = n + 1 WHERE id = 1")

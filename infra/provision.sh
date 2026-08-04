@@ -22,7 +22,7 @@ set -euo pipefail
 CLUSTER_NAME="${CLUSTER_NAME:-standing}"
 REGION="${REGION:-us-west-2}"
 CLOUD="${CLOUD:-AWS}"
-SQL_USER="${SQL_USER:-standing_app}"
+SQL_USER="${SQL_USER:-memorystand_app}"
 RU_LIMIT="${RU_LIMIT:-50000000}"     # stay inside the free monthly allowance
 STORAGE_LIMIT="${STORAGE_LIMIT:-10}" # GiB
 
@@ -30,12 +30,18 @@ need() { command -v "$1" >/dev/null 2>&1 || { echo "missing: $1" >&2; exit 1; };
 need ccloud
 need jq
 
+CRED_FILE="${CRED_FILE:-$HOME/.memorystand-sql-user.json}"
+DSN_FILE="${DSN_FILE:-$HOME/.memorystand-dsn}"
+
 echo "==> Authenticating (no-op if a valid session exists)"
 ccloud auth whoami >/dev/null 2>&1 || ccloud auth login
 
 echo "==> Looking for an existing cluster named '${CLUSTER_NAME}'"
-existing="$(ccloud cluster list -o json | jq -r --arg n "$CLUSTER_NAME" \
-  '.clusters[]? | select(.name==$n) | .id' | head -1)"
+# `ccloud cluster list -o json` returns a bare ARRAY, not {clusters:[...]}. Accept either,
+# because guessing wrong here fails with a jq type error that says nothing useful.
+existing="$(ccloud cluster list -o json 2>/dev/null | jq -r --arg n "$CLUSTER_NAME" \
+  'if type=="array" then .[] else (.clusters[]? // empty) end | select(.name==$n) | .id' \
+  | head -1)"
 
 if [[ -n "${existing}" ]]; then
   echo "    found: ${existing} (reusing)"
@@ -50,19 +56,43 @@ else
 fi
 
 echo "==> Cluster details"
-ccloud cluster info "${CLUSTER_NAME}" -o json | jq '{id, name, state, cloud_provider, plan}'
+ccloud cluster info "${CLUSTER_NAME}" -o json 2>/dev/null \
+  | jq '{id, name, state, cloud_provider, plan: (.plan // .config)}' 2>/dev/null \
+  || ccloud cluster info "${CLUSTER_NAME}" 2>/dev/null | grep -viE "retrieving|∙|●"
 
 echo "==> Ensuring SQL user '${SQL_USER}' exists"
-if ! ccloud cluster user list "${CLUSTER_NAME}" -o json | jq -e \
-     --arg u "$SQL_USER" '.users[]? | select(.name==$u)' >/dev/null 2>&1; then
-  # Prints a generated password once. Put it straight into SSM; never commit it.
-  ccloud cluster user create "${CLUSTER_NAME}" "${SQL_USER}" -o json
+if ! ccloud cluster user list "${CLUSTER_NAME}" -o json 2>/dev/null | jq -e \
+     --arg u "$SQL_USER" \
+     'if type=="array" then .[] else (.users[]? // empty) end
+      | select((.name // .) == $u)' >/dev/null 2>&1; then
+  # ccloud shows a generated password exactly once. Capture it to a 0600 file rather
+  # than letting it land in scrollback -- this terminal is the one a demo gets recorded
+  # from, and a credential on screen is unrecoverable once it is in a video.
+  umask 077
+  ccloud cluster user create "${CLUSTER_NAME}" "${SQL_USER}" -o json > "$CRED_FILE"
+  chmod 600 "$CRED_FILE"
+  echo "    created; password written to $CRED_FILE (not printed)"
 else
   echo "    already exists"
 fi
 
-echo "==> Connection string (store as an SSM SecureString, never a plaintext env var)"
-ccloud cluster connection-string "${CLUSTER_NAME}" --sql-user "${SQL_USER}" --database defaultdb
+echo "==> Assembling the DSN"
+# Build the full DSN (with password) into the same 0600 file. Print only the redacted
+# form, so the shape is verifiable on screen without the secret being on screen.
+BASE_URL="$(ccloud cluster connection-string "${CLUSTER_NAME}" --sql-user "${SQL_USER}" \
+              --database defaultdb 2>/dev/null | grep -Eo 'postgresql://[^ ]+' | head -1)"
+if [[ -n "$BASE_URL" && -s "$CRED_FILE" ]]; then
+  PW="$(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));print(d.get("password",""))' "$CRED_FILE" 2>/dev/null || true)"
+  if [[ -n "$PW" ]]; then
+    DSN="${BASE_URL/postgresql:\/\//postgresql://${SQL_USER}:${PW}@}"
+    printf '%s\n' "$DSN" > "$DSN_FILE"; chmod 600 "$DSN_FILE"
+    echo "    DSN written to $DSN_FILE"
+    echo "    ${DSN//$PW/********}"
+  fi
+else
+  echo "    could not assemble automatically; connection string:"
+  ccloud cluster connection-string "${CLUSTER_NAME}" --sql-user "${SQL_USER}" --database defaultdb
+fi
 
 cat <<'EOF'
 
