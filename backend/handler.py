@@ -504,6 +504,12 @@ def lambda_handler(event: dict[str, Any], context: Any = None) -> dict[str, Any]
         return _response(404, {"error": "not_found", "detail": str(exc)}, cors=True)
     except trust.OutcomeRejected as exc:
         return _response(400, {"error": "outcome_rejected", "detail": str(exc)}, cors=True)
+    except replay.InvalidInstant as exc:
+        # A refused instant is the caller's fault, not the server's. Returning 500 here
+        # would report a rejected injection attempt as "MemoryStand crashed", which both
+        # reads as a bug and hands an attacker a signal that they moved something.
+        _log("invalid_instant", request_id, level="warn", method=method, path=path)
+        return _response(400, {"error": "bad_request", "detail": str(exc)}, cors=True)
     except replay.GCWindowExceeded as exc:
         return _response(409, {"error": "gc_window_exceeded", "detail": str(exc)}, cors=True)
     except db.RetryBudgetExhausted as exc:

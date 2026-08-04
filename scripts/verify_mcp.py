@@ -152,6 +152,32 @@ def main() -> int:
     if not ok:
         findings.append("the read query failed; the MCP connection is not usable as documented")
 
+    # Fetch one real embedding first and inline it as a LITERAL below. This matters: an
+    # ORDER BY whose target is a scalar subquery is not a constant, and the optimizer will
+    # not use a vector index for it. Explaining that shape prints a plan with no
+    # `vector search` node, which looks exactly like "the index does not work here" and is
+    # simply an artefact of how the probe was written.
+    ok, emb_text = mcp.tool(
+        "select_query",
+        {
+            "database": "defaultdb",
+            "query": (
+                "SELECT embedding::string AS e FROM agent_memories "
+                f"WHERE tenant_id = '{DEMO_TENANT}' LIMIT 1"
+            ),
+        },
+    )
+    literal = ""
+    if ok:
+        try:
+            literal = json.loads(emb_text)["rows"][0]["e"]
+        except Exception:  # noqa: BLE001 - fall through to the honest "could not check"
+            literal = ""
+
+    if not literal:
+        print("   query plan read : SKIPPED (could not fetch a probe vector)")
+        return 1 if findings else 0
+
     ok, plan = mcp.tool(
         "explain_query",
         {
@@ -165,13 +191,9 @@ def main() -> int:
             # Both produced a plausible-looking plan with no `vector search` node, which
             # reads as "the index does not work at this scale" and is simply false.
             "query": (
-                "SELECT memory_id, content, embedding <=> "
-                "(SELECT embedding FROM agent_memories "
-                f"WHERE tenant_id = '{DEMO_TENANT}' LIMIT 1) AS distance "
-                f"FROM agent_memories WHERE tenant_id = '{DEMO_TENANT}' "
-                "AND verdict = 'accepted' ORDER BY embedding <=> "
-                "(SELECT embedding FROM agent_memories "
-                f"WHERE tenant_id = '{DEMO_TENANT}' LIMIT 1) LIMIT 5"
+                "SELECT memory_id, content FROM agent_memories "
+                f"WHERE tenant_id = '{DEMO_TENANT}' AND verdict = 'accepted' "
+                f"ORDER BY embedding <=> '{literal}' LIMIT 5"
             ),
         },
     )
@@ -179,9 +201,21 @@ def main() -> int:
     print(f"   query plan read : {'OK' if ok else 'FAILED'}")
     print(f"   vector search node present: {uses_index}")
     if ok and not uses_index:
+        # Do NOT explain this away with "too few rows". That was this script's first guess
+        # and it is false: EXPLAIN run directly against this cluster shows `vector search`
+        # on the 117-row demo tenant. The index is prefix-scoped, so per-tenant volume does
+        # not gate index selection. If the node is missing here, the query shape is wrong
+        # (a non-constant ORDER BY target, an L2 `<->` against a cosine index, or an extra
+        # predicate such as `embedding IS NOT NULL`), not the data size.
         print(
-            "   (expected at low row counts -- the optimizer picks a scan when the tenant\n"
-            "    holds few rows. See benchmarks/ for the row counts where it flips.)"
+            "   No vector search node. Do not read this as 'too few rows' -- the index is\n"
+            "   prefix-scoped and engages at 117 rows. Suspect the query shape instead.\n"
+            "   Plan was:"
+        )
+        print("     " + plan.strip()[:600].replace("\n", "\n     "))
+        findings.append(
+            "explain_query returned a plan with no vector search node; the recall query "
+            "shape may have drifted from what the index supports"
         )
 
     print()
