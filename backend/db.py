@@ -43,8 +43,36 @@ class RetryBudgetExhausted(RuntimeError):
     """A transaction hit SQLSTATE 40001 more times than the retry budget allows."""
 
 
+# Amazon Linux ships the trust store here; the Lambda python3.13 image has it at all
+# three of the usual paths. Verified by inspecting the real runtime image.
+LAMBDA_CA_BUNDLE = "/etc/pki/tls/certs/ca-bundle.crt"
+
+
+def _normalise_ssl(value: str) -> str:
+    """Make `sslrootcert=system` work inside Lambda.
+
+    CockroachDB Cloud hands out a DSN with `sslmode=verify-full` and no
+    `sslrootcert`, which fails locally on a missing ~/.postgresql/root.crt.
+    `sslrootcert=system` fixes that on a developer machine -- but inside the Lambda
+    runtime the bundled libpq does not resolve "system", and the connection dies with
+    `SSL error: certificate verify failed`.
+
+    Rather than keep two DSNs in sync (one in SSM for Lambda, one for laptops -- a
+    divergence nobody would remember), point at the concrete Amazon Linux trust store
+    when running in Lambda. Verification stays ON either way; only the path to the CA
+    bundle changes.
+    """
+    if not value or "sslrootcert" not in value:
+        return value
+    in_lambda = bool(os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+    if in_lambda and "sslrootcert=system" in value and os.path.exists(LAMBDA_CA_BUNDLE):
+        return value.replace("sslrootcert=system", f"sslrootcert={LAMBDA_CA_BUNDLE}")
+    return value
+
+
 def dsn() -> str:
     value = os.environ.get(DSN_ENV) or os.environ.get(FALLBACK_DSN_ENV)
+    value = _normalise_ssl(value) if value else value
     if not value:
         raise RuntimeError(
             f"No connection string. Set {DSN_ENV} (or {FALLBACK_DSN_ENV}).\n"
