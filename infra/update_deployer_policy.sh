@@ -78,22 +78,50 @@ aws iam get-policy-version --policy-arn "$POLICY_ARN" --version-id "$CURRENT_VER
     --query 'PolicyVersion.Document' --output json > "$RENDERED.live" 2>/dev/null || echo '{}' > "$RENDERED.live"
 python3 - "$RENDERED.live" "$RENDERED" <<'PY'
 import json, sys
-def actions(path):
-    try: d = json.load(open(path))
-    except Exception: return set()
-    if isinstance(d, str): d = json.loads(d)
-    out = set()
-    for s in d.get("Statement", []):
-        a = s.get("Action", [])
-        out.update(a if isinstance(a, list) else [a])
+
+def load(path):
+    try:
+        d = json.load(open(path))
+    except Exception:
+        return {}
+    return json.loads(d) if isinstance(d, str) else d
+
+def index(doc):
+    """Sid -> (actions, resources). Both matter."""
+    out = {}
+    for st in doc.get("Statement", []):
+        a, r = st.get("Action", []), st.get("Resource", [])
+        out[st.get("Sid", "<no-sid>")] = (
+            frozenset(a if isinstance(a, list) else [a]),
+            frozenset(r if isinstance(r, list) else [r]),
+        )
     return out
-live, new = actions(sys.argv[1]), actions(sys.argv[2])
-added, removed = sorted(new - live), sorted(live - new)
-print(f"    + {a}" for a in []) if False else None
-for a in added:   print(f"    + {a}")
-for a in removed: print(f"    - {a}")
-if not added and not removed:
-    print("    (no action-level changes; resource scopes may still differ)")
+
+live, new = index(load(sys.argv[1])), index(load(sys.argv[2]))
+
+changed = False
+for sid in sorted(set(live) | set(new)):
+    la, lr = live.get(sid, (frozenset(), frozenset()))
+    na, nr = new.get(sid, (frozenset(), frozenset()))
+    if (la, lr) == (na, nr):
+        continue
+    changed = True
+    label = "+ new statement" if sid not in live else "- removed" if sid not in new else "~ changed"
+    print("    [%s] %s" % (label, sid))
+    for x in sorted(na - la):
+        print("        + action    %s" % x)
+    for x in sorted(la - na):
+        print("        - action    %s" % x)
+    # Resource changes matter as much as action changes: a permission can be granted in
+    # name and still denied because the ARN does not cover what you actually call. The
+    # first version of this diff showed only actions, which hid exactly that case.
+    for x in sorted(nr - lr):
+        print("        + resource  %s" % x)
+    for x in sorted(lr - nr):
+        print("        - resource  %s" % x)
+
+if not changed:
+    print("    (identical -- nothing to apply)")
 PY
 rm -f "$RENDERED.live"
 
