@@ -1,0 +1,92 @@
+{
+  "schemaVersion": "1.0",
+  "title": "MemoryStand Evidence-First Demo",
+  "targetDurationSeconds": 165,
+  "candidateOnly": true,
+  "canClaimAGI": false,
+  "footer": "candidateOnly · not validated",
+  "scenes": [
+    {
+      "id": "01-hook",
+      "durationSeconds": 15,
+      "frame": "01-hook.png",
+      "evidenceClass": "LIVE AWS",
+      "cues": [
+        "It's three in the morning. An on-call agent's memory says raise the circuit breaker.",
+        "Most systems trust that because it's recent. MemoryStand asks something different: last time this agent acted on a memory, did it actually work?"
+      ]
+    },
+    {
+      "id": "02-admission-holds",
+      "durationSeconds": 20,
+      "frame": "02-admission-holds.png",
+      "evidenceClass": "LIVE AWS · OUTCOME PATH",
+      "cues": [
+        "A runbook fact goes in first, live: checkout-api's breaker trips at 800 milliseconds. Nothing on file contradicts it, so it's accepted.",
+        "A Slack claim arrives next, saying 300 milliseconds, with no runbook behind it. Slack doesn't outrank a runbook, so that claim is held for review, not thrown away."
+      ]
+    },
+    {
+      "id": "03-human-correction",
+      "durationSeconds": 19,
+      "frame": "03-human-correction.png",
+      "evidenceClass": "LIVE AWS · OUTCOME PATH",
+      "cues": [
+        "The on-call lead corrects it, live: 500 milliseconds, the real number. A human outranks a runbook, so this is accepted, and recorded as corrected by a higher-authority source.",
+        "The 800-millisecond fact stays on record, not deleted — the Slack guess is still just held, nobody confirmed it."
+      ]
+    },
+    {
+      "id": "04-agent-decides",
+      "durationSeconds": 21,
+      "frame": "04-agent-decides.png",
+      "evidenceClass": "LIVE AWS · OUTCOME PATH · STUB EMBEDDINGS",
+      "cues": [
+        "An incident hits: payments-gateway latency is spiking. Recall surfaces the corrected 500-millisecond fact first, ranked by a real vector search.",
+        "One disclosure: this AWS account has near-zero Bedrock quota, so embeddings fall back to a deterministic stub — real ranking, not learned relevance.",
+        "The agent proposes raising the timeout and records the decision."
+      ]
+    },
+    {
+      "id": "05-outcome-gate",
+      "durationSeconds": 31,
+      "frame": "05-outcome-gate.png",
+      "evidenceClass": "LIVE AWS · OUTCOME GATE",
+      "cues": [
+        "Here's the part nobody else does. The incident resolves in PagerDuty — a real external event, not the model — live, against the deployed database.",
+        "That's what promotes this memory to verified, in one transaction. Model calls used to decide this: zero. Not almost zero: the module that grants trust imports no model client at all.",
+        "Recency, source authority, self-consistency — that's the model grading its own homework. This is the world confirming the decision actually worked."
+      ]
+    },
+    {
+      "id": "06-cross-examine",
+      "durationSeconds": 20,
+      "frame": "06-cross-examine.png",
+      "evidenceClass": "LIVE AWS · CROSS-EXAMINE",
+      "cues": [
+        "This part isn't new — Zep and others already ship bitemporal replay.",
+        "What this proves is a real pinned read: AS OF SYSTEM TIME re-runs the exact query at the instant the decision was made, against the live database, not a reconstruction. Then it's diffed against what's true right now."
+      ]
+    },
+    {
+      "id": "07-node-loss-scale",
+      "durationSeconds": 21,
+      "frame": "07-node-loss-scale.png",
+      "evidenceClass": "LOCAL 3-NODE · LOCAL BENCHMARK",
+      "cues": [
+        "Separately, on a real three-node cluster, we kill a node mid-recall. Twelve reads, zero failures, all 101 memories still there. Three containers on one machine — this proves the replication mechanism, not a datacenter failing.",
+        "At 250,000 memories on that cluster, indexed recall held at 6.87 milliseconds against 526 unindexed: 76.5 times faster."
+      ]
+    },
+    {
+      "id": "08-close",
+      "durationSeconds": 18,
+      "frame": "08-close.png",
+      "evidenceClass": "PRIOR ART · CANDIDATE ONLY",
+      "cues": [
+        "Bitemporal replay and write-time contradiction checks aren't new either — Zep, Mem0, and MemTX all ship versions of them. What's new is grading memory trust on a real outcome, with zero model calls.",
+        "This is a hackathon build: candidate only, no general-intelligence claim, code's public."
+      ]
+    }
+  ]
+}

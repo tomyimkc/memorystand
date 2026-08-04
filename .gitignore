@@ -31,3 +31,8 @@ dist/
 
 # lambda build artifacts
 infra/build/
+
+# generated demo-video artifacts (screenshots, frames, rendered mp4/srt,
+# verifier receipts) -- large/binary and fully reproducible from
+# scripts/video/ + docs/demo/VIDEO_PLAN.md, which ARE committed
+artifacts/
