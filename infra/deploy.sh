@@ -273,7 +273,7 @@ print(json.dumps({"Variables": {
     "MEMORYSTAND_KILL_SWITCH_SSM_PARAM": "/memorystand/kill_switch",
     "MEMORYSTAND_SHARED_SECRET_SSM_PARAM": "/memorystand/shared_secret",
     "MEMORYSTAND_EMBED_MODEL": "amazon.titan-embed-text-v2:0",
-    "MEMORYSTAND_CHAT_MODEL": "anthropic.claude-3-5-haiku-20241022-v1:0",
+    "MEMORYSTAND_CHAT_MODEL": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
 }}))
 ' > "$ENV_FILE" )
 unset DSN_VALUE

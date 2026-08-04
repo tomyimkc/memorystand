@@ -85,7 +85,7 @@ SHARED_SECRET_HEADER = "x-memorystand-secret"
 WRITE_PATHS = {"/ingest", "/decide", "/confirm_outcome"}
 SECRET_GATED_PATHS = {"/ingest", "/decide"}
 
-CHAT_MODEL_ID = os.environ.get("MEMORYSTAND_CHAT_MODEL", "anthropic.claude-3-5-haiku-20241022-v1:0")
+CHAT_MODEL_ID = os.environ.get("MEMORYSTAND_CHAT_MODEL", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
 
 SSM_CACHE_TTL_S = 60.0
 _ssm_client: Any = None

@@ -26,7 +26,7 @@ except ImportError:  # pragma: no cover - operator-facing message
 
 REGION = os.environ.get("AWS_REGION", "us-east-1")
 EMBED_MODEL = os.environ.get("EMBED_MODEL_ID", "amazon.titan-embed-text-v2:0")
-CHAT_MODEL = os.environ.get("CHAT_MODEL_ID", "anthropic.claude-3-5-haiku-20241022-v1:0")
+CHAT_MODEL = os.environ.get("CHAT_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
 EMBED_DIMS = 512
 
 results: list[dict] = []
