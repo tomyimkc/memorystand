@@ -67,7 +67,7 @@ if str(REPO_ROOT) not in sys.path:
 # Imported at module level, once per container, so the connection pool in backend.db
 # (and the lazily-created boto3 clients in backend.embeddings) are reused across warm
 # invocations rather than rebuilt per request.
-from backend import agent, audit, db, decisions, embeddings, memory, replay, trust  # noqa: E402
+from backend import agent, audit, breaker, db, decisions, embeddings, memory, replay, trust  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Configuration: kill switch and shared secret, each SSM-backed with an env override.
@@ -257,12 +257,14 @@ def _route_decide(body: dict[str, Any], headers: dict[str, str], request_id: str
         # when it was only recording, and that hid the fact that the deployed loop was
         # never exercised. Callers who do this are labelled, loudly, as not-the-agent.
         reasoning_source = "caller_supplied"
+        model_calls = 0
     else:
         proposed = agent.propose(query, consulted)
         action = proposed["action"]
         rationale = proposed["rationale"]
         requires_approval = requires_approval or proposed["requires_approval"]
         reasoning_source = proposed["reasoning_source"]
+        model_calls = proposed["model_calls"]
 
     produced = tuple(str(m) for m in (body.get("produced_memory_ids") or ()))
     result = decisions.decide(
@@ -282,7 +284,13 @@ def _route_decide(body: dict[str, Any], headers: dict[str, str], request_id: str
         action=action,
         reasoning_source=reasoning_source,
     )
-    return 201, {**result, "consulted": consulted, "reasoning_source": reasoning_source}
+    return 201, {
+        **result,
+        "consulted": consulted,
+        "rationale": rationale,
+        "reasoning_source": reasoning_source,
+        "model_calls": model_calls,
+    }
 
 
 def _route_confirm_outcome(body: dict[str, Any], headers: dict[str, str], request_id: str) -> tuple[int, dict]:
@@ -339,6 +347,11 @@ def _route_health(qs: dict[str, Any], headers: dict[str, str], request_id: str) 
     body: dict[str, Any] = {
         "kill_switch": kill_switch_engaged(),
         "embedding_provenance": embeddings.provenance(),
+        # An open circuit is not an error -- it is the system deliberately answering fast
+        # on the fallback path. But it changes what the answers mean (stub embeddings
+        # rank by lexical accident, not semantics), so it has to be visible rather than
+        # inferred from suspiciously good latency.
+        "circuit_breakers": breaker.snapshot(),
     }
     # Health must report a database outage, not be taken down by one -- so its own DB
     # probes are caught locally instead of falling through to the 503 degraded path.

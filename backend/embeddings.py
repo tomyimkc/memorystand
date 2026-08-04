@@ -21,6 +21,8 @@ import math
 import os
 import random
 import time
+
+from . import breaker
 from typing import Sequence
 
 EMBED_DIMS = 512
@@ -83,6 +85,15 @@ def embed(text: str, *, max_retries: int = 5) -> list[float]:
         _stub_used = True
         return _stub_embedding(text)
 
+    # Same reasoning as bedrock_client: once Bedrock has failed repeatedly, paying
+    # EMBED_DEADLINE_S again on every request to learn it a third time is pure latency.
+    # Degrading straight to the stub is what would have happened anyway, just sooner.
+    try:
+        breaker.embedding.check()
+    except breaker.CircuitOpen:
+        _stub_used = True
+        return _stub_embedding(text)
+
     body = json.dumps({"inputText": text, "dimensions": EMBED_DIMS})
     started = time.monotonic()
     for attempt in range(1, max_retries + 1):
@@ -99,11 +110,13 @@ def embed(text: str, *, max_retries: int = 5) -> list[float]:
                 flush=True,
             )
             _stub_used = True
+            breaker.embedding.record_failure()
             break
         try:
             resp = client.invoke_model(modelId=MODEL_ID, body=body)
             vec = json.loads(resp["body"].read())["embedding"]
             _real_used = True
+            breaker.embedding.record_success()
             return vec
         except Exception as exc:  # noqa: BLE001
             name = type(exc).__name__
@@ -122,6 +135,7 @@ def embed(text: str, *, max_retries: int = 5) -> list[float]:
             return _stub_embedding(text)
 
     _stub_used = True
+    breaker.embedding.record_failure()
     return _stub_embedding(text)
 
 

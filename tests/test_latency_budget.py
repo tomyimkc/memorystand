@@ -113,3 +113,89 @@ def test_both_deadlines_fit_in_one_request() -> None:
         f"({bedrock_client.DEADLINE_S}s) = {total}s, leaving too little of the 30s "
         "Lambda timeout for the database work and the response"
     )
+
+
+# --- The circuit breaker: bounded failure is not the same as cheap failure ---------
+#
+# Deadlines alone left /decide at 21.5s in production, because every request re-paid the
+# embedding deadline plus the model deadline to rediscover that Bedrock was still
+# throttled. These tests assert the *second* call is cheap, which is the whole point.
+
+
+def test_repeated_failures_stop_costing_the_caller_time(throttled, monkeypatch) -> None:
+    from backend import breaker as breaker_mod
+
+    monkeypatch.setattr(bedrock_client, "DEADLINE_S", 1.0)
+    monkeypatch.setattr(breaker_mod, "FAILURE_THRESHOLD", 1)
+    breaker_mod.chat.reset()
+
+    def call() -> float:
+        started = time.monotonic()
+        with pytest.raises(bedrock_client.ModelUnavailable):
+            bedrock_client.converse("s", [{"role": "user", "content": [{"text": "hi"}]}])
+        return time.monotonic() - started
+
+    first = call()
+    calls_after_first = throttled.calls
+    second = call()
+
+    assert throttled.calls == calls_after_first, (
+        "the second request still called Bedrock -- the circuit did not open, so every "
+        "request keeps paying full price to rediscover a known outage"
+    )
+    assert second < first / 2, (
+        f"first failure took {first:.2f}s, second took {second:.2f}s -- the breaker is "
+        "not actually saving the caller any time"
+    )
+    breaker_mod.chat.reset()
+
+
+def test_circuit_closes_again_when_the_dependency_recovers(monkeypatch) -> None:
+    """Self-healing matters here: the expected end state is quota being granted mid-flight.
+
+    A breaker that stays open until someone redeploys would turn a transient throttle into
+    a permanent downgrade to the fallback -- worse than the bug it fixes.
+    """
+    from backend import breaker as breaker_mod
+
+    monkeypatch.setattr(breaker_mod, "FAILURE_THRESHOLD", 1)
+    monkeypatch.setattr(breaker_mod, "COOLDOWN_S", 0.05)
+    b = breaker_mod.Breaker("test")
+
+    b.record_failure()
+    assert b.state() == "open"
+    with pytest.raises(breaker_mod.CircuitOpen):
+        b.check()
+
+    time.sleep(0.06)
+    assert b.state() == "half_open"
+    b.check()          # the probe is allowed through
+    b.record_success()  # ...and it succeeds
+    assert b.state() == "closed"
+    b.check()          # normal service, no operator involved
+
+
+def test_failed_probe_reopens_rather_than_letting_everything_through(monkeypatch) -> None:
+    """A probe that fails must restart the cooldown, or the saving evaporates."""
+    from backend import breaker as breaker_mod
+
+    monkeypatch.setattr(breaker_mod, "FAILURE_THRESHOLD", 1)
+    monkeypatch.setattr(breaker_mod, "COOLDOWN_S", 0.05)
+    b = breaker_mod.Breaker("test")
+
+    b.record_failure()
+    time.sleep(0.06)
+    b.check()           # probe allowed
+    b.record_failure()  # probe fails
+    assert b.state() == "open", "a failed probe left the circuit re-probeable immediately"
+    with pytest.raises(breaker_mod.CircuitOpen):
+        b.check()
+
+
+def test_open_circuit_is_visible_on_health() -> None:
+    """Silent degradation is the failure mode: fast answers on stub embeddings look fine."""
+    from backend import breaker as breaker_mod
+
+    snap = breaker_mod.snapshot()
+    assert set(snap) == {"bedrock-converse", "bedrock-embed"}
+    assert all(v in {"closed", "open", "half_open"} for v in snap.values())

@@ -31,6 +31,8 @@ import random
 import time
 from typing import Any
 
+from . import breaker
+
 # MEMORYSTAND_CHAT_MODEL overrides this. The default below is a safe *starting point*,
 # not a guarantee: it is the id used in scripts/spike_bedrock.py, but Bedrock model
 # access is granted per AWS account and per region, so the account actually running
@@ -145,14 +147,6 @@ def converse(
     first. The time bound is the load-bearing one: attempts alone are not a
     latency budget, and this call sits inside a 30s Lambda timeout.
     """
-    global _call_count
-
-    from botocore.exceptions import (
-        ClientError,
-        EndpointConnectionError,
-        NoCredentialsError,
-    )
-
     try:
         client = _get_client()
     except ModelUnavailable:
@@ -170,6 +164,30 @@ def converse(
     if tools:
         kwargs["toolConfig"] = {"tools": tools}
 
+    # Refuse instantly if the model has been failing: rediscovering that costs the
+    # caller the full DEADLINE_S, and the answer does not change second to second.
+    try:
+        breaker.chat.check()
+    except breaker.CircuitOpen as exc:
+        raise ModelUnavailable(str(exc)) from exc
+
+    try:
+        return _converse_attempts(client, kwargs)
+    except ModelUnavailable:
+        breaker.chat.record_failure()
+        raise
+
+
+def _converse_attempts(client, kwargs: dict[str, Any]) -> dict:
+    """The bounded retry loop itself. Split out so the breaker wraps every exit path."""
+    global _call_count
+
+    from botocore.exceptions import (
+        ClientError,
+        EndpointConnectionError,
+        NoCredentialsError,
+    )
+
     last_exc: Exception | None = None
     started = time.monotonic()
     for attempt in range(1, MAX_ATTEMPTS + 1):
@@ -181,6 +199,7 @@ def converse(
         try:
             response = client.converse(**kwargs)
             _call_count += 1
+            breaker.chat.record_success()
             return response
         except NoCredentialsError as exc:
             raise ModelUnavailable(f"no AWS credentials available: {exc}") from exc
