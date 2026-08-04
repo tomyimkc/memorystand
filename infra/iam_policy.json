@@ -48,6 +48,16 @@
         "logs:PutLogEvents"
       ],
       "Resource": "arn:aws:logs:REGION:ACCOUNT_ID:log-group:/aws/lambda/memorystand:*"
+    },
+    {
+      "Sid": "ReadCloudWatchMetricsForOutcomeVerification",
+      "_comment": "backend/evidence.py re-queries a claimed metric change before a memory may be promoted to 'verified'. Resource is '*' because CloudWatch's Get/List metric APIs do not support resource-level permissions -- a metric has no ARN -- so '*' is the only value AWS accepts. Both actions are read-only. deploy.sh strips this _comment before applying: IAM rejects unknown members inside a Statement.",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:GetMetricStatistics",
+        "cloudwatch:ListMetrics"
+      ],
+      "Resource": "*"
     }
   ]
 }

@@ -200,26 +200,35 @@ it needs the CockroachDB CLI, which is not installed on a plain macOS machine, a
 The migration rewrites one CHECK constraint. No rows are read, written or moved, every existing
 value stays valid, and re-running it is a no-op.
 
-Also pending, and the reason `verified` is currently unreachable in production: the Lambda role
-and the deployer user both lack `cloudwatch:GetMetricStatistics`. Verified live — the check
-degrades exactly as designed rather than failing open:
+## Outcome verification is live, and it refuses things
 
-    claims duration FELL -> unavailable
-    AccessDenied when calling GetMetricStatistics
+`verified` is reachable in production. Verified end to end against real CloudWatch data on the
+deployed Lambda, all three paths, all with `model_calls: 0`:
 
-`unavailable` grants nothing, so an unchecked claim cannot reach `verified`. The policy JSON in
-`infra/iam_policy.json` and `infra/deployer_policy.json` is already updated. Applying it:
+| Claim submitted | What CloudWatch actually showed | Result |
+|---|---|---|
+| −11,000 ms | −11,452.66 ms | **confirmed** — within the 50% tolerance |
+| −10 ms | −11,452.66 ms | **refused** — magnitude disagreement |
+| +500 ms | −11,452.66 ms | **refused** — opposite direction |
 
-    # 1. Deployer user (local testing). Needs an ADMIN credential, by design -- the scoped
-    #    deploy identity refuses to widen its own permissions, since an identity that can
-    #    widen itself is not scoped.
-    AWS_PROFILE=default ./infra/update_deployer_policy.sh
+> CloudWatch confirms 'AWS/Lambda|Duration|FunctionName=memorystand' moved -1.145e+04 against a
+> claimed -1.1e+04, within tolerance. Checked independently, with no model involved.
 
-    # 2. Lambda execution role. Do NOT hand-apply infra/iam_policy.json with put-role-policy:
-    #    it is a TEMPLATE containing ACCOUNT_ID placeholders and human-readable comment keys
-    #    that IAM rejects with MalformedPolicyDocument. deploy.sh renders it (substituting
-    #    ACCOUNT_ID/REGION, stripping non-IAM keys) and applies it for you.
-    REGION=us-west-2 ./infra/deploy.sh
+### Two things this surfaced
+
+**A correction.** An earlier version of this page said the CloudWatch statement in
+`infra/iam_policy.json` and `infra/deployer_policy.json` was "already updated". It was not. The
+edit and the `aws iam` call that followed it were in one shell invocation, the invocation was
+refused as a whole, and the edit therefore never ran — but the claim that it had was written
+down anyway. The files carry the statement now, and `deploy.sh` renders and applies it (it
+strips the `_comment` key first; IAM rejects unknown members inside a Statement).
+
+**Verification is inherently delayed, by design.** Confirming an outcome the instant a decision
+is made returns `unavailable`, because the "after" window is in the future and CloudWatch has no
+datapoints for it yet. That is correct rather than broken: an outcome is something the world
+reports back *later*. A memory therefore sits at `attested` until enough time has passed for the
+metric to have moved, and only then can it reach `verified`. Anything that promoted instantly
+would not be measuring an outcome.
 
 ## Not yet run
 
