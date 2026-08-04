@@ -6,6 +6,8 @@
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
+**Live demo: <https://ojao6oaxlk26mqfjwpuy7g4dy40tglyi.lambda-url.us-west-2.on.aws>** · [deployment status](docs/DEPLOY_STATUS.md)
+
 **Submission for the [CockroachDB × AWS Hackathon — Build with Agentic Memory](https://cockroachdb-ai.devpost.com).**
 
 > 🚧 **Under construction.** Started 2026-08-03. See [SPIKE-RESULTS.md](SPIKE-RESULTS.md) for what

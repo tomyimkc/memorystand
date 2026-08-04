@@ -55,6 +55,13 @@ def _stub_embedding(text: str) -> list[float]:
     return [v / norm for v in vec]
 
 
+# Hard ceiling on how long embedding may take before we stop waiting and degrade.
+# Sized against the Lambda timeout (30s) with room for the rest of the request: a
+# dependency that is throttled must not be able to consume the whole budget. Override
+# with MEMORYSTAND_EMBED_DEADLINE_S.
+EMBED_DEADLINE_S = float(os.environ.get("MEMORYSTAND_EMBED_DEADLINE_S", "6"))
+
+
 def embed(text: str, *, max_retries: int = 5) -> list[float]:
     """Return a ``EMBED_DIMS``-dimensional embedding for ``text``.
 
@@ -77,7 +84,22 @@ def embed(text: str, *, max_retries: int = 5) -> list[float]:
         return _stub_embedding(text)
 
     body = json.dumps({"inputText": text, "dimensions": EMBED_DIMS})
+    started = time.monotonic()
     for attempt in range(1, max_retries + 1):
+        # Retrying a throttled model is only worth it while there is time left. Without
+        # this the backoff (0.5s, 1s, 2s, 4s, 8s + jitter) can outlast the whole Lambda
+        # timeout, and the caller sees a 30s hang instead of a fast, honest degradation.
+        # Observed exactly that in production: /recall and /decide returned
+        # "Internal Server Error" via `Status: timeout` while Bedrock quota was zero.
+        if time.monotonic() - started > EMBED_DEADLINE_S:
+            print(
+                f"[embeddings] giving up on Bedrock after {EMBED_DEADLINE_S}s "
+                f"({attempt - 1} attempts); using the deterministic stub. "
+                f"Latency stays valid; relevance does NOT.",
+                flush=True,
+            )
+            _stub_used = True
+            break
         try:
             resp = client.invoke_model(modelId=MODEL_ID, body=body)
             vec = json.loads(resp["body"].read())["embedding"]

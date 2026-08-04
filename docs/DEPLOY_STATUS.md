@@ -16,54 +16,59 @@ argument is "check claims before trusting them" cannot have an aspirational stat
 | **Lambda → CockroachDB Cloud** | direct invoke returns `200`, `database: reachable`, `gc_window_seconds: 4500` |
 | Graceful degradation | exercised in production: before the TLS fix the handler returned `200` with `database: unreachable` and the underlying error, rather than crashing |
 
-## Blocked: the public Function URL returns 403
+## Resolved: the Function URL 403
 
-Every route returns `403 Forbidden` with the Function-URL-authorization message, while the
-**same function invoked directly returns 200**. So the handler is fine; the auth layer in front
-of it is not.
+**Cause: a missing permission, not an account restriction.** My hypothesis -- that a day-old
+account with a 10-execution Lambda ceiling and zero Bedrock quota was also blocked from public
+Function URLs -- was **wrong**, and the console said so plainly:
 
-Excluded by testing, not by assumption:
+> Your function URL auth type is NONE, but is missing permissions required for public access...
+> create a resource-based policy that grants **lambda:invokeFunction and lambda:invokeFunctionUrl**
+> permissions to all principals (*)
 
-- `AuthType` is `NONE` — read back from the live config.
-- The resource policy is correct — **three** statements with `Principal: "*"`,
-  `Action: lambda:InvokeFunctionUrl`, `Condition: lambda:FunctionUrlAuthType = NONE`.
-- Not propagation — 403 persisted across five retries over ~2 minutes.
-- Not a stale URL — deleting and recreating the Function URL produced an identical 403 on a
-  brand-new URL with a fresh permission statement.
+AWS requires **both** actions. Every instinct says `lambda:InvokeFunctionUrl` is *the*
+Function-URL permission, so granting only that looks complete -- and fails closed with a 403
+naming neither the missing action nor the fix.
 
-**Leading hypothesis: account-level restriction.** This account is measurably restricted:
+One wrinkle: `--function-url-auth-type NONE` is only accepted alongside `InvokeFunctionUrl`, so
+the second grant must omit it. Both statements are required:
 
-| Limit | This account | Normal |
-|---|---|---|
-| Lambda concurrent executions | **10** | 1000 |
-| Bedrock on-demand quotas | **0** on 157 of 160 | non-zero |
+    aws lambda add-permission --function-name memorystand \
+      --statement-id publicInvokeFunctionUrl --action lambda:InvokeFunctionUrl \
+      --principal '*' --function-url-auth-type NONE
 
-A day-old, unverified AWS account with a 10-execution ceiling and no Bedrock capacity is
-plausibly also blocked from exposing public Function URLs. The CLI in this environment has no
-`get-public-access-block-config`, so this is **unconfirmed** — stated as a hypothesis, not a
-finding.
+    aws lambda add-permission --function-name memorystand \
+      --statement-id publicInvokeFunction --action lambda:InvokeFunction --principal '*'
 
-### What to check
+## Then: 30-second timeouts on the embedding routes
 
-1. Console → **Lambda → memorystand → Configuration → Function URL** — look for a public-access
-   or block warning.
-2. Console → **Account → billing/verification status** — new accounts are sometimes restricted
-   until identity and payment are verified.
-3. Open a **Support case** (Account and billing, free tier): "Function URL with AuthType NONE
-   returns 403 despite a correct resource policy." Include the function ARN.
+With auth fixed, `/health` returned 200 but `/recall` and `/decide` returned Internal Server
+Error. CloudWatch showed `Status: timeout` at exactly 30,000 ms.
 
-### If it stays blocked
+Bedrock quota is zero, and `embed()` retried five times with exponential backoff -- which can
+outlast the entire Lambda timeout. A throttled dependency could consume the whole request
+budget. Embedding is now time-boxed (`MEMORYSTAND_EMBED_DEADLINE_S`, default 6s): past the
+deadline it stops retrying and degrades to the deterministic stub, announcing that it did.
 
-The rules require a *functional demo URL*, not specifically a Lambda Function URL. In rough
-order of preference:
+That is a better system regardless of quota. Bounded latency under dependency failure is the
+point of the Production Readiness criterion, and it was found by deploying rather than by
+reasoning about it.
 
-1. **Wait.** New-account restrictions commonly lift within days, and there are 14 left.
-2. **API Gateway** in front of the same Lambda — a different public surface that may not be
-   covered by the same restriction.
-3. **Self-host the API** on owned hardware behind a tunnel, keeping CockroachDB Cloud as the
-   memory layer. Satisfies the requirement, but it must survive unattended until 2026-09-15,
-   which is a real risk to weigh.
-4. **Submit local-only and say so.** Costs Production Readiness points; keeps the project honest.
+## Live and verified end to end
+
+**Demo URL: <https://ojao6oaxlk26mqfjwpuy7g4dy40tglyi.lambda-url.us-west-2.on.aws>**
+
+| Route | Result |
+|---|---|
+| `GET /health` | 200 -- `database: reachable`, `gc_window_seconds: 4500` |
+| `GET /recall` | 200 -- real memories from CockroachDB Cloud, ranked with distances |
+| `POST /ingest` without the secret | **401**, with CORS headers on the error |
+| `POST /decide` with the secret | 201 -- decision recorded |
+| `POST /confirm_outcome` | `outcome: success`, **`model_calls: 0`** |
+| `GET /timemachine` | 99 memories reconstructed at decision time |
+
+The central claim now holds **in production**: a memory's trust is granted by an external
+outcome, on a path that makes zero model calls.
 
 ## Not yet run
 
