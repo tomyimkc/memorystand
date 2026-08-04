@@ -117,6 +117,25 @@ with `python scripts/loadtest.py --rows 10000 --tenants 50`.
 
 **~9.4× faster at p50, ~12.5× at p99.** Write throughput during seeding: 4,093 rows/sec.
 
+### And at 25× the scale, on a real 3-node cluster
+
+250,000 memories across 200 tenants, `num_replicas = 3`
+([full report](benchmarks/results-cluster-250k.md)):
+
+| Recall latency | p50 | p95 | p99 |
+|---|---|---|---|
+| **Vector-indexed** | **6.87 ms** | **14.37 ms** | **15.65 ms** |
+| Brute-force, same data | 526.21 ms | 558.45 ms | 704.59 ms |
+
+**76.5× faster at p50, 45× at p99.** The gap widens with scale, which is the whole
+argument for an ANN index: brute force grows with the corpus, the index does not.
+Recall stayed in single-digit milliseconds at a quarter-million memories.
+
+The honest other half: maintaining that index cost **5.7× on write throughput**
+(972 rows/sec indexed vs 5,520 unindexed). For agent memory that is usually the right
+trade — memories are read far more than written — but it is a real cost, and it is
+reported rather than omitted.
+
 The plan for the exact query `recall()` issues:
 
 ```
