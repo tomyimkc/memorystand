@@ -134,6 +134,23 @@ tenant's *admitted* memories, so cost scales with that tenant's own data rather 
 platform's. Drop the `verdict` filter and the same EXPLAIN shows three spans — one per
 verdict — which is the partition pruning made visible.
 
+Node loss, from `scripts/cluster-demo.sh` — a real 3-node cluster, `num_replicas = 3`:
+
+```
+    t+ 2.0s  recall OK  (3 memories)
+    *** ms-node3 KILLED ***
+    t+ 3.6s  recall OK  (3 memories)
+    ...
+    12 successful reads, 0 failed, across a node loss
+    ms-node3 is not in `docker ps` -- confirmed down
+    memories_still_readable: 101
+```
+
+This is the one claim that cannot be made on single-node Postgres: the node hosting your
+memory died and recall never stopped serving. Full run and its caveats — three containers
+share a machine, so this proves the replication mechanism, not a datacentre failure — in
+[benchmarks/failover.md](benchmarks/failover.md).
+
 Concurrency, from `scripts/race_demo.py`:
 
 ```
@@ -219,8 +236,8 @@ project exists to prevent.
   to the action taken. MemoryStand means "survived contact with reality once", not "true".
 - **Time travel is bounded by the cluster's garbage-collection window.** The measured bound is
   recorded in [SPIKE-RESULTS.md](SPIKE-RESULTS.md).
-- **Multi-region survival is an architectural property here, not a demonstrated one** — unless
-  spike 8 confirms `ccloud cluster disruption` works on this tier.
+- **Node loss is demonstrated** (`benchmarks/failover.md`) on a 3-node cluster. **Multi-region
+  survival is not** — that remains an architectural property, not something shown here.
 
 ## Repo layout
 
