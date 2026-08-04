@@ -181,6 +181,43 @@ def _ask_model(alert_text: str, recalled: list[dict]) -> dict[str, Any]:
     )
 
 
+def propose(situation: str, recalled: list[dict[str, Any]]) -> dict[str, Any]:
+    """Choose ONE action for ``situation``, grounded in ``recalled`` memories.
+
+    The single reasoning entry point. ``handle_alert`` uses it, and so does the
+    deployed ``/decide`` route -- previously ``backend/handler.py`` carried its own
+    near-identical copy, so the loop documented here was NOT the loop running in
+    production. Two implementations of the thing the project calls "the agent" is a
+    defect regardless of which one is better.
+
+    Returns ``action``, ``rationale``, ``requires_approval``, ``reasoning_source`` and
+    ``model_calls``. ``reasoning_source`` is deliberately explicit -- ``bedrock:<model>``
+    when the model actually answered, ``fallback_heuristic`` when it did not -- because a
+    keyword table silently impersonating an agent is precisely the failure this project
+    should not ship.
+    """
+    calls_before = bedrock_client.call_count()
+    try:
+        proposal = _ask_model(situation, recalled)
+        action = str(proposal["action"])
+        rationale = str(proposal["rationale"])
+        source = f"bedrock:{bedrock_client.MODEL_ID}"
+    except bedrock_client.ModelUnavailable as exc:
+        action = _fallback_action(situation)
+        rationale = (
+            f"Deterministic fallback: the reasoning model was unavailable ({exc}). "
+            "Action chosen from an explicit keyword rule, not by a model."
+        )
+        source = "fallback_heuristic"
+    return {
+        "action": action,
+        "rationale": rationale,
+        "requires_approval": action in HIGH_RISK_ACTIONS,
+        "reasoning_source": source,
+        "model_calls": bedrock_client.call_count() - calls_before,
+    }
+
+
 def handle_alert(tenant_id: str, agent_id: str, alert: dict[str, Any]) -> dict[str, Any]:
     """Recall memory for an alert, get a proposed action, and record the decision.
 
@@ -201,21 +238,13 @@ def handle_alert(tenant_id: str, agent_id: str, alert: dict[str, Any]) -> dict[s
     recalled = memory.recall(tenant_id, agent_id, alert_text, k=5)
     recalled_ids = {row["memory_id"] for row in recalled}
 
-    calls_before = bedrock_client.call_count()
-    try:
-        proposal = _ask_model(alert_text, recalled)
-        action = proposal["action"]
-        rationale = proposal["rationale"]
-        cited_memory_ids = [mid for mid in proposal["cited_memory_ids"] if mid in recalled_ids]
-        used_model = True
-    except bedrock_client.ModelUnavailable as exc:
-        action = _fallback_action(alert_text)
-        rationale = f"deterministic fallback (model unavailable): {exc}"
-        cited_memory_ids = list(recalled_ids)
-        used_model = False
-    model_calls_this_call = bedrock_client.call_count() - calls_before
-
-    requires_approval = action in HIGH_RISK_ACTIONS
+    proposed = propose(alert_text, recalled)
+    action = proposed["action"]
+    rationale = proposed["rationale"]
+    used_model = proposed["reasoning_source"].startswith("bedrock:")
+    cited_memory_ids = list(recalled_ids)
+    model_calls_this_call = proposed["model_calls"]
+    requires_approval = proposed["requires_approval"]
 
     produced_memory_ids: list[str] = []
     entity = alert.get("entity") or alert.get("service")

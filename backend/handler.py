@@ -67,7 +67,7 @@ if str(REPO_ROOT) not in sys.path:
 # Imported at module level, once per container, so the connection pool in backend.db
 # (and the lazily-created boto3 clients in backend.embeddings) are reused across warm
 # invocations rather than rebuilt per request.
-from backend import audit, db, decisions, embeddings, memory, replay, trust  # noqa: E402
+from backend import agent, audit, db, decisions, embeddings, memory, replay, trust  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Configuration: kill switch and shared secret, each SSM-backed with an env override.
@@ -215,61 +215,6 @@ def _get_bedrock_runtime() -> Any:
     return _bedrock_runtime_client
 
 
-def _reason(situation: str, consulted: list[dict[str, Any]]) -> tuple[str, str, bool, str]:
-    """Ask the configured chat model (Bedrock Converse; Amazon Nova by default -- see
-    docs/BEDROCK_QUOTA.md for why not Claude) what the agent should do next.
-
-    Returns ``(action, rationale, requires_approval, reasoning_source)``. On any Bedrock
-    failure -- no credentials, no model access, throttling -- falls back to a
-    deterministic heuristic that always requires human approval, and says so in
-    ``reasoning_source`` rather than silently passing off a guess as a reasoned decision.
-    This mirrors ``embeddings.py``'s stub-fallback pattern: degrade honestly, never
-    silently.
-    """
-    context_lines = [f"- ({row.get('trust_tier', '?')}) {row.get('content', '')}" for row in consulted]
-    if not context_lines:
-        context_lines = ["- (nothing on file yet for this query)"]
-    prompt = (
-        "You are the reasoning step of an on-call agent. Given the situation and what it "
-        "recalls from memory, propose exactly one next action.\n\n"
-        f"Situation: {situation}\n\nRecalled memories:\n" + "\n".join(context_lines) + "\n\n"
-        "Reply with ONLY a JSON object, no other text: "
-        '{"action": "<short verb phrase>", "rationale": "<one sentence>", '
-        '"requires_approval": <true or false>}'
-    )
-    try:
-        resp = _get_bedrock_runtime().converse(
-            modelId=CHAT_MODEL_ID,
-            messages=[{"role": "user", "content": [{"text": prompt}]}],
-            inferenceConfig={"maxTokens": 200, "temperature": 0.0},
-        )
-        text = resp["output"]["message"]["content"][0]["text"].strip()
-        parsed = json.loads(text)
-        return (
-            str(parsed["action"]),
-            str(parsed.get("rationale", "")),
-            bool(parsed.get("requires_approval", False)),
-            f"bedrock:{CHAT_MODEL_ID}",
-        )
-    except Exception as exc:  # noqa: BLE001 - a reasoning failure must fall back, not crash /decide
-        print(
-            json.dumps({"event": "reasoning_fallback", "reason": f"{type(exc).__name__}: {exc}"}),
-            flush=True,
-        )
-        if consulted:
-            top = consulted[0]
-            rationale = (
-                "Bedrock reasoning unavailable; deterministic fallback escalates to a human "
-                f"based on the top recalled memory: {(top.get('content') or '')[:80]!r}"
-            )
-        else:
-            rationale = "Bedrock reasoning unavailable and nothing relevant was recalled; escalating by default."
-        return "escalate_to_human", rationale, True, "fallback_heuristic"
-
-
-# ---------------------------------------------------------------------------
-# Route handlers. Each returns (status_code, response_body).
-# ---------------------------------------------------------------------------
 def _route_ingest(body: dict[str, Any], headers: dict[str, str], request_id: str) -> tuple[int, dict]:
     _check_shared_secret(headers)
     tenant_id = _require(body, "tenant_id")
@@ -306,13 +251,18 @@ def _route_decide(body: dict[str, Any], headers: dict[str, str], request_id: str
     rationale = body.get("rationale")
     requires_approval = bool(body.get("requires_approval", False))
     if action:
-        # Caller supplied its own action/rationale (e.g. a scripted demo, or a caller
-        # with its own reasoning loop) -- skip the Bedrock round trip rather than
-        # overriding an explicit instruction.
+        # A caller MAY supply its own action -- another agent driving this as a memory
+        # service, for instance. But it is no longer the demo path: letting the demo
+        # hand /decide a pre-chosen action made the agent look like it was reasoning
+        # when it was only recording, and that hid the fact that the deployed loop was
+        # never exercised. Callers who do this are labelled, loudly, as not-the-agent.
         reasoning_source = "caller_supplied"
     else:
-        action, rationale, model_requires_approval, reasoning_source = _reason(query, consulted)
-        requires_approval = requires_approval or model_requires_approval
+        proposed = agent.propose(query, consulted)
+        action = proposed["action"]
+        rationale = proposed["rationale"]
+        requires_approval = requires_approval or proposed["requires_approval"]
+        reasoning_source = proposed["reasoning_source"]
 
     produced = tuple(str(m) for m in (body.get("produced_memory_ids") or ()))
     result = decisions.decide(
