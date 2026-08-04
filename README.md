@@ -82,6 +82,23 @@ native MVCC means no separate version table and no second store — not a claim 
 **Write-time contradiction checking is not new**: Mem0, Graphiti and
 [MemTX](https://arxiv.org/html/2607.23929v2) all do a version of it.
 
+**The trust ladder itself is not new either.**
+[NELL](https://cdn.aaai.org/ojs/7519/7519-13-11049-1-2-20201228.pdf) (CMU, running since 2010)
+split beliefs into *candidates* and *promoted*, promoting above a 0.9 confidence threshold with
+ontological consistency checks and a per-iteration promotion cap. The difference is what supplies
+the confidence: NELL's own extractors corroborating each other — self-consistency at scale, which
+delivered roughly 74% precision on promoted facts. And in reputation systems
+([EigenTrust](https://nlp.stanford.edu/pubs/eigentrust.pdf), Beta reputation) trust updates *only*
+on observed transaction outcomes and never on self-report, which is the same normative stance this
+project takes, applied to peers rather than to memories.
+
+**The closest live research** is [GovMem](https://arxiv.org/abs/2607.02579) (June 2026), which
+governs *when not to write memory*, mapping a candidate to `promote` / `reject` / `needs-review`
+and discounting correlated traces so that repetition is not mistaken for independent evidence.
+It is genuinely adjacent and arrives at the same instinct from the other end: GovMem governs
+promotion at **write** time by analysing the agent's own traces; MemoryStand governs it at
+**outcome** time by re-querying something outside the agent entirely. Neither subsumes the other.
+
 ### So what is actually different: who is allowed to decide a memory is true
 
 Every shipping agent-memory system answers "is this memory still true?" by asking a model.
