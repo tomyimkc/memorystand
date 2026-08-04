@@ -46,8 +46,8 @@ then **Technical Implementation**. Prizes: 1st $5,000, 2nd $2,500, 3rd $1,250.
 > isolation level CockroachDB offers) is what makes two agents racing to write contradictory
 > memories about the same incident resolve to exactly one winner, provably, under real `40001`
 > contention — not a mocked test. And a prefix-partitioned vector index on
-> `(tenant_id, verdict, embedding)` keeps a 50-tenant, 10,000-memory ANN search at **1.60 ms p50**
-> versus **15.05 ms** brute-force on the same data, because the index partition *is* "this
+> `(tenant_id, verdict, embedding)` keeps a 50-tenant, 10,000-memory ANN search at **2.38 ms p50**
+> versus **23.61 ms** brute-force on the same data, because the index partition *is* "this
 > tenant's admitted memories," not the whole platform's. Time-travel and write-time contradiction
 > checking are prior art (Zep/Graphiti, Mem0, MemTX, TOKI); MemoryStand says so in its own README
 > rather than waiting for a judge to find it. The one thing being claimed as new is the outcome
@@ -114,8 +114,8 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > *equality* predicate, so putting `verdict` there is what turns "search this tenant's memories"
 > into "search this tenant's *admitted* memories" as a single server-side operation, at index
 > cost, instead of a filter applied after the fact. Measured on 10,000 memories across 50 tenants:
-> **1.60 ms p50 / 1.86 ms p95 / 2.01 ms p99** indexed, versus **15.05 / 18.09 / 25.20 ms**
-> brute-force on the identical data — roughly 9.4× faster at p50, 12.5× at p99
+> **2.38 ms p50 / 2.76 ms p95 / 2.91 ms p99** indexed, versus **23.61 / 28.95 / 35.36 ms**
+> brute-force on the identical data — 9.92× faster at p50, 12.14× at p99
 > (`scripts/loadtest.py --rows 10000 --tenants 50`). The before/after is visible directly in
 > `EXPLAIN`: with the `verdict` predicate present, the plan shows one `vector search` node with a
 > single `prefix spans` range scoped to that tenant+verdict; drop the predicate and the same query

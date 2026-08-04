@@ -254,9 +254,12 @@ to sanity-check ambiguous evidence, so `trust.OutcomeRejected` is deliberately s
 **The kill switch and the shared secret are both asymmetric on purpose.** The kill switch blocks
 `/ingest`, `/decide`, and `/confirm_outcome` but never the four read routes -- "I have no memory
 right now" degrades toward "reads still work", never toward "writes silently vanish". The shared
-secret gates only the two Bedrock-calling routes (`/ingest`, `/decide`), because those spend real
-money and quota on every call; the read routes stay open so a judge can poke them from a browser
-without being handed a secret first. Cost, stated in Known Limits below: those four read routes
+secret gates all three write routes. It originally gated only the two Bedrock-calling ones
+(`/ingest`, `/decide`), on the reasoning that those spend real money and quota on every call --
+which left `/confirm_outcome`, the route that *grants trust*, open to anyone holding a decision
+id. Gate by what a route changes, not by what it costs; a test now asserts every `POST` route is
+gated, so the next one cannot be classified by feel. The read routes stay open so a judge can
+poke them from a browser without being handed a secret first. Cost, stated in Known Limits below: those four read routes
 are unauthenticated by design.
 
 **Lambda reserved concurrency is capped at 15** (`infra/deploy.sh`), specifically because
@@ -268,9 +271,9 @@ same cluster rather than trusting Lambda's account-wide 1000-execution limit to 
 
 **Retrieval latency** (`benchmarks/results.md`, `python scripts/loadtest.py --rows 10000
 --tenants 50`, single local CockroachDB v26.2.5 node): the vector-indexed table served p50
-1.60ms / p99 2.01ms versus 15.05ms / 25.20ms for an identical brute-force control -- roughly
-9.4x faster at p50, 12.5x at p99, at 10,000 rows across 50 tenants. Write throughput during
-seeding: ~4,093 rows/sec. That report also records a more nuanced, honestly-reported finding:
+2.38ms / p99 2.91ms versus 23.61ms / 35.36ms for an identical brute-force control -- 9.92x
+faster at p50, 12.14x at p99, at 10,000 rows across 50 tenants. Write throughput during
+seeding: 2,623 rows/sec indexed versus 6,751 unindexed. That report also records a more nuanced, honestly-reported finding:
 at that row count, `backend.memory.recall()`'s exact compound predicate did not always make the
 optimizer choose `vector search` over two other B-tree indexes already on the table
 (`agent_memories_recallable_idx`, `agent_memories_attr_idx`); an isolated single-index table
@@ -319,7 +322,7 @@ project exists to prevent.
   which is the module that implements all seven routes. (An earlier draft of this document
   described a mismatch between the two; that was fixed before either landed, and the note is kept
   here only because the deploy path is still unexercised -- see the next bullet.)
-- **Nothing in `infra/` has been run against a real AWS account.** The scripts are written against
+- **Everything in `infra/` has now been run against a real AWS account** -- `provision.sh`, `ssm_setup.sh`, `deploy.sh` and `deploy_frontend.sh`. The dashboard is live at <https://main.d19xad9aeccy3e.amplifyapp.com>; see docs/DEPLOY_STATUS.md for the verified evidence and the failures found along the way. (The paragraph below is the original pre-deployment caveat, kept because the discipline was right.) Originally: The scripts are written against
   the documented CLI surface and pass `bash -n`, but until an account exists they are unverified,
   and that is a materially weaker claim than everything else in this repo, which was measured
   against a live database.

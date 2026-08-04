@@ -19,9 +19,12 @@ Design decisions that matter for a judge reading this file:
     "recall still works" and away from "silently drop a write" -- those are not
     symmetric failures, so the switch is not symmetric either.
 
-  * Shared secret on the two Bedrock-calling routes only. ``/ingest`` and ``/decide``
-    spend real money and quota on every call, so they require a shared secret compared
-    with ``hmac.compare_digest``. The four read routes (``/recall``, ``/timemachine``,
+  * Shared secret on every route that changes something -- ``/ingest``, ``/decide`` and
+    ``/confirm_outcome`` -- compared with ``hmac.compare_digest``. It originally gated only
+    the first two, on the reasoning that those spend real money and quota. That reasoning
+    left the route which GRANTS TRUST wide open, and anyone with a decision id could promote
+    memories to ``verified``. Gate by what a route changes, not by what it costs. The four
+    read routes (``/recall``, ``/timemachine``,
     ``/diff``, ``/health``) stay open on purpose: they are index-backed, cheap, and a
     judge needs to be able to poke them directly from a browser or curl without first
     being handed a secret. Gating reads the same way would just be security theatre

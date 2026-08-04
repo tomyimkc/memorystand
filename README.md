@@ -120,10 +120,12 @@ with `python scripts/loadtest.py --rows 10000 --tenants 50`.
 
 | Recall latency | p50 | p95 | p99 |
 |---|---|---|---|
-| **Vector-indexed** (`agent_memories`) | **1.60 ms** | **1.86 ms** | **2.01 ms** |
-| Brute-force, same data, no vector index | 15.05 ms | 18.09 ms | 25.20 ms |
+| **Vector-indexed** (`agent_memories`) | **2.38 ms** | **2.76 ms** | **2.91 ms** |
+| Brute-force, same data, no vector index | 23.61 ms | 28.95 ms | 35.36 ms |
 
-**~9.4× faster at p50, ~12.5× at p99.** Write throughput during seeding: 4,093 rows/sec.
+**9.92× faster at p50, 12.14× at p99.** Write throughput during seeding: 2,623 rows/sec
+(indexed) versus 6,751 rows/sec (unindexed) — maintaining the vector index costs write
+throughput, and that trade is the point of measuring both.
 
 ### And at 25× the scale, on a real 3-node cluster
 
