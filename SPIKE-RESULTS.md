@@ -10,7 +10,7 @@ is blocked on an unknown.
 |---|---|---|---|
 | 1 | Vector index available + used | ✅ | Works — **but only with `verdict` in the index prefix.** See below |
 | 2 | GC window / `AS OF SYSTEM TIME` reach | ✅ | `gc.ttlseconds = 14400` (4h) default; AOST verified working |
-| 3 | Bedrock model access (Claude + Titan) | ⏳ | Needs an AWS account; deterministic stub covers local runs |
+| 3 | Bedrock model access (Nova + Titan) | ⏳ | Needs an AWS account; deterministic stub covers local runs. Originally targeted Claude — moved to Nova after finding Anthropic models geo-restricted; see `docs/BEDROCK_QUOTA.md` |
 | 4 | Lambda → CockroachDB pooling | ✅ | `maxconn=1` verified; found and fixed two leaks it exposed |
 | 5 | Basic-tier idle suspension | ⏳ | Needs a Cloud cluster |
 | 6 | ccloud CLI command surface | ✅ | Confirmed from `--help` — see below |
@@ -23,7 +23,7 @@ All ✅ rows were verified against a real **CockroachDB v26.2.5** single-node cl
 ---|---|---|---|
 | 1 | Vector index available on Cloud Basic? | ⏳ | Needs a live cluster |
 | 2 | GC retention window / `AS OF SYSTEM TIME` reach | ⏳ | Needs a live cluster |
-| 3 | Bedrock model access latency (Claude + Titan) | ⏳ | Needs an AWS account |
+| 3 | Bedrock model access latency (Nova + Titan) | ⏳ | Needs an AWS account |
 | 4 | Lambda → CockroachDB connection pooling | ⬜ | Design locked; smoke test on Day 6 |
 | 5 | Basic-tier idle suspension policy | ⏳ | Needs a live cluster |
 | 6 | ccloud CLI command surface | ✅ | **Confirmed locally — see below** |

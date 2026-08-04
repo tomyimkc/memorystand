@@ -45,8 +45,9 @@ paste `infra/deployer_policy.json` with `ACCOUNT_ID` replaced by your 12-digit a
 Name it `MemoryStandDeployer`. Attach it to the user.
 
 > The policy grants Lambda/Amplify/SSM/scheduler actions scoped to resources named
-> `memorystand*`, plus `bedrock:InvokeModel` on one named inference profile and its two
-> underlying foundation models. It cannot touch anything else in your account.
+> `memorystand*`, plus `bedrock:InvokeModel` on three named foundation models (Nova Lite,
+> Nova Micro, Titan Text Embeddings V2) -- all `ON_DEMAND`, so there is no inference-profile
+> ARN to grant separately. It cannot touch anything else in your account.
 >
 > It also, deliberately, cannot modify **itself** — no `iam:CreatePolicy`, no
 > `iam:GetPolicy`. An identity that can widen its own permissions is not really scoped.
@@ -70,7 +71,8 @@ aws configure
 
 Paste the Access key ID, then the Secret access key, then:
 
-- Default region: `us-east-1`  *(Bedrock has the broadest model availability there)*
+- Default region: `us-west-2`  *(this account has zero on-demand Bedrock capacity in
+  `us-east-1` -- see `docs/BEDROCK_QUOTA.md` -- and only `us-west-2` has a usable allowance)*
 - Default output format: `json`
 
 Verify:
@@ -87,14 +89,19 @@ becomes possible — nothing before it will work, and nothing after it needs the
 Bedrock models are opt-in per account. Console → **Amazon Bedrock** → **Model access** →
 **Modify model access**, and enable:
 
-- **Anthropic Claude Haiku 4.5** — the agent's reasoning
+- **Amazon Nova Lite** — the agent's reasoning (Anthropic models are refused from this
+  operator's country with a `ValidationException`, independent of IAM and region -- see
+  `docs/BEDROCK_QUOTA.md` -- so this project does not use Claude on Bedrock)
 - **Amazon Titan Text Embeddings V2** — every memory's embedding
 
-For these models approval is usually immediate. Verify from the terminal:
+Model access approval is usually immediate, but **capacity is a separate, unadvertised gate**:
+a brand-new account can show `AUTHORIZED` model access and still fail every call with a zero
+requests-per-minute quota. Verify from the terminal, which makes real calls rather than trusting
+the console:
 
 ```bash
 cd /Users/tom/Documents/GitHub/memorystand
-AWS_REGION=us-east-1 .venv/bin/python scripts/spike_bedrock.py
+AWS_REGION=us-west-2 .venv/bin/python scripts/spike_bedrock.py
 ```
 
 That script checks credentials, lists visible models, makes one real embedding call, one real

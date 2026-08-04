@@ -69,6 +69,8 @@ Standard open-source libraries only, used under their own licenses and declared 
 Claude Code (Anthropic) was used throughout the build for architecture discussion, SQL and Python
 authoring, and documentation.
 
-Amazon Bedrock (Claude via the Converse API, and Amazon Titan Text Embeddings V2) is disclosed
+Amazon Bedrock (Amazon Nova Lite via the Converse API — not Claude; Anthropic models on
+Bedrock are refused from this operator's country, see `docs/BEDROCK_QUOTA.md` — and Amazon
+Titan Text Embeddings V2) is disclosed
 separately under AWS services rather than here, because it is a **runtime component of the
 submitted agent itself** — not a tool used to author the code.

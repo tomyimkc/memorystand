@@ -18,7 +18,7 @@ from backend import decisions, memory, replay, trust
 
 def test_belief_state_at_returns_the_pre_change_state_after_a_change(tenant_id, agent_id, db_now):
     before = memory.remember(tenant_id, agent_id, "belief before the cutoff")
-    instant = db_now()
+    instant = db_now(before["memory_id"], tenant_id)
     after = memory.remember(tenant_id, agent_id, "belief written after the cutoff")
 
     belief = replay.belief_state_at(tenant_id, instant)
@@ -30,7 +30,7 @@ def test_belief_state_at_returns_the_pre_change_state_after_a_change(tenant_id, 
 
 def test_recall_as_of_composes_aost_with_a_vector_order_by(tenant_id, agent_id, db_now):
     before = memory.remember(tenant_id, agent_id, "the payments queue backs up under load")
-    instant = db_now()
+    instant = db_now(before["memory_id"], tenant_id)
     memory.remember(tenant_id, agent_id, "an unrelated fact written after the cutoff")
 
     results = replay.recall_as_of(tenant_id, agent_id, "payments queue backs up", instant, k=10)
@@ -42,7 +42,7 @@ def test_recall_as_of_composes_aost_with_a_vector_order_by(tenant_id, agent_id, 
 
 def test_belief_diff_marks_added_and_changed_correctly(tenant_id, agent_id, db_now):
     to_be_promoted = memory.remember(tenant_id, agent_id, "restarting the worker cleared the backlog")
-    instant = db_now()
+    instant = db_now(to_be_promoted["memory_id"], tenant_id)
 
     added_after = memory.remember(tenant_id, agent_id, "a brand new fact written after the cutoff")
 

@@ -37,7 +37,7 @@
 #
 # Usage:
 #   ./infra/deploy_frontend.sh
-#   APP_NAME=memorystand BRANCH_NAME=main REGION=us-east-1 ./infra/deploy_frontend.sh
+#   APP_NAME=memorystand BRANCH_NAME=main REGION=us-west-2 ./infra/deploy_frontend.sh
 #
 # Re-run any time: every AWS call below is written to converge (find-or-create the app,
 # find-or-create the branch, always push a fresh deployment) rather than fail on a second

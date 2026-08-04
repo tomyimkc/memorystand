@@ -25,7 +25,7 @@ from typing import Sequence
 
 EMBED_DIMS = 512
 MODEL_ID = os.environ.get("MEMORYSTAND_EMBED_MODEL", "amazon.titan-embed-text-v2:0")
-REGION = os.environ.get("AWS_REGION", "us-east-1")
+REGION = os.environ.get("AWS_REGION", "us-west-2")
 STUB_ENV = "MEMORYSTAND_EMBED_STUB"
 
 _client = None

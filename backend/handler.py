@@ -216,7 +216,8 @@ def _get_bedrock_runtime() -> Any:
 
 
 def _reason(situation: str, consulted: list[dict[str, Any]]) -> tuple[str, str, bool, str]:
-    """Ask Claude (Bedrock Converse) what the agent should do next.
+    """Ask the configured chat model (Bedrock Converse; Amazon Nova by default -- see
+    docs/BEDROCK_QUOTA.md for why not Claude) what the agent should do next.
 
     Returns ``(action, rationale, requires_approval, reasoning_source)``. On any Bedrock
     failure -- no credentials, no model access, throttling -- falls back to a

@@ -31,11 +31,15 @@
 #   MEMORYSTAND_DSN='postgresql://user:pass@host:26257/defaultdb?sslmode=verify-full' \
 #     ./infra/ssm_setup.sh [--force]
 #
-#   REGION=us-east-1 MEMORYSTAND_DSN='...' ./infra/ssm_setup.sh --force
+#   REGION=us-west-2 MEMORYSTAND_DSN='...' ./infra/ssm_setup.sh --force
 #
+# REGION must match infra/deploy.sh's REGION (default us-west-2): SSM parameters are
+# regional, and the deployed Lambda reads them from its own region via a plain
+# GetParameter call with no cross-region config. A mismatch here fails closed at
+# runtime with "parameter not found", not at deploy time.
 set -euo pipefail
 
-REGION="${REGION:-${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}}"
+REGION="${REGION:-${AWS_REGION:-${AWS_DEFAULT_REGION:-us-west-2}}}"
 FORCE=0
 
 for arg in "$@"; do

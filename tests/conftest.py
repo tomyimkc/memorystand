@@ -18,6 +18,7 @@ test, across all four tables, regardless of whether the test passed.
 from __future__ import annotations
 
 import datetime as dt
+import time
 import os
 import sys
 import uuid
@@ -130,15 +131,43 @@ def db_now() -> Callable[[], dt.datetime]:
     process's, since AOST is relative to the cluster's HLC.
     """
 
-    def _now() -> dt.datetime:
-        conn = db.get_conn()
-        try:
-            with conn.cursor() as cur:
-                cur.execute("SELECT clock_timestamp()")
-                (ts,) = cur.fetchone()
-            conn.commit()
-            return ts
-        finally:
-            db.put_conn(conn)
+    def _now(must_see: str | None = None, tenant_id: str | None = None) -> dt.datetime:
+        """Return a cluster timestamp; if ``must_see`` is given, one at which it is visible.
+
+        Why the handshake exists. ``clock_timestamp()`` can return an instant that precedes
+        the commit timestamp of a write issued immediately before it: CockroachDB may push a
+        transaction's commit timestamp forward, so "write, then read the clock" does NOT
+        guarantee the write is visible AS OF that reading. On a freshly created cluster this
+        is reproducible about one run in nine, and it surfaces as a memory written BEFORE
+        the cutoff being reported as 'added' after it -- which reads as a correctness bug in
+        the time-travel code when it is really a test-harness race.
+
+        Sleeping would mask it. Polling until the row is genuinely visible at the captured
+        instant is deterministic, and normally converges on the first attempt.
+        """
+        deadline = time.monotonic() + 10.0
+        while True:
+            conn = db.get_conn()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT clock_timestamp()")
+                    (ts,) = cur.fetchone()
+                conn.commit()
+            finally:
+                db.put_conn(conn)
+
+            if must_see is None or tenant_id is None:
+                return ts
+
+            from backend import replay as _replay
+
+            if must_see in {m["memory_id"] for m in _replay.belief_state_at(tenant_id, ts)}:
+                return ts
+            if time.monotonic() > deadline:
+                raise AssertionError(
+                    f"memory {must_see} still not visible AS OF {ts} after 10s -- "
+                    "this is no longer a commit-timestamp race"
+                )
+            time.sleep(0.05)
 
     return _now

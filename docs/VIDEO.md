@@ -5,8 +5,11 @@ CockroachDB memory layer at work" (the hackathon's own wording). This document i
 `scripts/record-demo.sh` is the driver that makes recording it mechanical. Read that script's
 `--help` before your first take.
 
-The timestamp table below sums to **2:37**, leaving real margin under the 2:55 mark and 23 seconds
-of slack before the hard 3:00 cutoff — judges are not required to watch past 3:00, so going over
+The timestamp table below sums to **2:37** of *narration*. That is not the same as runtime: the
+unattended `--auto` take measures **2:54.78–2:56.04**, because commands take time to run between
+spoken lines. Plan against the measured figure, not the narration total — the real margin before
+the hard 3:00 cutoff is about **4–5 seconds**, not 23. Judges are not required to watch past 3:00,
+so going over
 is a worse failure mode than finishing a little early.
 
 **One number to be honest about up front:** `scripts/record-demo.sh --auto` was run start-to-finish
@@ -38,7 +41,7 @@ are the exact numbers `scripts/record-demo.sh --list` reports.
 | 2:07–2:27 | 7. EXPLAIN — the vector index is real | Terminal: raw `EXPLAIN` output | **✅ #4** |
 | 2:27–2:37 | 8. Closing | Title card / talking head | — |
 
-**Total: 2:37.** Run `scripts/record-demo.sh --list` any time to reprint this table's beat numbers
+**Narration total: 2:37** (spoken words only; measured end-to-end runtime is ~2:55 — see above). Run `scripts/record-demo.sh --list` any time to reprint this table's beat numbers
 and durations from the script itself — they are the same numbers, one source of truth.
 
 ## The four beats that satisfy "CockroachDB memory layer at work"

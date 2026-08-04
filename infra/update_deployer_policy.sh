@@ -148,5 +148,5 @@ echo "    done"
 cat <<EOF
 
 Re-run the Bedrock check:
-  AWS_PROFILE=memorystand AWS_REGION=us-east-1 .venv/bin/python scripts/spike_bedrock.py
+  AWS_PROFILE=memorystand AWS_REGION=us-west-2 .venv/bin/python scripts/spike_bedrock.py
 EOF

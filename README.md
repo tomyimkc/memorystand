@@ -137,7 +137,7 @@ verdict — which is the partition pruning made visible.
 Concurrency, from `scripts/race_demo.py`:
 
 ```
-N=10 concurrent writers, 10/10 updates landed, 0 lost updates, 9 retries observed (SQLSTATE 40001)
+N=10 concurrent writers, 10/10 updates landed, 0 lost updates, retries observed (SQLSTATE 40001)
 [Part 2] concurrent contradictory writes -> accepted=1 quarantined=1 -> PASS
 ```
 
@@ -147,8 +147,10 @@ guard doing its job under real serializable conflict, not a mocked test.
 
 ## Quickstart
 
-One command. No AWS account, no CockroachDB Cloud account, no Postgres install — just Docker
-and Python.
+One command. No AWS account, no CockroachDB Cloud account, no Postgres install.
+
+**Needs:** Docker, Python 3.11–3.13, and `jq` (`brew install jq` / `apt install jq`) — the
+demo script parses JSON with it.
 
 ```bash
 git clone <this-repo> && cd memorystand
@@ -192,8 +194,10 @@ the exact judge-facing URL shape, and what stays free for a ~6-week judging wind
 
 ## AWS services used
 
-- **Amazon Bedrock** — Claude (Converse API) for reasoning and admission control; Titan Text
-  Embeddings V2 (512-dim) for embeddings. Deliberately *absent* from the promotion path.
+- **Amazon Bedrock** — Amazon Nova Lite (Converse API) for reasoning and admission control
+  (not Claude — Anthropic models on Bedrock are refused from this operator's country; see
+  `docs/BEDROCK_QUOTA.md`); Titan Text Embeddings V2 (512-dim) for embeddings. Deliberately
+  *absent* from the promotion path.
 - **AWS Lambda** — the whole backend, behind a Function URL.
 - **Amazon EventBridge Scheduler** — the periodic checkpoint job and keep-warm ping.
 - **AWS Systems Manager Parameter Store** — the CockroachDB DSN as a SecureString.

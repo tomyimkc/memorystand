@@ -9,13 +9,18 @@
 # Note --cloud AWS: the memory layer itself runs on AWS, not just the compute
 # in front of it.
 #
+# REGION defaults to us-west-2 to match infra/deploy.sh's Lambda region -- the Lambda
+# calls this cluster on every request, so co-locating avoids cross-region latency on top
+# of the measured query numbers in README.md. Nothing about ccloud itself requires this;
+# override REGION if you deploy the compute elsewhere.
+#
 #   ./infra/provision.sh                    # create
 #   CLUSTER_NAME=standing-demo ./infra/provision.sh
 #
 set -euo pipefail
 
 CLUSTER_NAME="${CLUSTER_NAME:-standing}"
-REGION="${REGION:-us-east-1}"
+REGION="${REGION:-us-west-2}"
 CLOUD="${CLOUD:-AWS}"
 SQL_USER="${SQL_USER:-standing_app}"
 RU_LIMIT="${RU_LIMIT:-50000000}"     # stay inside the free monthly allowance

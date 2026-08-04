@@ -5,7 +5,7 @@
     {
       "Sid": "InvokeNamedBedrockModelsOnly",
       "Effect": "Allow",
-      "Action": "bedrock:InvokeModel",
+      "Action": ["bedrock:InvokeModel", "bedrock:Converse"],
       "Resource": [
         "arn:aws:bedrock:REGION:ACCOUNT_ID:inference-profile/amazon.nova-lite-v1:0",
         "arn:aws:bedrock:*::foundation-model/amazon.nova-lite-v1:0",

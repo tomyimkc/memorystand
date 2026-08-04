@@ -105,13 +105,34 @@ def test_no_recall_path_contains_embedding_is_not_null():
     """That predicate alone makes the optimizer abandon the vector index for a
     full scan, and it is redundant besides -- see backend/memory.py's module
     docstring / CLAUDE.md hard-won fact #2.
+
+    Scoped to string literals that are actually SQL. An earlier version grepped raw
+    file text, which meant any *explanation* of the rule -- a docstring, a comment, the
+    benchmark report's own "do not do this" paragraph -- tripped the guard it was
+    documenting. A regression guard that fires on its own documentation trains people to
+    ignore it, so it now parses the AST and only inspects strings that look like queries.
+    Comments never reach the AST, so they are excluded for free.
     """
+    pattern = re.compile(r"embedding\s+is\s+not\s+null", re.IGNORECASE)
     violations = []
     for path in _python_files():
-        text = path.read_text(encoding="utf-8")
-        if re.search(r"embedding\s+is\s+not\s+null", text, re.IGNORECASE):
-            violations.append(str(path.relative_to(REPO_ROOT)))
-    assert not violations, f"'embedding IS NOT NULL' found in: {violations}"
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Constant) and isinstance(node.value, str)):
+                continue
+            s = node.value
+            if not pattern.search(s):
+                continue
+            # Only a string that is actually a query can defeat the index.
+            if re.search(r"\bSELECT\b", s, re.IGNORECASE) and re.search(r"\bFROM\b", s, re.IGNORECASE):
+                violations.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}")
+    assert not violations, (
+        "'embedding IS NOT NULL' found inside a SQL string -- it defeats the vector "
+        f"index: {violations}"
+    )
 
 
 # Columns declared UUID[] in db/schema.sql that this codebase actually SELECTs

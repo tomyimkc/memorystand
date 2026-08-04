@@ -21,7 +21,7 @@
 #
 # Usage:
 #   ./infra/keepwarm.sh
-#   FUNCTION_NAME=memorystand REGION=us-east-1 END_DATE=2026-09-16T00:00:00Z ./infra/keepwarm.sh
+#   FUNCTION_NAME=memorystand REGION=us-west-2 END_DATE=2026-09-16T00:00:00Z ./infra/keepwarm.sh
 #
 set -euo pipefail
 

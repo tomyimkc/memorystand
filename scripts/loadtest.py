@@ -468,6 +468,59 @@ def write_report(
     def row(name: str, r: LatencyResult) -> str:
         return f"| {name} | {r.p50:.2f} | {r.p95:.2f} | {r.p99:.2f} | {r.mean:.2f} | {len(r.samples_ms)} |"
 
+    # The optimizer narrative MUST come from what this run observed.
+    #
+    # It used to be a hardcoded paragraph asserting the optimizer did NOT pick the vector
+    # index. That was true when written -- before the prefix became
+    # (tenant_id, verdict, embedding) and before "embedding IS NOT NULL" left the recall
+    # path -- and false afterwards. It kept printing regardless, so anyone running the
+    # command this report invites them to run could see "vector search: True" in the EXPLAIN
+    # block and, directly beneath it, prose insisting the opposite.
+    #
+    # A benchmark that contradicts its own evidence is worse than no benchmark, and doubly
+    # so for a project arguing that claims should be checked. So: derive it.
+    if has_vector_search and has_prefix_spans:
+        optimizer_narrative = (
+            "## Optimizer plan choice\n\n"
+            "The optimizer **did** choose the vector index for the production query shape --\n"
+            "the exact query `backend.memory.recall()` issues. The `vector search` node and\n"
+            "the `prefix spans` line above come from this run, not from a contrived probe.\n\n"
+            "`prefix spans` is the part worth reading closely: the scan is bounded to one\n"
+            "tenant's *admitted* memories, because the index prefix is\n"
+            "`(tenant_id, verdict, embedding)`. ANN cost therefore scales with that tenant's\n"
+            "own row count rather than the whole table's, and a held-for-review memory is not\n"
+            "merely filtered out of the result -- it is not in the partition being searched.\n\n"
+            "Two things had to be true for this plan to appear, both learned the hard way: the\n"
+            "filter columns must sit inside the index prefix, and `ANALYZE` must have run since\n"
+            "the last bulk load. Miss either and the optimizer silently falls back to a scan.\n"
+        )
+    elif has_vector_search:
+        optimizer_narrative = (
+            "## Optimizer plan choice\n\n"
+            "The optimizer chose the vector index (`vector search` appears above), but this run\n"
+            "did **not** capture a `prefix spans` line -- usually meaning the tenant predicate\n"
+            "did not prune to a single prefix. Treat the per-tenant scaling argument as\n"
+            "unproven by this particular run.\n"
+        )
+    else:
+        optimizer_narrative = (
+            "## Optimizer plan choice -- read this before quoting the EXPLAIN above\n\n"
+            "At the density this run measured, the cost-based optimizer did **not** choose the\n"
+            "vector index for the production query. Causes worth checking, in order:\n\n"
+            "1. **Stale statistics.** After a bulk load the optimizer estimates ~1 row per\n"
+            "   tenant and a scan looks cheaper. This script runs `ANALYZE` before measuring;\n"
+            "   if you seeded by another route, run it yourself.\n"
+            "2. **A filter outside the index prefix.** The prefix is\n"
+            "   `(tenant_id, verdict, embedding)`, so both must appear as equality predicates.\n"
+            "   Adding `embedding IS NOT NULL` alone is enough to defeat the index.\n"
+            "3. **Index competition.** `agent_memories` also carries `agent_memories_attr_idx`\n"
+            "   and the partial `agent_memories_recallable_idx`; at small scale the cost model\n"
+            "   can prefer either.\n\n"
+            "This is a reportable finding about index selection at this scale, not evidence the\n"
+            "vector index is broken -- but do not quote the EXPLAIN above as proof of ANN search\n"
+            "while this section reads this way.\n"
+        )
+
     speedup_p50 = (noindex_latency.p50 / indexed_latency.p50) if indexed_latency.p50 else float("nan")
     speedup_p99 = (noindex_latency.p99 / indexed_latency.p99) if indexed_latency.p99 else float("nan")
     embed_desc = (
@@ -542,82 +595,7 @@ across {args.tenants} tenants.
 - Shows a `vector search` node: **{has_vector_search}**
 - Shows a `prefix spans` line scoped to the tenant equality predicate: **{has_prefix_spans}**
 
-## Optimizer plan choice -- read this before quoting the EXPLAIN above
-
-At the row/tenant density this run measured, CockroachDB's cost-based
-optimizer did **not** choose the vector index for the query above. It chose
-a different, already-existing B-tree index on `agent_memories`
-(`agent_memories_recallable_idx` or `agent_memories_attr_idx`, both created
-by `db/schema.sql` alongside the vector index) instead.
-
-To isolate the cause, the harness also runs the same query **without** the
-`verdict = 'accepted'` filter, against the same table and data:
-
-```
-{explain_bare_text}
-```
-
-- Shows a `vector search` node: **{has_vector_search_bare}**
-- Shows a `prefix spans` line scoped to the tenant equality predicate: **{has_prefix_spans_bare}**
-
-**This was investigated beyond the two EXPLAIN blocks above.** Manually
-seeding a single tenant with up to 15,000 rows directly in `agent_memories`
-(this repo's real, deployed table) still did not flip the plan to
-`vector search`, with or without the verdict filter. The cause is not query
-shape or row count -- it is that `agent_memories` carries **two other
-B-tree indexes** (`agent_memories_attr_idx` on
-`(tenant_id, entity, attribute_key, verdict)`, and the partial
-`agent_memories_recallable_idx` on `(tenant_id, agent_id, created_at) WHERE
-verdict = 'accepted'`) that CockroachDB's local-distribution cost model
-judges cheaper than an ANN index scan for a `tenant_id`-scoped point lookup,
-at every scale tested here.
-
-To confirm the vector index mechanism itself is real, correctly wired, and
-actually selected by the optimizer when nothing else competes for the same
-`tenant_id` predicate, a separate isolated table with **only** a vector
-index (no competing B-tree indexes) was seeded with 5,000 single-tenant
-rows and the identical query shape (`tenant_id` equality + vector
-`ORDER BY ... LIMIT 5`) was run against it. That did show the target
-artifact, captured verbatim:
-
-```
-distribution: local
-
-- top-k
-    estimated row count: 5
-    order: +column9
-    k: 5
-
-    - render
-
-        - lookup join
-            table: _scratch_probe@_scratch_probe_pkey
-            equality: (id) = (id)
-            equality cols are key
-
-            - vector search
-                  table: _scratch_probe@_scratch_probe_tenant_id_v_idx
-                  target count: 5
-                  prefix spans: [/'11111111-1111-1111-1111-111111111111' - /'11111111-1111-1111-1111-111111111111']
-```
-
-(Manual verification run against this same cluster, not reproduced by this
-script -- box-drawing characters above are re-rendered as plain dashes for
-Markdown; the `vector search` node and `prefix spans` line are quoted
-verbatim from the CockroachDB `EXPLAIN` output.)
-
-**The honest summary:** the vector index is real and CockroachDB's
-optimizer does select it -- with a genuine `prefix spans` scan -- when it is
-the only viable index for a `tenant_id`-scoped query. On the schema as
-currently deployed, two other indexes on `agent_memories` are cheaper for
-`backend.memory.recall()`'s exact query shape at every scale tested (up to
-15,000 rows for one tenant), so the plan for the production query does not
-show `vector search` today. That is a real, reportable finding about this
-schema's current index competition, not evidence the vector index feature
-doesn't work. A natural follow-up (out of scope for this benchmark script)
-is testing whether dropping or hinting away the competing indexes, or
-testing at a much higher per-tenant row count, changes the optimizer's
-choice for the production query.
+{optimizer_narrative}
 
 ## Caveats
 

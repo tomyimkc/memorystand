@@ -28,6 +28,10 @@
 
 set -euo pipefail
 
+# Parameterised to match run-local.sh and record-demo.sh; hardcoding it here
+# meant the three scripts disagreed about which container they were driving.
+CONTAINER="${MEMORYSTAND_CONTAINER:-crdb-memorystand}"
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
@@ -84,9 +88,9 @@ fi
 command -v docker >/dev/null 2>&1 || { echo "error: docker not found on PATH" >&2; exit 1; }
 command -v jq >/dev/null 2>&1 || { echo "error: jq not found on PATH (brew install jq)" >&2; exit 1; }
 
-if ! docker ps --filter "name=^crdb-memorystand$" --filter "status=running" --format '{{.Names}}' \
-     | grep -qx crdb-memorystand; then
-  echo "error: the crdb-memorystand container is not running (docker ps shows no match)." >&2
+if ! docker ps --filter "name=^${CONTAINER}$" --filter "status=running" --format '{{.Names}}' \
+     | grep -qx "$CONTAINER"; then
+  echo "error: the "$CONTAINER" container is not running (docker ps shows no match)." >&2
   echo "       This script talks to an already-running cluster; it does not start one." >&2
   exit 1
 fi
@@ -127,7 +131,7 @@ pause
 banner "Reset: clear the demo tenant, then seed a small deterministic backdrop"
 
 for t in tool_audit agent_decisions belief_snapshots agent_memories; do
-  docker exec -i crdb-memorystand ./cockroach sql --insecure \
+  docker exec -i "$CONTAINER" ./cockroach sql --insecure \
     -e "DELETE FROM ${t} WHERE tenant_id = '${DEMO_TENANT}';" >/dev/null
 done
 echo "cleared agent_memories, agent_decisions, belief_snapshots, tool_audit for $DEMO_TENANT"
@@ -187,7 +191,7 @@ say "it is corrected. The Slack claim from step 2 is still just held; nobody has
 
 echo
 say "What checkout-api.circuit_breaker_timeout_ms looks like now, oldest first:"
-docker exec -i crdb-memorystand ./cockroach sql --insecure --format=table \
+docker exec -i "$CONTAINER" ./cockroach sql --insecure --format=table \
   -e "SELECT source, attribute_value AS value, verdict FROM agent_memories \
       WHERE tenant_id = '${DEMO_TENANT}' AND entity = 'checkout-api' \
         AND attribute_key = 'circuit_breaker_timeout_ms' \

@@ -3,11 +3,13 @@
 """Day-1 Amazon Bedrock spikes: model access and embedding throughput quota.
 
 Answers two go/no-go questions before any application code depends on them:
-  3. Is Claude (Converse) + Titan Embeddings V2 access actually granted, and how fast?
+  3. Is the configured chat model (Converse; Amazon Nova by default -- see
+     docs/BEDROCK_QUOTA.md for why not Claude) + Titan Embeddings V2 access actually
+     granted, and how fast?
   7. What is the Titan embedding throughput quota? Day 11 seeds thousands of
      embeddings; a default per-account throttle would silently wreck that.
 
-    export AWS_REGION=us-east-1
+    export AWS_REGION=us-west-2
     python scripts/spike_bedrock.py
 """
 
@@ -70,8 +72,10 @@ def spike_list_models() -> None:
             "foundation models visible",
             all(seen.values()),
             f"{len(ids)} models in {REGION}; embed={seen['embed']} chat={seen['chat']}. "
-            f"Anthropic ids present (sample): {anthropic}",
-            "Pick a different model id from the list above, or switch region to us-east-1.",
+            f"Anthropic ids present (sample, likely unusable -- see docs/BEDROCK_QUOTA.md "
+            f"on geo-restriction): {anthropic}",
+            "Pick a different model id from the list above. Do not switch to us-east-1: "
+            "this account has zero on-demand Bedrock capacity there (docs/BEDROCK_QUOTA.md).",
         )
     except Exception as exc:  # noqa: BLE001
         record(31, "foundation models visible", False, f"{type(exc).__name__}: {exc}",
@@ -115,7 +119,8 @@ def spike_3_embeddings() -> bool:
 
 
 def spike_3b_converse() -> None:
-    """Claude via the Converse API -- reasoning and contradiction adjudication."""
+    """CHAT_MODEL (Amazon Nova by default) via the Converse API -- reasoning and
+    contradiction adjudication."""
     try:
         rt = boto3.client("bedrock-runtime", region_name=REGION)
         t0 = time.time()
@@ -126,12 +131,12 @@ def spike_3b_converse() -> None:
         )
         dt = time.time() - t0
         text = resp["output"]["message"]["content"][0]["text"].strip()
-        record(32, "Claude Converse access", True, f"replied {text!r} in {dt * 1000:.0f} ms")
+        record(32, "Chat model Converse access", True, f"replied {text!r} in {dt * 1000:.0f} ms")
     except ClientError as exc:
         code = exc.response.get("Error", {}).get("Code", "?")
         record(
             32,
-            "Claude Converse access",
+            "Chat model Converse access",
             False,
             f"{code}: {exc}",
             "FIX-6: adjudicate() must default to the DETERMINISTIC rule-only contradiction "

@@ -2,8 +2,9 @@
 """The on-call agent loop: an alert comes in, a decision comes out.
 
 This is the one path in the codebase where a model gets a vote. It recalls
-admitted memories for the alert, asks Claude (via ``backend.bedrock_client``)
-to propose exactly one action from a fixed allow-list grounded only in those
+admitted memories for the alert, asks the configured chat model (Amazon Nova
+by default -- see ``backend.bedrock_client``, and docs/BEDROCK_QUOTA.md for why not
+Claude) to propose exactly one action from a fixed allow-list grounded only in those
 memories, records the decision, and writes back any new durable fact the
 alert itself established.
 
@@ -144,7 +145,7 @@ def _format_memories_for_prompt(recalled: list[dict]) -> str:
 
 
 def _ask_model(alert_text: str, recalled: list[dict]) -> dict[str, Any]:
-    """Ask Claude to propose one action. Raises ``bedrock_client.ModelUnavailable``
+    """Ask the configured chat model to propose one action. Raises ``bedrock_client.ModelUnavailable``
     if Bedrock cannot be reached, or if the model's response does not include a
     well-formed ``propose_action`` call -- both are treated the same way by the
     caller, which falls back to the deterministic rule table either way.
@@ -184,7 +185,7 @@ def handle_alert(tenant_id: str, agent_id: str, alert: dict[str, Any]) -> dict[s
     """Recall memory for an alert, get a proposed action, and record the decision.
 
     1. Recalls memories relevant to the alert text via vector search.
-    2. Asks Claude to propose one action grounded in those memories, falling back to
+    2. Asks the configured chat model to propose one action grounded in those memories, falling back to
        a deterministic keyword rule if the model is unavailable.
     3. Marks the decision ``requires_approval`` if the action is high-risk.
     4. Writes any new durable fact the alert established (which entity last saw

@@ -1,5 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
-"""A thin, honest wrapper over Bedrock's Converse API for Claude.
+"""A thin, honest wrapper over Bedrock's Converse API.
+
+The reasoning model is Amazon Nova by default (``DEFAULT_MODEL_ID`` below), not Claude:
+Anthropic models on Bedrock are refused from this operator's country with a
+``ValidationException``, independent of IAM and region -- see docs/BEDROCK_QUOTA.md. This
+module itself is model-agnostic; it forwards whatever ``MODEL_ID`` resolves to.
 
 "Thin" is a design choice, not a shortcut: this module does prompt-shaping for
 nobody. It sends exactly what it is given (system prompt, messages, optional
@@ -9,7 +14,7 @@ how to reach Bedrock and how to fail without taking the caller down with it.
 
 Failure handling is the point of this file. An on-call agent demo has to work
 in front of a judge who may not have AWS credentials configured, may not have
-requested access to the Claude model in Bedrock, or may be rate limited. None
+requested access to the configured chat model in Bedrock, or may be rate limited. None
 of those are bugs in this codebase, and none of them should raise an opaque
 botocore exception into ``backend/agent.py`` -- they all collapse into the one
 typed ``ModelUnavailable``, which the agent loop catches to run its
@@ -101,7 +106,8 @@ def converse(
     max_tokens: int = 1024,
     temperature: float = 0.0,
 ) -> dict:
-    """Call Claude on Bedrock via the Converse API and return the raw response dict.
+    """Call the configured chat model (``MODEL_ID``, Amazon Nova by default) on Bedrock
+    via the Converse API and return the raw response dict.
 
     ``messages`` and ``tools`` are passed through verbatim in Converse's own
     shape (``messages`` as ``[{"role": ..., "content": [{"text": ...}]}]``;

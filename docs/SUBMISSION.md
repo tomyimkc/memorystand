@@ -1,196 +1,288 @@
-# Devpost submission checklist — CockroachDB × AWS Hackathon
+# Devpost submission — MemoryStand
 
-Every field below was pulled live from the hackathon's own submission form
-(`cockroachdb-ai.devpost.com`) on 2026-08-04, not guessed. Field IDs are Devpost's internal ids,
-included so you can match this doc to the live form field-for-field.
+Ready-to-paste copy for `cockroachdb-ai.devpost.com`, rewritten 2026-08-04 for the current build:
+region `us-west-2`, reasoning model `amazon.nova-lite-v1:0` (not Claude — see
+[docs/BEDROCK_QUOTA.md](BEDROCK_QUOTA.md)), and the measured 10k-row benchmark in `README.md`.
+Field IDs are Devpost's own internal ids, included so this doc lines up with the live form
+field-for-field.
 
-## The hard deadline
+## Deadline
 
-**Submissions close 2026-08-18 21:00 UTC = 2026-08-18 17:00 ET.** Judging runs 2026-08-19 through
-2026-09-15; winners announced 2026-09-21. You are already registered for this hackathon (confirmed
-via the Devpost API) — no separate registration step needed. **No project has been created yet**
-for this hackathon on your Devpost account — that is step 1 below.
+**Submissions close 2026-08-18 17:00 ET (2026-08-18 21:00 UTC).** Today is 2026-08-04 — **14 days
+out.** Judging is five equally-weighted criteria; ties break toward **Agentic Memory Design**,
+then **Technical Implementation**. Prizes: 1st $5,000, 2nd $2,500, 3rd $1,250.
 
-Judging is five equally-weighted criteria, tie-break favors the first, then the second:
+---
 
-1. **Agentic Memory Design** — does CockroachDB play a meaningful, production-grade role as the
-   agent's memory layer, at more than toy scale?
-2. **Technical Implementation** — is the integration with CockroachDB tools quality engineering,
-   used correctly and safely?
-3. **Real-World Impact** — how big could the impact be on real users/workflows?
-4. **Production Readiness** — secure, observable, scalable; has failure been thought about?
-5. **Creativity & Originality** — genuinely new, or a novel application?
+## Title, tagline, opening
 
-Prizes: 1st $5,000 + blog feature + swag; 2nd $2,500 + swag; 3rd $1,250 + swag ($8,750 total pool).
+### Title
 
-## Step 0 — create the project
+**MemoryStand**
 
-No Devpost project exists yet for MemoryStand. Create one (via devpost.com's "Create a project"
-flow, or ask me to call `create_project` for you) and connect it to the
-`cockroachdb-ai` hackathon before the fields below are fillable.
+### Tagline (one line, ≤ ~70 chars for Devpost's card view)
 
-## Step 1 — the blocking prerequisite: get real AWS + ccloud access
+> Agent memory that earns trust from outcomes, not from asking itself.
 
-Everything below assumes this repo is still what `SPIKE-RESULTS.md` and `README.md`'s Status table
-say it is today: **built and verified locally, never run against real AWS or CockroachDB Cloud
-credentials** (there are none on this machine). Two form fields below are hard-blocked on this:
+### Opening three paragraphs (long description)
 
-- The **functional demo app URL** (field 27812, required) needs something deployed and reachable —
-  `infra/deploy.sh` is written but has never been run.
-- The **AWS Services dropdown** (field 27816, required, must select ≥1) can only honestly list a
-  service once it has actually executed against real AWS, not just been coded against the SDK.
+> Every agent-memory product on the market decides what to trust using one of three signals:
+> **recency** (the newest write wins), **source authority** (the runbook outranks Slack), or
+> **model self-consistency** (ask the model whether it still believes itself). All three are the
+> agent grading its own homework. MemoryStand uses a fourth signal that none of them use: **did it
+> actually work?**
+>
+> A memory is promoted from `unconfirmed` to `verified` only when a real, external, non-model
+> event confirms that the decision it produced was correct — PagerDuty resolving the incident, a
+> monitored metric recovering, a named on-call engineer signing off. That promotion path,
+> `backend/trust.py`, makes **zero model calls**: it imports no model client, and
+> `assert_no_model_calls()` runs on the live path every time `grant_standing()` is called, not
+> just in a docstring. Tests cover it. If a model could influence which memories get trusted, the
+> whole claim collapses into the self-consistency bucket everyone else is already in.
+>
+> CockroachDB is not incidental to this — it is why the mechanism is cheap to build correctly.
+> `AS OF SYSTEM TIME` lets `cross-examine` re-run an agent's exact recall query pinned to the
+> instant it paged someone, with no separate version table. SERIALIZABLE isolation (the only
+> isolation level CockroachDB offers) is what makes two agents racing to write contradictory
+> memories about the same incident resolve to exactly one winner, provably, under real `40001`
+> contention — not a mocked test. And a prefix-partitioned vector index on
+> `(tenant_id, verdict, embedding)` keeps a 50-tenant, 10,000-memory ANN search at **1.60 ms p50**
+> versus **15.05 ms** brute-force on the same data, because the index partition *is* "this
+> tenant's admitted memories," not the whole platform's. Time-travel and write-time contradiction
+> checking are prior art (Zep/Graphiti, Mem0, MemTX, TOKI); MemoryStand says so in its own README
+> rather than waiting for a judge to find it. The one thing being claimed as new is the outcome
+> gate — and it is scoped to the on-call domain, where "did it actually work" has an unambiguous,
+> externally-checkable answer within minutes.
 
-**Before you can submit, you (the owner) need to:**
-1. Get AWS credentials on this machine (`aws sts get-caller-identity` should succeed).
-2. Get a `ccloud` session (`ccloud auth login`; `ccloud auth whoami` should succeed) — or spin up a
-   CockroachDB Cloud free-tier cluster directly from the console if you'd rather not use `ccloud`.
-3. Run, in order: `./infra/provision.sh` (CockroachDB Cloud cluster) → `./infra/ssm_setup.sh`
-   (secrets into SSM) → `./infra/deploy.sh` (Lambda + Function URL) → point `frontend/index.html` at
-   the deployed Function URL and host it (Amplify Hosting, or anywhere static).
-4. Re-run `scripts/demo.sh` against the *deployed* stack once, and update `README.md`'s Status
-   table and `SPIKE-RESULTS.md` honestly with what actually worked.
+---
 
-Everything else in this checklist can be filled in now; these two fields cannot.
+## Form fields
 
-## Step 2 — make the repository public
+| # | Field | Id | Required | Status |
+|---|---|---|---|---|
+| 1 | Demo app URL | 27812 | Yes | **OWNER ONLY** — blocked on deploy, see checklist below |
+| 2 | Testing credentials/instructions | 28078 | No | Drafted below |
+| 3 | Public repo URL | 27813 | Yes | **OWNER ONLY** — blocked on making the repo public, then `https://github.com/tomyimkc/memorystand` |
+| 4 | OSS license file URL | 27814 | Yes | `https://github.com/tomyimkc/memorystand/blob/main/LICENSE` (once public) |
+| 5 | CockroachDB tools used | 27815 | Yes (≥2) | Drafted below — all four |
+| 6 | AWS services used | 27816 | Yes (≥1) | Drafted below |
+| 7 | How meaningfully integrated | 27817 | Yes | Drafted below |
+| 8 | Project start date | 27818 | Yes | `08-03-26` |
+| 9 | Pre-existing code disclosure | 27819 | Yes | Drafted below |
+| 10 | Architecture diagram | 27820 | No | Source exists (`ARCHITECTURE.md`, two Mermaid diagrams, lines 9 and 80) — **OWNER ONLY** to render/export and upload |
+| 11 | Feedback on CockroachDB AI tools | 27821 | No | Drafted below |
+| 12 | Submitter type | 27822 | Yes | **OWNER ONLY** |
+| 13 | Country of residence | 27823 | Yes | **OWNER ONLY** |
+| 14 | Organization name | 27824 | No | **OWNER ONLY** (blank if solo) |
+| 15 | AI tools leveraged | 27825 | Yes | Drafted below |
+| 16 | Level of learning | 27826 | Yes | **OWNER ONLY** — honest self-assessment |
+| 17 | AI career value gained | 27827 | Yes | **OWNER ONLY** — honest self-assessment |
+| 18 | Not an employee of sponsors | 27828 | Yes | **OWNER ONLY** — checkbox |
+| 19 | Eligible jurisdiction | 27829 | Yes | **OWNER ONLY** — checkbox |
+| 20 | Age of majority | 27830 | Yes | **OWNER ONLY** — checkbox |
 
-The repo is currently **private**. Field 27813 requires a public URL, and the rules require the
-Apache-2.0 license to be visible in the repo's "About" section. Before submitting:
-- [ ] Flip the GitHub repo to public (`tomyimkc/memorystand`).
-- [ ] Confirm GitHub's own license detector picked up `LICENSE` (Apache-2.0) — check the "About"
-      sidebar on the repo page shows the license badge, not just the file being present.
-- [ ] Double check no secrets are in git history (`DISCLOSURES.md`, `.gitignore` already exclude
-      the obvious ones — spot-check `git log -p` for anything that slipped through before flipping
-      to public, since a private→public flip is not easily undone for anyone who already cloned).
+Fields the owner alone can answer are called out again in the day-of checklist at the bottom.
 
-## Devpost form, field by field
+---
 
-| # | Field (Devpost id) | Required | Status |
-|---|---|---|---|
-| 1 | URL to functional demo app (27812) | Yes | **TODO — blocked on Step 1** |
-| 2 | Testing credentials/instructions for demo app (28078) | No | Draft below |
-| 3 | URL to public code repo (27813) | Yes | **TODO — blocked on Step 2**, then `https://github.com/tomyimkc/memorystand` |
-| 4 | URL to license file in the repo (27814) | Yes | `https://github.com/tomyimkc/memorystand/blob/main/LICENSE` (once public) |
-| 5 | Which CockroachDB tools (27815, pick ≥2) | Yes | Draft below |
-| 6 | Which AWS services (27816, pick ≥1) | Yes | **TODO — blocked on Step 1** |
-| 7 | How meaningfully integrated (27817) | Yes | Draft below (finish once #5/#6 are locked in) |
-| 8 | Project start date, MM-DD-YY (27818) | Yes | `08-03-26` |
-| 9 | Pre-existing code disclosure (27819) | Yes | Draft below (condensed from `DISCLOSURES.md`) |
-| 10 | Architecture diagram upload (27820) | No | **TODO** — render one from `ARCHITECTURE.md`'s Mermaid diagram |
-| 11 | Feedback on CockroachDB AI tools (27821) | No | Draft below |
-| 12 | Submitter type: Individual / Organization / Team (27822) | Yes | **TODO — only you know this** |
-| 13 | Country of residence (27823) | Yes | **TODO — only you know this** |
-| 14 | Organization name, if applicable (27824) | No | **TODO** (blank if solo) |
-| 15 | Which AI tools leveraged (27825) | Yes | Draft below |
-| 16 | Level of learning derived (27826: None/Moderate/Significant) | Yes | **TODO — your honest call**; draft leans "Significant" |
-| 17 | Gained AI career value? (27827: Yes/No) | Yes | **TODO — your honest call** |
-| 18 | Not an employee of the sponsors (27828) | Yes | **TODO — confirm and check** |
-| 19 | Eligible jurisdiction (27829) | Yes | **TODO — confirm and check** |
-| 20 | Age of majority (27830) | Yes | **TODO — confirm and check** |
+### Field 2 — Testing credentials / instructions (optional)
 
-### Field 2 — testing credentials/instructions (optional)
+> No account and no credentials are needed to evaluate this project locally.
+>
+> ```
+> git clone https://github.com/tomyimkc/memorystand
+> cd memorystand
+> ./scripts/run-local.sh        # CockroachDB in Docker + schema + 101 seeded memories, ~1 min
+> ./scripts/demo.sh             # the whole story end to end, 8 beats
+> ```
+>
+> This brings up CockroachDB v26.2.5 in Docker and runs the full admission-control → outcome-gate
+> → cross-examine loop with no AWS account and no CockroachDB Cloud account. Embeddings fall back
+> to a deterministic local stub (`MEMORYSTAND_EMBED_STUB=1`, set automatically by the script and
+> announced on screen — a stub result is never presented as a real embedding). `pytest -q` runs
+> the 19-test suite. `python cli/memorystand.py recall --query "payments failover"` drives the CLI
+> directly. [If a deployed demo app exists by submission time: replace this paragraph with its URL
+> and any login notes it needs; keep this local path as a fallback for judges who prefer it.]
 
-> No account or credentials are needed to evaluate this project locally: `git clone`, then
-> `./scripts/run-local.sh` brings up CockroachDB in Docker, applies the schema, and seeds fixture
-> data in about a minute, with no AWS account and no CockroachDB Cloud account required
-> (embeddings fall back to a deterministic local stub, clearly logged as such). `./scripts/demo.sh`
-> then walks the full story end to end. [Once the demo app from Step 1 is deployed: replace this
-> paragraph with the deployed URL and any login/testing notes it needs.]
+### Field 5 — Which CockroachDB tools (pick ≥2; all four apply here)
 
-### Field 5 — Which CockroachDB tools are used (pick ≥2)
+> **Distributed Vector Indexing.** `agent_memories.embedding` is a native `VECTOR(512)` column
+> with `VECTOR INDEX agent_memories_tenant_idx (tenant_id, verdict, embedding vector_cosine_ops)`
+> (`db/schema.sql`). `verdict` sits in the index prefix deliberately, not as an afterthought: a
+> vector index in CockroachDB is only used by the optimizer when every prefix column is an
+> *equality* predicate, so putting `verdict` there is what turns "search this tenant's memories"
+> into "search this tenant's *admitted* memories" as a single server-side operation, at index
+> cost, instead of a filter applied after the fact. Measured on 10,000 memories across 50 tenants:
+> **1.60 ms p50 / 1.86 ms p95 / 2.01 ms p99** indexed, versus **15.05 / 18.09 / 25.20 ms**
+> brute-force on the identical data — roughly 9.4× faster at p50, 12.5× at p99
+> (`scripts/loadtest.py --rows 10000 --tenants 50`). The before/after is visible directly in
+> `EXPLAIN`: with the `verdict` predicate present, the plan shows one `vector search` node with a
+> single `prefix spans` range scoped to that tenant+verdict; drop the predicate and the same query
+> plan shows three spans, one per verdict value, i.e. the optimizer falls back to scanning every
+> partition. That failure mode is silent — no error, just a slower query — which is also the
+> subject of the feedback in field 11.
+>
+> **Agent Skills Repo.** `skills/cockroachdb-observability-and-diagnostics/
+> auditing-agent-memory-with-time-travel/SKILL.md` is an authored skill in the upstream
+> frontmatter format (name, description, compatibility, license, metadata). It documents the
+> `AS OF SYSTEM TIME` audit pattern this project's `cross-examine` command depends on — including
+> the trap that cost real debugging time: `AS OF SYSTEM TIME` cannot appear inside a subquery or
+> CTE (CockroachDB error `42601`), so the fix is `SET TRANSACTION AS OF SYSTEM TIME` as the first
+> statement of the (already-open, psycopg2-managed) transaction, not `BEGIN AS OF SYSTEM TIME`.
+> Every SQL statement and `EXPLAIN` plan in the skill was copy-pasted from a real session against
+> this project's own cluster, not written from documentation alone.
+>
+> **Cloud Managed MCP Server.** Wired as a read-only (`mcp:read`) service-account connection,
+> used from Claude Code as the judge- and operator-facing inspection surface for the running
+> cluster — deliberately never in the write path, so a judge (or an operator) can query live state
+> without any route through this project's own application code.
+>
+> **ccloud CLI.** `infra/provision.sh` provisions the CockroachDB Basic cluster on `--cloud AWS`,
+> creates the scoped SQL user, and prints the connection string non-interactively (`-o json`), so
+> the same script is usable in CI or by a judge re-running the deploy path rather than only
+> point-and-click through the console.
 
-Two of the four are genuinely verified against a live cluster today, with no external account
-needed:
+### Field 6 — Which AWS services (pick ≥1)
 
-- **Distributed Vector Indexing** — `agent_memories.embedding` is a `VECTOR(512)` column with a
-  prefix-partitioned index on `(tenant_id, verdict, embedding)`. `scripts/demo.sh` step 7 (and
-  `scripts/record-demo.sh` beat 7) capture a live `EXPLAIN` plan proving the `vector search` node
-  and `prefix spans` are real, not asserted.
-- **Agent Skills Repo** — `skills/cockroachdb-observability-and-diagnostics/
-  auditing-agent-memory-with-time-travel/SKILL.md` is an authored skill in the upstream
-  frontmatter format (name/description/compatibility/license/metadata), documenting the
-  `AS OF SYSTEM TIME` audit pattern this project uses, with every SQL statement and `EXPLAIN` plan
-  in it copy-pasted from a real session against this project's own cluster.
+> Amazon Bedrock (Amazon Nova Lite for reasoning, Titan Text Embeddings V2 for embeddings), AWS
+> Lambda, AWS Lambda Function URLs, Amazon EventBridge Scheduler, AWS Systems Manager Parameter
+> Store, Amazon CloudWatch Logs, AWS Amplify Hosting, and a CockroachDB cluster provisioned with
+> `--cloud AWS`.
+>
+> **BEFORE PASTING:** tick only what has actually been deployed by then. As of this writing the
+> deployment scripts are written and the Lambda package is verified to build and import inside
+> the real `public.ecr.aws/lambda/python:3.13` runtime, but the deploy has not been run against
+> a live account. Claiming a service that has never run would be the one kind of overstatement
+> this entire project argues against — and a judge can check.
+>
+> Note on the reasoning model: this project originally targeted Claude on Bedrock. Anthropic
+> models are refused from this operator's AWS account with `ValidationException: Access to
+> Anthropic models is not allowed from unsupported countries...` — a geo-restriction independent
+> of IAM and region. The reasoning model is now `amazon.nova-lite-v1:0`, which is AWS-native,
+> `ON_DEMAND`, and carries no such restriction. Full detail, including the on-demand-quota
+> situation for a brand-new AWS account, is in `docs/BEDROCK_QUOTA.md`.
 
-The other two are **written but not yet run against a real account** (see Step 1) and should only
-be checked once true:
+### Field 7 — How meaningfully integrated
 
-- **Cloud Managed MCP Server** — `ARCHITECTURE.md` designs a read-only (`mcp:read`) service
-  account as the judge-facing inspection path, but no CockroachDB Cloud cluster exists yet to
-  connect it to.
-- **ccloud CLI** — `infra/provision.sh` is written and its flags were checked against
-  `ccloud --help` (`ccloud 0.8.23`), but it has never actually provisioned a cluster (no `ccloud`
-  session on this machine).
+> Argued by what breaks if each piece is removed, since that is a harder bar than listing what was
+> used.
+>
+> **Remove the vector index's `verdict` prefix column** and `recall()` still runs — it just stops
+> being tenant-and-admission-scoped at the database layer, silently falling back to a full scan
+> (no error), which is exactly the trap this build hit and fixed. **Remove `AS OF SYSTEM TIME`**
+> and `cross-examine` has no way to answer "what did the agent believe when it paged you" — the
+> only alternative is a hand-built version table and triggers on every write, which is the
+> integration cost CockroachDB's native MVCC removes entirely. **Remove SERIALIZABLE isolation**
+> (CockroachDB's only isolation level) and the concurrent-contradiction test
+> (`scripts/race_demo.py`: 10 concurrent writers, 10/10 updates landed, 9 retries observed as real
+> `40001` conflicts, exactly one of two contradictory writes accepted) has no guarantee behind it
+> — it becomes a race with no referee. **Remove `backend/trust.py`'s promotion path** and the
+> project's entire thesis is gone: it is the one place in the codebase asserted, and tested, to
+> make zero model calls (`assert_no_model_calls()`, run on the live path, not just documented).
+>
+> On the AWS side: **remove Bedrock** and admission control's enrichment step degrades to its
+> documented rule-table fallback (`backend/agent.py`) rather than failing closed — by design, so a
+> capacity outage (see `docs/BEDROCK_QUOTA.md`) never blocks the trust-critical path. **Remove
+> Lambda + the Function URL** and there is no deployed backend, full stop — it is the entire
+> runtime, not a component of it. **Remove SSM Parameter Store** and the CockroachDB DSN would
+> need to live in a Lambda environment variable in plaintext, which the project's own security
+> posture explicitly rejects. **Remove EventBridge Scheduler** and the periodic checkpoint job and
+> keep-warm ping stop running, silently degrading Lambda cold-start latency and the tamper-evident
+> checkpoint cadence in `backend/snapshots.py`. **Remove Amplify Hosting** and there is no
+> judge-facing dashboard, only an API judges would have to `curl` by hand.
 
-**If Step 1 is done before you submit**, select all four and expand the integration explanation
-(field 7) accordingly. **If it is not**, select the first two only — that still clears the "at
-least two" requirement honestly.
+### Field 9 — Pre-existing code disclosure
 
-### Field 7 — how meaningfully integrated (draft; finish after Step 1 and field 5/6 are final)
+> This repository's first commit is dated 2026-08-03, inside the Submission Period
+> (2026-06-30–2026-08-18), with no earlier history — it was initialised from empty. No source
+> code from any prior repository was copied into this project; every schema, Lambda handler,
+> Bedrock integration, MCP/Agent Skill wiring, spike script, provisioning script, and frontend
+> file here was newly written during the Submission Period.
+>
+> The author has previously worked on a personal, unrelated Apache-2.0 monorepo that explored two
+> *design instincts* which carried over as thinking, not as code: (1) a memory store whose writes
+> must clear a check before becoming readable — that earlier work used a two-table accepted/held
+> split with an application-level verifier on SQLite; this project instead uses a single table
+> whose own MVCC history is the audit trail, adjudicated inside a serializable transaction, with
+> CockroachDB's `AS OF SYSTEM TIME` for replay, none of which existed in the earlier work; and (2)
+> treating an agent's tool surface as needing identity, an audit log, and a kill switch —
+> reimplemented here from scratch against a SQL `tool_audit` table with native row-level TTL, AWS
+> SSM for secrets, and IAM scoped to named model ARNs. No file, function body, schema string, or
+> configuration was reused verbatim from that project, which is itself not a CockroachDB or AWS
+> project. Full detail is in `DISCLOSURES.md`, checked into the repo so it is independently
+> verifiable rather than only asserted on this form.
 
-> CockroachDB's `VECTOR` column and prefix-partitioned vector index are not bolted on — they are
-> the reason `recall()` scopes its ANN search to one tenant's admitted memories via a *server-side*
-> index prefix `(tenant_id, verdict)`, verified with a live `EXPLAIN` (measured p50 1.60ms indexed
-> vs 15.05ms brute-force at 10k rows / 50 tenants; see `README.md`). The Agent Skill documents the
-> `AS OF SYSTEM TIME` pattern that `replay.cross_examine()` uses to pin a whole read to a decision's
-> exact instant — the mechanism this project's headline feature (`grant_standing()`'s outcome gate)
-> depends on to prove what an agent believed when it acted. [If Step 1 is complete: add a paragraph
-> on the Managed MCP Server as the read-only judge-facing inspection path with zero application
-> code in between, and `ccloud`'s role in provisioning the cluster and rotating the service-account
-> credential non-interactively.] On the AWS side: [fill in once real — e.g. "AWS Lambda runs the
-> entire backend behind a Function URL; Amazon Bedrock (Claude via Converse, Titan Text Embeddings
-> V2) powers reasoning and embeddings, and is deliberately absent from the trust-promotion path —
-> see `backend/trust.py`'s `assert_no_model_calls()`, which is checked on the live path, not just
-> documented."]
+### Field 11 — Feedback on CockroachDB AI tools (optional, high-value)
 
-### Field 9 — pre-existing code disclosure (condensed from `DISCLOSURES.md`)
+> Four concrete traps from this build, offered as constructive feedback rather than complaint:
+>
+> **A vector index goes silently unused if a filter column sits outside its prefix, and there is
+> no warning.** Our index is `(tenant_id, verdict, embedding)`. Adding an innocuous-looking
+> `embedding IS NOT NULL` predicate — the kind of defensive null-check a developer adds out of
+> habit — defeated the index entirely with no error, just a query that got slower as the table
+> grew. An `EXPLAIN`-based lint, or a warning when a query on an indexed vector column falls back
+> to a full scan, would have caught this in seconds instead of costing a profiling session.
+>
+> **`AS OF SYSTEM TIME` inside a subquery or CTE fails with `42601`, and the message doesn't
+> point at the fix.** The error text describes a syntax problem, not "move this to
+> `SET TRANSACTION AS OF SYSTEM TIME` as the first statement of the transaction" — which is the
+> actual fix, and non-obvious if you're coming from Postgres, where the natural instinct is
+> `BEGIN AS OF SYSTEM TIME` (which fails differently, `25001`, because psycopg2 has already opened
+> the transaction by the time your code runs).
+>
+> **`UUID[]` columns arrive at psycopg2 unmapped, as a string, and iterating that string silently
+> yields characters, not UUIDs.** There's no error — a `for x in row['some_uuid_array']` loop just
+> quietly iterates over `'`, `0`, `9`, ... instead of the array elements. Casting server-side to
+> `::STRING[]` fixed it, but nothing on the CockroachDB or psycopg2 side surfaced that the type
+> round-trip was wrong.
+>
+> **Stats need an explicit `ANALYZE` after a bulk load, or the optimizer keeps ignoring the vector
+> index even though it exists and is otherwise correct.** This one at least fails loud once you
+> know to look for it (a plan without the `vector search` node) — but nothing at load time hints
+> that a fresh bulk-loaded table needs it.
 
-> This repository's first commit is dated 2026-08-03, inside the Submission Period, with no earlier
-> history. No source code from any prior repository was copied in. The author previously explored
-> two unrelated *design instincts* on a different, non-CockroachDB, non-AWS personal project (an
-> accepted/quarantine memory split, and treating an agent tool surface as needing identity/audit/a
-> kill switch) — reimplemented here from scratch against CockroachDB-specific primitives (single-
-> table MVCC history, `AS OF SYSTEM TIME`, SSM, IAM). No file, function body, or schema string was
-> reused verbatim. Full detail in `DISCLOSURES.md`, checked into the repo so it's verifiable, not
-> just asserted on this form.
-
-### Field 11 — feedback on CockroachDB AI tools (optional; draft, edit freely)
-
-> The vector index's requirement that the prefix columns (here `tenant_id, verdict`) be *equality*
-> predicates for the optimizer to use it at all was the single biggest early trap — a query with an
-> extra `embedding IS NOT NULL` predicate silently fell back to a full scan with no error, only a
-> slow query. An `EXPLAIN`-based lint or a clearer optimizer hint here would have saved real time.
-> Also: `AS OF SYSTEM TIME` rejecting use inside a subquery/CTE (`42601`) wasn't obvious from the
-> error message alone; `SET TRANSACTION AS OF SYSTEM TIME` as the first statement of a transaction
-> was the fix, but it took a spike script to find (see `SPIKE-RESULTS.md`).
-
-### Field 15 — which AI tools leveraged
+### Field 15 — Which AI tools leveraged
 
 > Claude Code (Anthropic) was used throughout for architecture discussion, SQL and Python
-> authoring, and documentation — disclosed in full in `DISCLOSURES.md`. Amazon Bedrock (Claude via
-> the Converse API, and Titan Text Embeddings V2) is a **runtime component of the submitted agent
-> itself**, not an authoring tool, and is covered separately under AWS services.
+> authoring, and documentation — disclosed in full in `DISCLOSURES.md`. Amazon Bedrock (Nova Lite
+> for reasoning, Titan Text Embeddings V2 for embeddings) is a **runtime component of the
+> submitted agent itself**, not an authoring tool, and is covered separately under AWS services.
+
+---
+
+## Fields only the owner can answer
+
+Rows 1, 3, 10, 12, 13, 14, 16, 17, 18, 19, 20 above. In particular: field 1 (demo URL) and the
+final content of field 6 depend on `infra/deploy.sh` actually being run against real AWS
+credentials; field 3 depends on flipping the repo from private to public; field 10 needs the
+existing Mermaid source in `ARCHITECTURE.md` rendered to an image and uploaded; fields 12–14 and
+16–20 are personal/eligibility answers no one else can supply.
+
+---
 
 ## 48 hours before the deadline (by 2026-08-16 17:00 ET)
 
-- [ ] Step 1 (real AWS + ccloud) is done, or you've made a deliberate, honest call to submit with
-      only local-verified CockroachDB tools and whichever AWS service you did get running.
-- [ ] Repo is public (Step 2), license badge visible.
-- [ ] `README.md`'s Status table reflects reality — no ✅ for anything that wasn't actually run.
-- [ ] Video is recorded, edited, uploaded, and set to **Public**. Watch the public link once,
+- [ ] `infra/provision.sh` → `infra/ssm_setup.sh` → `infra/deploy.sh` → `infra/deploy_frontend.sh`
+      have been run against real AWS + `ccloud` credentials, or a deliberate, honest call has been
+      made to submit with only what actually ran.
+- [ ] Repo is public; GitHub's own license badge shows Apache-2.0 in the "About" sidebar.
+- [ ] `git log -p` spot-checked for anything that shouldn't go public before flipping visibility —
+      a private→public flip is not cleanly reversible once anyone has cloned it.
+- [ ] `README.md`'s Status table reflects reality — no checkmark for anything that wasn't actually
+      run against real infrastructure.
+- [ ] Demo video recorded, edited, uploaded, set to **Public** — watch the public link once,
       logged out, start to finish.
-- [ ] Demo app URL is live and has been hit from a browser that isn't yours (a different network,
-      or ask someone else) to catch a firewall/CORS surprise before a judge does.
-- [ ] Devpost project draft has every field in the table above filled in except the ones only you
-      can answer (rows 12, 13, 14, 16, 17, 18, 19, 20).
+- [ ] Demo app URL hit from a browser/network that isn't the owner's, to catch a firewall or CORS
+      surprise before a judge does.
+- [ ] Every field above except the owner-only rows is filled in on the live Devpost draft.
+- [ ] Architecture diagram exported from `ARCHITECTURE.md` and uploaded (field 10).
 
 ## Day of (2026-08-18)
 
-- [ ] Re-run `./scripts/demo.sh` (or `record-demo.sh --auto` for a quick smoke check) against
-      whatever is live one more time. A cold cluster or an expired credential the morning of is the
-      single most common last-day failure.
-- [ ] Fill in the four checkbox/personal fields (12, 13, 18, 19, 20) and the two subjective ones
-      (16, 17) — these cannot be pre-filled by anyone but you.
-- [ ] Submit **well before 17:00 ET** — Devpost's deadline enforcement is exact; do not test it.
-- [ ] After submitting, confirm the submission shows as **submitted** (not just saved as a draft)
-      on your Devpost dashboard.
+- [ ] Re-run `./scripts/demo.sh` (or `scripts/record-demo.sh --auto`) against whatever is live,
+      one more time. A cold cluster or an expired credential on the last morning is the single
+      most common failure at this stage.
+- [ ] Fill in the personal/eligibility fields (12, 13, 14, 16, 17, 18, 19, 20) — only the owner
+      can answer these.
+- [ ] Submit well before 17:00 ET — Devpost's deadline enforcement is exact; do not test it.
+- [ ] After submitting, confirm the dashboard shows **submitted**, not **draft**.

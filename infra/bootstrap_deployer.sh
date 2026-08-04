@@ -159,7 +159,9 @@ Done. Use the scoped profile from here on:
 
 Still to do by hand in the console (nothing can automate them):
   1. Enable MFA on the root account, then stop using root.
-  2. Bedrock -> Model access -> enable Claude Haiku 4.5 and Titan Text Embeddings V2.
+  2. Bedrock -> Model access -> enable Amazon Nova Lite and Titan Text Embeddings V2
+     (not Claude -- Anthropic models on Bedrock are geo-restricted from this operator's
+     country; see docs/BEDROCK_QUOTA.md).
   3. Billing -> Budgets -> a \$20 monthly cost budget. Bedrock has no free tier and the
      demo endpoint is public.
 

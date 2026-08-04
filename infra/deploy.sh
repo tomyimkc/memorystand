@@ -19,7 +19,7 @@
 #
 # Usage:
 #   ./infra/deploy.sh
-#   FUNCTION_NAME=memorystand REGION=us-east-1 ./infra/deploy.sh
+#   FUNCTION_NAME=memorystand REGION=us-west-2 ./infra/deploy.sh
 #
 # Re-run any time: every AWS call below is written to converge rather than fail on a
 # second run (create-if-missing, update-if-present).
