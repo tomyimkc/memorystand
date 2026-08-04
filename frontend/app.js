@@ -89,7 +89,14 @@
   // running the Quickstart never has to pass ?api= for the local flow to work. A judge
   // hitting a deployed Amplify URL always needs ?api=<lambda-function-url> explicitly --
   // there is no way to bake a not-yet-deployed Lambda URL in here honestly.
-  var API_BASE = (qs.get("api") || "http://127.0.0.1:8077").replace(/\/+$/, "");
+  // Default to the deployed API so a judge opening the hosted page needs no query
+  // parameter and no local setup. ?api= still overrides, which is what `run-local.sh
+  // --serve` relies on when pointing this same file at http://127.0.0.1:8077.
+  var DEPLOYED_API = "https://ojao6oaxlk26mqfjwpuy7g4dy40tglyi.lambda-url.us-west-2.on.aws";
+  var LOCAL_API = "http://127.0.0.1:8077";
+  var IS_LOCAL_PAGE = location.protocol === "file:" ||
+                      /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+  var API_BASE = (qs.get("api") || (IS_LOCAL_PAGE ? LOCAL_API : DEPLOYED_API)).replace(/\/+$/, "");
 
   // Every fetch below is capped so a stalled connection (conference wifi, a Lambda cold
   // start behind a dead security group, a typo'd ?api=) turns into a clear timeout error

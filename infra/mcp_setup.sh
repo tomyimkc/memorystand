@@ -10,7 +10,13 @@
 #   ccloud service-account create <name> [--description string]
 #   ccloud service-account api-key create <service account id> <key name>
 #   ccloud service-account api-key delete <api key id>
-# UNVERIFIED, second assumption: this passes a SERVICE-ACCOUNT id in the position
+# CONFIRMED 2026-08-04: passing a SERVICE-ACCOUNT id in the position ccloud documents
+# as `<user ID>` is accepted -- the call got past it and failed only on the role name.
+# Role names are SCREAMING_SNAKE, not title case. The API enumerates them on rejection:
+#   BILLING_COORDINATOR ORG_ADMIN ORG_MEMBER CLUSTER_ADMIN CLUSTER_OPERATOR_WRITER
+#   CLUSTER_DEVELOPER CLUSTER_CREATOR FOLDER_ADMIN FOLDER_MOVER
+# Resource type is likewise uppercase: valid values are ORGANIZATION, CLUSTER, FOLDER.
+# Previously noted as unverified: this passes a SERVICE-ACCOUNT id in the position
 # `ccloud role add` documents as `<user ID>`. Its --help uses generic "user id"
 # language with no example distinguishing service accounts from human users, and
 # there is no session here to test against. Plausible -- most cloud IAM systems
@@ -27,7 +33,7 @@
 # What this script deliberately does NOT try to guess: the EXACT role-name
 # string `ccloud role add` accepts. CockroachDB Cloud's docs
 # (cockroachlabs.com/docs/cockroachcloud/managing-access) only show the
-# human display name "Cluster Developer" / "Cluster Operator" / "Cluster
+# human display name "CLUSTER_DEVELOPER" / "Cluster Operator" / "Cluster
 # Admin"; no `--help` output or public example on this machine shows the
 # literal argument string `ccloud role add` expects for it, and there is no
 # live session to test one. MEMORYSTAND_MCP_ROLE below defaults to the
@@ -46,7 +52,7 @@
 #     own Cloud-IAM identity, scoped to exactly one cluster, with the
 #     smallest role that still allows running SELECT/EXPLAIN/SHOW through the
 #     MCP server's read tools.
-#   - Cluster Developer is the most restrictive assignable cluster-scoped
+#   - CLUSTER_DEVELOPER is the most restrictive assignable cluster-scoped
 #     role in CockroachDB Cloud's own role table (see docs/MCP.md) -- it does
 #     not carry Cluster Admin/Operator's ability to change maintenance
 #     windows, delete the cluster, or edit other role grants. A leaked key
@@ -66,7 +72,7 @@ CLUSTER_NAME="${CLUSTER_NAME:-standing}"
 CLUSTER_ID="${CLUSTER_ID:-}"
 SERVICE_ACCOUNT_NAME="${SERVICE_ACCOUNT_NAME:-memorystand-mcp-readonly}"
 API_KEY_NAME="${API_KEY_NAME:-memorystand-mcp-readonly-key}"
-MEMORYSTAND_MCP_ROLE="${MEMORYSTAND_MCP_ROLE:-Cluster Developer}"
+MEMORYSTAND_MCP_ROLE="${MEMORYSTAND_MCP_ROLE:-CLUSTER_DEVELOPER}"
 OUT_FILE="${OUT_FILE:-$HOME/.memorystand-mcp-key}"
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing required tool: $1" >&2; exit 1; }; }
@@ -82,7 +88,7 @@ fi
 if [[ -z "$CLUSTER_ID" ]]; then
   echo "==> Resolving cluster id for '${CLUSTER_NAME}' (set CLUSTER_ID to skip this lookup)"
   CLUSTER_ID="$(ccloud cluster list -o json | jq -r --arg n "$CLUSTER_NAME" \
-    '.clusters[]? | select(.name==$n) | .id' | head -1)"
+    'if type=="array" then .[] else (if type=="array" then .[] else (.clusters[]? // empty) end // empty) end | select(.name==$n) | .id' | head -1)"
   if [[ -z "$CLUSTER_ID" ]]; then
     echo "Could not find a cluster named '${CLUSTER_NAME}'. Pass CLUSTER_ID=<uuid> explicitly," >&2
     echo "or CLUSTER_NAME=<name> matching an existing cluster (see 'ccloud cluster list')." >&2
@@ -93,10 +99,10 @@ echo "    cluster id: ${CLUSTER_ID}"
 
 echo "==> Ensuring service account '${SERVICE_ACCOUNT_NAME}' exists"
 sa_id="$(ccloud service-account list -o json | jq -r --arg n "$SERVICE_ACCOUNT_NAME" \
-  '.service_accounts[]? | select(.name==$n) | .id' | head -1)"
+  'if type=="array" then .[] else (if type=="array" then .[] else (.service_accounts[]? // empty) end // empty) end | select(.name==$n) | .id' | head -1)"
 if [[ -z "$sa_id" ]]; then
   sa_id="$(ccloud service-account create "$SERVICE_ACCOUNT_NAME" \
-    --description "Read-only identity for the CockroachDB Cloud MCP server (MemoryStand hackathon demo). Never used for writes." \
+    --description "Read-only MCP identity for MemoryStand. Never used for writes." \
     -o json | jq -r '.id')"
   echo "    created: ${sa_id}"
 else
@@ -105,7 +111,7 @@ fi
 
 echo "==> Granting '${MEMORYSTAND_MCP_ROLE}' on cluster ${CLUSTER_ID} to ${sa_id}"
 echo "    (least privilege: scoped to this one cluster, not the organization)"
-if ! ccloud role add "$sa_id" "$MEMORYSTAND_MCP_ROLE" cluster "$CLUSTER_ID"; then
+if ! ccloud role add "$sa_id" "$MEMORYSTAND_MCP_ROLE" CLUSTER "$CLUSTER_ID"; then
   echo "role grant failed. This is almost certainly the unverified role-name string" >&2
   echo "described in this script's header comment -- re-run with MEMORYSTAND_MCP_ROLE" >&2
   echo "set to whatever 'ccloud role add --help' or the CockroachDB Cloud console" >&2

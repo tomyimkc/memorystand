@@ -40,7 +40,7 @@ echo "==> Looking for an existing cluster named '${CLUSTER_NAME}'"
 # `ccloud cluster list -o json` returns a bare ARRAY, not {clusters:[...]}. Accept either,
 # because guessing wrong here fails with a jq type error that says nothing useful.
 existing="$(ccloud cluster list -o json 2>/dev/null | jq -r --arg n "$CLUSTER_NAME" \
-  'if type=="array" then .[] else (.clusters[]? // empty) end | select(.name==$n) | .id' \
+  'if type=="array" then .[] else (if type=="array" then .[] else (.clusters[]? // empty) end // empty) end | select(.name==$n) | .id' \
   | head -1)"
 
 if [[ -n "${existing}" ]]; then
@@ -63,7 +63,7 @@ ccloud cluster info "${CLUSTER_NAME}" -o json 2>/dev/null \
 echo "==> Ensuring SQL user '${SQL_USER}' exists"
 if ! ccloud cluster user list "${CLUSTER_NAME}" -o json 2>/dev/null | jq -e \
      --arg u "$SQL_USER" \
-     'if type=="array" then .[] else (.users[]? // empty) end
+     'if type=="array" then .[] else (if type=="array" then .[] else (.users[]? // empty) end // empty) end
       | select((.name // .) == $u)' >/dev/null 2>&1; then
   # ccloud shows a generated password exactly once. Capture it to a 0600 file rather
   # than letting it land in scrollback -- this terminal is the one a demo gets recorded
