@@ -95,12 +95,12 @@ Everything marked ✅ was run against a real CockroachDB v26.2.5 cluster, not ju
 | Lambda handler, 7 routes, kill switch, degraded mode | ✅ exercised over HTTP |
 | Bedrock agent loop + deterministic fallback | ✅ fallback path verified |
 | `memorystand` CLI (6 subcommands) | ✅ |
-| Static dashboard (`frontend/`) | ✅ 4 panels, no build step |
+| Static dashboard (`frontend/`) | ✅ 4 panels + seeded-demo preview strip, no build step, driven against a live local API |
 | Tamper-evident checkpoints (`backend/snapshots.py`) | ✅ |
 | Authored CockroachDB Agent Skill | ✅ upstream format |
 | One-command demo (`scripts/demo.sh`) | ✅ 8 beats, exit 0 |
 | ccloud provisioning (`infra/provision.sh`) | ✅ flags verified against `ccloud 0.8.23` |
-| AWS deploy scripts (`infra/deploy.sh`, IAM, SSM, keep-warm) | ⚠️ written, **never run** — no AWS account yet |
+| AWS deploy scripts (`infra/deploy.sh`, `infra/deploy_frontend.sh`, IAM, SSM, keep-warm) | ⚠️ written, **never run** — no AWS account yet. See [docs/DEPLOY.md](docs/DEPLOY.md) for the exact judge-facing URL shape and what stays free. |
 | Bedrock with real credentials | ⏳ deterministic stub covers local runs |
 | Cloud cluster, MCP server wiring, video | ⬜ |
 
@@ -167,12 +167,15 @@ Then:
 .venv/bin/python scripts/loadtest.py --rows 10000 --tenants 50  # reproduce the numbers below
 ```
 
-Deploying to real infrastructure instead (needs accounts):
+Deploying to real infrastructure instead (needs accounts; **never run against a real
+account as of this writing** — see [docs/DEPLOY.md](docs/DEPLOY.md) for the honest status,
+the exact judge-facing URL shape, and what stays free for a ~6-week judging window):
 
 ```bash
 ./infra/provision.sh              # CockroachDB Basic cluster, on AWS, via ccloud
 ./infra/ssm_setup.sh              # secrets as SSM SecureStrings
 ./infra/deploy.sh                 # Lambda + Function URL
+./infra/deploy_frontend.sh        # dashboard -> AWS Amplify Hosting (amplify.yml at repo root)
 ```
 
 ## CockroachDB tools used

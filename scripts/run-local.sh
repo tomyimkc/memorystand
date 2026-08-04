@@ -104,6 +104,13 @@ export MEMORYSTAND_DSN="$DSN"
 export COCKROACH_DSN="$DSN"
 export MEMORYSTAND_EMBED_STUB=1
 
+# /ingest and /decide require a shared secret because they are the two routes that spend
+# money on Bedrock. Locally that protects nothing, but leaving it unset makes those two
+# routes return 401 -- so anyone following the Quickstart literally sees two of the four
+# dashboard panels fail with "unauthorized" and reasonably concludes the app is broken.
+# Set a known local value and print it. In a real deploy this comes from SSM, never a default.
+export MEMORYSTAND_SHARED_SECRET="${MEMORYSTAND_SHARED_SECRET:-local-dev-secret}"
+
 say "3/5  Schema"
 docker exec -i "$CONTAINER" ./cockroach sql --insecure < db/schema.sql 2>&1 \
   | grep -Ei '^ERROR' && { echo "schema failed" >&2; exit 1; }
@@ -123,6 +130,7 @@ Ready. Everything below runs with no AWS account.
 
   export MEMORYSTAND_DSN='$DSN'
   export MEMORYSTAND_EMBED_STUB=1
+  export MEMORYSTAND_SHARED_SECRET='$MEMORYSTAND_SHARED_SECRET'   # local only; real deploys read this from SSM
 
 Watch the whole story end to end (this is the video's shot list):
   ./scripts/demo.sh

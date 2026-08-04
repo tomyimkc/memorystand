@@ -103,6 +103,33 @@
   .status-dot.down { background: var(--red); box-shadow: 0 0 0 3px var(--red-dim); }
   .status-pill .api-base { color: var(--text-dim); font-family: var(--mono); font-size: 12px; }
 
+  /* ---------- seeded-demo preview strip ---------- */
+  section.preview-strip {
+    margin: 20px 28px 0;
+    max-width: 1800px;
+    margin-left: auto;
+    margin-right: auto;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .preview-strip-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+  }
+  .preview-strip-head h2 { margin: 0 0 4px; font-size: 15px; }
+  .preview-strip-head p { margin: 0; font-size: 13px; color: var(--text-dim); max-width: 70ch; }
+  .preview-strip-result { font-size: 13px; }
+  .preview-strip-result .memory-row { margin-bottom: 6px; }
+  .preview-strip-result .preview-summary { margin: 0 0 8px; color: var(--text-dim); }
+
   /* ---------- layout ---------- */
   main.grid {
     display: grid;
@@ -294,6 +321,14 @@
   }
   .model-calls-hero .mc-number.zero { color: var(--green); }
   .model-calls-hero .mc-number.nonzero { color: var(--red); }
+  .model-calls-hero .mc-note {
+    margin: 8px 0 0;
+    font-size: 12px;
+    color: var(--text-dim);
+    max-width: 48ch;
+    margin-left: auto;
+    margin-right: auto;
+  }
 
   .tier-columns {
     display: grid;
@@ -394,6 +429,23 @@
     <span class="api-base" id="apiBaseLabel"></span>
   </div>
 </header>
+
+<section class="preview-strip" id="previewStrip">
+  <div class="preview-strip-head">
+    <div>
+      <h2>Seeded demo tenant</h2>
+      <p>
+        One click, no UUIDs to type: loads the tenant this demo ships with (~101 seeded
+        on-call memories) and shows a few of them via the read-only <code>/recall</code>
+        endpoint, so there is something real on screen before you touch any form below.
+      </p>
+    </div>
+    <button class="primary" type="button" id="loadSeededDemo">Load seeded demo tenant</button>
+  </div>
+  <div class="preview-strip-result" id="previewResult">
+    <p class="placeholder">Checking for existing memories…</p>
+  </div>
+</section>
 
 <main class="grid">
 
@@ -509,6 +561,15 @@
       Report what actually happened. Memories that decision <em>produced</em> are promoted
       or demoted based on that outcome — never on a model's opinion of itself.
     </p>
+
+    <div class="model-calls-hero" id="modelCallsHero">
+      <div class="mc-label">model calls on this path</div>
+      <div class="mc-number zero" id="modelCallsNumber">0</div>
+      <p class="mc-note" id="modelCallsNote">
+        By design, before any outcome is confirmed: this promotion path never asks a
+        model anything. Confirm an outcome below and this updates from the real response.
+      </p>
+    </div>
 
     <form class="panel-form" id="form-confirm">
       <div class="field span2">

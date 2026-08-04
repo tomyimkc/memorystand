@@ -67,26 +67,46 @@
 // never hardcodes it -- the operator pastes it into the top bar, and it is
 // sent only on those two routes, only in memory, never persisted to storage.
 //
-// CORS: verified against a running handler.py dev server: GET routes
-// (/health, /timemachine) and the OPTIONS preflight for POST routes all send
-// Access-Control-Allow-Origin, but the actual POST responses for /decide,
-// /ingest and /confirm_outcome currently do not (handler.py's `_response(...,
-// cors=is_read)` only sets it for GET). In a real cross-origin deployment
-// (Amplify Hosting calling a Lambda Function URL, or this dashboard served on
-// a different local port than the API) the browser's preflight will succeed
-// but the actual POST response will be opaque to `fetch`, and this file's
-// error handling will report it exactly like "API unreachable" -- because
-// from the browser's point of view it is indistinguishable from a network
-// failure. That is a backend fix (widen `cors=` to unconditionally true on
-// every _response call in handler.py), out of this file's scope; flagged
-// here so it is not mistaken for a dashboard bug when it surfaces.
+// CORS: re-verified 2026-08-04 against a running handler.py dev server (curl -i on
+// every route, including POST /decide, /ingest and /confirm_outcome, plus an OPTIONS
+// preflight). Every response -- reads, writes, and error paths alike -- now sends
+// Access-Control-Allow-Origin: * (handler.py's `_response(..., cors=True)` is
+// unconditional). A cross-origin deployment (Amplify Hosting calling a Lambda Function
+// URL, or this dashboard served on a different local port than the API) works. If a
+// future backend change reintroduces a read/write split here, the symptom from this
+// file's side will be indistinguishable from "API unreachable" -- the browser hides the
+// actual response from a CORS-opaque POST -- so this comment exists to make that failure
+// mode easy to recognize again if it ever comes back.
 // -----------------------------------------------------------------------------
 
 (function () {
   "use strict";
 
   var qs = new URLSearchParams(window.location.search);
-  var API_BASE = (qs.get("api") || "http://127.0.0.1:8000").replace(/\/+$/, "");
+  // Default matches scripts/run-local.sh's MEMORYSTAND_LOCAL_PORT (8077), not the more
+  // common 8000 -- port 8000 is documented as taken by an unrelated service on this
+  // project's own dev machines, and run-local.sh --serve always binds 8077. A judge
+  // running the Quickstart never has to pass ?api= for the local flow to work. A judge
+  // hitting a deployed Amplify URL always needs ?api=<lambda-function-url> explicitly --
+  // there is no way to bake a not-yet-deployed Lambda URL in here honestly.
+  var API_BASE = (qs.get("api") || "http://127.0.0.1:8077").replace(/\/+$/, "");
+
+  // Every fetch below is capped so a stalled connection (conference wifi, a Lambda cold
+  // start behind a dead security group, a typo'd ?api=) turns into a clear timeout error
+  // within a few seconds instead of a spinner that spins forever with no explanation.
+  var FETCH_TIMEOUT_MS = 10000;
+
+  function fetchWithTimeout(url, opts) {
+    var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = null;
+    if (controller) {
+      opts = Object.assign({}, opts, { signal: controller.signal });
+      timer = setTimeout(function () { controller.abort(); }, FETCH_TIMEOUT_MS);
+    }
+    return fetch(url, opts).finally(function () {
+      if (timer) clearTimeout(timer);
+    });
+  }
 
   // ---------------------------------------------------------------- helpers
 
@@ -186,7 +206,7 @@
     Object.keys(extraHeaders || {}).forEach(function (k) {
       if (extraHeaders[k]) headers[k] = extraHeaders[k];
     });
-    return fetch(url, {
+    return fetchWithTimeout(url, {
       method: "POST",
       headers: headers,
       body: JSON.stringify(body),
@@ -217,7 +237,7 @@
   function apiGet(path, params) {
     var qsStr = new URLSearchParams(params || {}).toString();
     var url = API_BASE + path + (qsStr ? "?" + qsStr : "");
-    return fetch(url, { method: "GET" })
+    return fetchWithTimeout(url, { method: "GET" })
       .then(function (resp) {
         return resp.text().then(function (text) {
           var data = null;
@@ -241,6 +261,16 @@
 
   function errorMessage(result) {
     if (result.networkError) {
+      if (result.networkError.name === "AbortError") {
+        return (
+          "Timed out waiting for " +
+          API_BASE +
+          " (no response within " +
+          (FETCH_TIMEOUT_MS / 1000) +
+          "s). The API may be down, cold-starting, or unreachable from this network -- " +
+          "check the address bar's ?api= value, or the operator's Lambda Function URL."
+        );
+      }
       return (
         "Could not reach " +
         API_BASE +
@@ -274,12 +304,12 @@
   function checkConnection() {
     statusDot.className = "status-dot";
     statusText.textContent = "checking…";
-    fetch(API_BASE + "/health", { method: "GET" })
+    fetchWithTimeout(API_BASE + "/health", { method: "GET" })
       .then(function () {
         markConnected(true);
       })
       .catch(function () {
-        // A same-origin-policy / network failure means truly unreachable.
+        // A same-origin-policy / network failure / timeout means truly unreachable.
         // Any HTTP response at all (even 404, if /health isn't implemented)
         // still proves the server is up, and is handled in the .then above.
         markConnected(false);
@@ -287,6 +317,77 @@
   }
 
   checkConnection();
+
+  // ---------------------------------------------------- seeded-demo preview strip
+  // Values match the seeded tenant/agent this repo ships with (db/seed/seed.py via
+  // scripts/run-local.sh) -- the same defaults already pre-filled into the topbar
+  // inputs below. This exists so a first-time visitor never has to know or type a UUID:
+  // click the button (or just load the page, since it auto-runs once) and see real
+  // data, or a plain-language explanation of why there isn't any yet.
+  var SEEDED_TENANT_ID = "9c8f6e5a-9d1a-4a1c-8f2e-3b6d1c7a4e10";
+  var SEEDED_AGENT_ID = "1a2b3c4d-5e6f-4708-9a0b-1c2d3e4f5061";
+  var previewResult = $("previewResult");
+  var loadSeededDemoBtn = $("loadSeededDemo");
+
+  function runPreview(previewTenantId) {
+    clear(previewResult);
+    previewResult.appendChild(
+      el("p", { class: "placeholder" }, [
+        document.createTextNode(""),
+      ])
+    );
+    previewResult.lastChild.appendChild(el("span", { class: "spinner" }));
+    previewResult.lastChild.appendChild(document.createTextNode(" checking " + previewTenantId + " for existing memories…"));
+
+    // /recall is an open, read-only route (no shared secret needed) -- this preview
+    // works even before an operator has configured MEMORYSTAND_SHARED_SECRET, which
+    // /decide and /ingest below require.
+    apiGet("/recall", { tenant_id: previewTenantId, q: "on-call incident", k: 3 }).then(function (result) {
+      clear(previewResult);
+      if (!result.ok || !result.data) {
+        renderError(previewResult, result);
+        return;
+      }
+      var results = result.data.results || [];
+      if (results.length === 0) {
+        previewResult.appendChild(
+          el("p", { class: "preview-summary" }, [
+            document.createTextNode(
+              "No memories found yet for tenant " + shortId(previewTenantId) + ". This is an empty " +
+              "database, not a broken page -- seed it with "
+            ),
+            el("code", { text: "./scripts/run-local.sh" }),
+            document.createTextNode(
+              " (adds 101 example on-call incidents), or submit your first memory with panel 2 below."
+            ),
+          ])
+        );
+        return;
+      }
+      previewResult.appendChild(
+        el("p", { class: "preview-summary" }, [
+          document.createTextNode(
+            "Real data: " + results.length + " memory(ies) recalled for tenant " + shortId(previewTenantId) + ". " +
+            "Panels 1 and 4 below use this same tenant ID."
+          ),
+        ])
+      );
+      results.forEach(function (m) {
+        previewResult.appendChild(memoryRow(m));
+      });
+    });
+  }
+
+  loadSeededDemoBtn.addEventListener("click", function () {
+    $("tenantId").value = SEEDED_TENANT_ID;
+    $("agentId").value = SEEDED_AGENT_ID;
+    runPreview(SEEDED_TENANT_ID);
+  });
+
+  // Auto-run once on load with whatever tenant ID is currently in the field (the seeded
+  // UUID by default) -- a first-time visitor who never clicks anything still sees real
+  // data or a clear empty-state message instead of nothing.
+  runPreview($("tenantId").value.trim() || SEEDED_TENANT_ID);
 
   function tenantId() {
     return $("tenantId").value.trim();
@@ -507,6 +608,25 @@
   var confirmSubmit = $("confirmSubmit");
   var confirmSourceSelect = $("confirmSource");
   var confirmDeltaField = $("confirmDeltaField");
+  var modelCallsNumberEl = $("modelCallsNumber");
+  var modelCallsNoteEl = $("modelCallsNote");
+
+  // Updates the persistent hero in the panel header, not something inside confirmResult
+  // -- it is the single most important number on the page, so it stays visible before,
+  // during, and after every confirm attempt rather than living only in the result area.
+  function updateModelCallsHero(modelCalls, data) {
+    var n = typeof modelCalls === "number" ? modelCalls : 0;
+    modelCallsNumberEl.textContent = String(n);
+    modelCallsNumberEl.className = "mc-number " + (n === 0 ? "zero" : "nonzero");
+    if (data) {
+      modelCallsNoteEl.textContent =
+        "From the last confirmed outcome (decision " +
+        shortId(data.decision_id) +
+        "): the promotion path made " +
+        n +
+        (n === 1 ? " model call." : " model calls.");
+    }
+  }
 
   function syncDeltaRequirement() {
     var needsDelta = confirmSourceSelect.value === "metric";
@@ -591,12 +711,11 @@
     ]);
     confirmResult.appendChild(columns);
 
-    var modelCalls = typeof data.model_calls === "number" ? data.model_calls : 0;
-    var mcHero = el("div", { class: "model-calls-hero" }, [
-      el("div", { class: "mc-label", text: "model calls on this path" }),
-      el("div", { class: "mc-number " + (modelCalls === 0 ? "zero" : "nonzero"), text: String(modelCalls) }),
-    ]);
-    confirmResult.appendChild(mcHero);
+    // The model-calls-hero itself lives outside confirmResult (see #modelCallsHero in
+    // index.html) so it stays visible -- showing the honest static "0" -- through every
+    // loading/error state this panel goes through, instead of only appearing after a
+    // successful response.
+    updateModelCallsHero(data.model_calls, data);
 
     confirmResult.appendChild(rawJsonBlock(data));
   }
