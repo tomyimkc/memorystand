@@ -698,67 +698,69 @@ def _scene_04_agent_decides(scene: dict[str, Any], evidence: dict[str, Any], des
 
 
 def _scene_05_outcome_gate(scene: dict[str, Any], evidence: dict[str, Any], destination: Path) -> None:
+    """The centrepiece: the ladder, and a refusal.
+
+    The previous version of this panel said "PagerDuty resolving the incident is what promotes
+    this memory to verified". That stopped being true when evidence re-checking landed --
+    PagerDuty now earns `attested`, because this deployment cannot re-query PagerDuty. Only a
+    claim the system of record independently confirms reaches `verified`.
+    """
     image = background()
     draw = ImageDraw.Draw(image)
     evidence_badges(image, scene["evidenceClass"])
     header(
         image,
         eyebrow="POST /confirm_outcome  ·  LIVE, AGAINST THE DEPLOYED API  ·  CENTERPIECE",
-        title_value="The outcome gate promotes -- zero model calls",
-    )
-    confirm = step_payload(evidence, "confirm")
-
-    rounded_panel(image, (90, 300, 900, 700), fill=PANEL_2, outline=AMBER, width=3)
-    text(draw, (122, 336), "MODEL CALLS ON THIS PATH", size=22, color=MUTED, bold=True)
-    mc = confirm.get("model_calls", 0)
-    color = GREEN if mc == 0 else RED
-    draw.text((122, 380), str(mc), font=font(140, bold=True, mono=True), fill=color)
-    text(
-        draw,
-        (122, 560),
-        "The module that grants trust imports no model client at all.",
-        size=20,
-        color=MUTED,
-        max_width=720,
+        title_value="Attested is not verified -- and a wrong claim is refused",
     )
 
-    rounded_panel(image, (940, 300, 1840, 700), fill=PANEL_2)
-    text(draw, (972, 336), "REAL EXTERNAL SIGNAL", size=20, color=MUTED, bold=True)
-    text(draw, (972, 372), f"source: {confirm.get('source')}", size=30, color=INK, bold=True)
-    text(draw, (972, 420), f"outcome: {confirm.get('outcome')}", size=30, color=GREEN, bold=True)
-    text(draw, (972, 468), f"external_ref: {confirm.get('external_ref')}", size=20, color=MUTED)
-    promoted = confirm.get("promoted") or []
-    text(draw, (972, 520), f"promoted: {len(promoted)} memory(ies)", size=22, color=ACCENT, bold=True)
-    if promoted:
-        text(draw, (972, 556), str(promoted[0]), size=16, color=FAINT, mono=True, max_width=830)
-    text(
-        draw,
-        (972, 600),
-        "PagerDuty resolving the incident -- not the model -- is what promotes this\nmemory to verified, in one transaction on the live database.",
-        size=20,
-        color=INK,
-        max_width=830,
-    )
+    attested = step_payload(evidence, "confirm")
+    verified = step_payload(evidence, "confirmVerified")
+    refused_step = (evidence.get("steps") or {}).get("confirmRefused") or {}
+    refused = refused_step.get("payload") or {}
+
+    # Left: the number the whole project rests on.
+    rounded_panel(image, (90, 300, 700, 700), fill=PANEL_2, outline=AMBER, width=3)
+    text(draw, (122, 336), "MODEL CALLS ON THIS PATH", size=20, color=MUTED, bold=True)
+    mc = attested.get("model_calls", 0)
+    draw.text((122, 380), str(mc), font=font(140, bold=True, mono=True), fill=GREEN if mc == 0 else RED)
+    text(draw, (122, 556), "The module that grants trust imports\nno model client at all.",
+         size=19, color=MUTED, max_width=540)
+
+    # Middle: the two rungs, side by side, so the distinction is visible not narrated.
+    rounded_panel(image, (730, 300, 1290, 700), fill=PANEL_2)
+    text(draw, (762, 336), "1 · PAGERDUTY  ->  ATTESTED", size=19, color=MUTED, bold=True)
+    text(draw, (762, 372), f"source: {attested.get('source')}", size=24, color=INK, bold=True)
+    text(draw, (762, 410), "verification: not_verifiable", size=19, color=AMBER, mono=True)
+    text(draw, (762, 444), "No PagerDuty token here, so nothing\ncan re-check it. Real signal, unchecked.",
+         size=18, color=MUTED, max_width=500)
+
+    text(draw, (762, 520), "2 · METRIC  ->  VERIFIED", size=19, color=MUTED, bold=True)
+    vstatus = (verified.get("verification") or {}).get("status", "not captured")
+    observed = (verified.get("verification") or {}).get("observed")
+    text(draw, (762, 556), f"verification: {vstatus}", size=22,
+         color=GREEN if vstatus == "confirmed" else AMBER, mono=True, bold=True)
+    if observed is not None:
+        text(draw, (762, 592), f"CloudWatch observed: {observed:,.0f} ms", size=18, color=MUTED, mono=True)
+    text(draw, (762, 626), "Re-queried against the system of\nrecord, which agreed.",
+         size=18, color=MUTED, max_width=500)
+
+    # Right: the refusal. The strongest single frame in the video.
+    rounded_panel(image, (1320, 300, 1840, 700), fill=PANEL_2, outline=RED, width=3)
+    text(draw, (1352, 336), "3 · A WRONG CLAIM", size=19, color=MUTED, bold=True)
+    detail = str(refused.get("detail") or refused.get("error") or "not captured")
+    text(draw, (1352, 376), "REFUSED", size=44, color=RED, bold=True)
+    text(draw, (1352, 440), detail, size=17, color=INK, max_width=460)
+    text(draw, (1352, 636), "A memory gains nothing from a claim\nits own metric contradicts.",
+         size=18, color=MUTED, max_width=460)
 
     rounded_panel(image, (90, 740, 1840, 950), fill=PANEL_2)
-    text(
-        draw,
-        (122, 776),
-        "Recency, source authority, self-consistency -- that's the model grading its own homework.",
-        size=24,
-        color=MUTED,
-        max_width=1680,
-    )
-    text(
-        draw,
-        (122, 818),
-        "This is the world confirming the decision actually worked.",
-        size=32,
-        color=INK,
-        bold=True,
-        max_width=1680,
-    )
-    footer(image, scene["evidenceClass"])
+    text(draw, (122, 776),
+         "Every shipping agent-memory system asks a model whether its own memory is true.",
+         size=24, color=MUTED, max_width=1680)
+    text(draw, (122, 818),
+         "MemoryStand asks CloudWatch -- and refuses the promotion when CloudWatch disagrees.",
+         size=32, color=INK, bold=True, max_width=1680)
     image.save(destination)
 
 
