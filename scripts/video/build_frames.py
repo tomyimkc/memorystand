@@ -243,13 +243,20 @@ def header(image: Image.Image, *, eyebrow: str, title_value: str, subtitle: str 
 
 def footer(image: Image.Image, footer_label: str) -> None:
     draw = ImageDraw.Draw(image)
-    draw.rounded_rectangle((80, 990, 1840, 1043), radius=16, fill=(5, 9, 15), outline=BORDER, width=2)
-    text(draw, (108, 1004), footer_label, size=21, color=MUTED, bold=True)
-    right_x = 1500
-    selected = font(21, bold=True)
+    # The claim boundary lives at the TOP, not the bottom.
+    #
+    # It used to sit at y=990-1043, directly under content panels that extend to y=950 --
+    # and the burned caption band lands in that same strip. The result was a caption box
+    # half-covering real evidence text, which reads as a rendering bug rather than a
+    # designed lower third. Captions now own everything below y=950; nothing else is
+    # drawn there.
+    selected = font(20, bold=True)
     label = "candidateOnly: true  ·  canClaimAGI: false"
     width = int(draw.textlength(label, font=selected))
-    draw.text((right_x - width + 320, 1004), label, font=selected, fill=GREEN)
+    draw.text((1840 - width, 34), label, font=selected, fill=GREEN)
+    # No second copy of the evidence class here: the coloured pills at the top-left already
+    # name it, and drawing it again at y=132 collided with the scene title.
+    _ = footer_label
 
 
 def load_screenshot() -> Path:

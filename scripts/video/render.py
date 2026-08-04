@@ -310,7 +310,10 @@ def _wrap(draw: ImageDraw.ImageDraw, text: str, selected: ImageFont.FreeTypeFont
     return lines
 
 
-def render_caption_png(cue: Cue, destination: Path, *, font_size: int = 40, bottom_margin: int = 130) -> None:
+def render_caption_png(cue: Cue, destination: Path, *, font_size: int = 38, bottom_margin: int = 34) -> None:
+    # Anchored low on purpose: build_frames.py reserves everything below y=950 for
+    # captions, so a smaller bottom margin puts the band in empty space instead of
+    # over evidence panels.
     image = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
     selected = _caption_font(font_size)
