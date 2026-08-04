@@ -18,10 +18,10 @@ flowchart TB
         direction TB
         Ingest["POST /ingest<br/>memory.remember()<br/>secret-gated"]
         Decide["POST /decide<br/>recall -> reason -> decisions.decide()<br/>secret-gated"]
-        Confirm["POST /confirm_outcome<br/>trust.grant_standing()<br/>NEVER calls Bedrock"]
+        Confirm["POST /confirm_outcome<br/>secret-gated<br/>trust.grant_standing(tenant_id, decision_id, evidence)<br/>NEVER calls Bedrock"]
         Recall["GET /recall<br/>memory.recall()"]
         TimeMachine["GET /timemachine<br/>replay.cross_examine()"]
-        Diff["GET /diff<br/>replay.belief_diff()"]
+        Diff["GET /diff<br/>instant allow-listed before it reaches SQL<br/>replay.belief_diff()"]
         Health["GET /health<br/>db version, GC window, kill-switch, embedding provenance"]
     end
 
@@ -30,7 +30,7 @@ flowchart TB
     SSM["AWS SSM Parameter Store<br/>/memorystand/dsn (SecureString)<br/>/memorystand/shared_secret (SecureString)<br/>/memorystand/kill_switch (String)"]
     CW["Amazon CloudWatch Logs<br/>/aws/lambda/memorystand, 14-day retention<br/>one structured JSON line per request"]
     EB["Amazon EventBridge Scheduler<br/>keep-warm: GET /health every 5 min<br/>(infra/keepwarm.sh, ends 2026-09-16)"]
-    MCP["CockroachDB Cloud<br/>Managed MCP Server<br/>mcp:read service account, READ-ONLY"]
+    MCP["CockroachDB Cloud<br/>Managed MCP Server<br/>memorystand-mcp-readonly service account<br/>Cluster Developer + Cluster Operator Writer -- write-capable"]
 
     Judge --> Browser --> Amplify --> FnURL --> Handler
     Handler --> Ingest & Decide & Confirm & Recall & TimeMachine & Diff & Health
@@ -51,7 +51,7 @@ flowchart TB
     EB -. "GET /health, every 5 min" .-> FnURL
 
     Judge -. "direct SQL, no app code" .-> MCP
-    MCP -. "read-only" .-> CRDB
+    MCP -. "write-capable (Cluster Operator Writer)" .-> CRDB
 
     classDef modelFree fill:#d7f5d7,stroke:#2e7d32,stroke-width:2px,color:#1b1b1b
     classDef bedrockTouching fill:#fde2e2,stroke:#c62828,stroke-width:1px,color:#1b1b1b
@@ -69,11 +69,43 @@ Two things worth calling out that a first read of the diagram will not show. Fir
 counts **seven** HTTP routes, not the six `memorystand` CLI subcommands (`remember`, `recall`,
 `decide`, `confirm`, `cross-examine`, `audit`) -- `/health` has no CLI equivalent, and `audit`
 has no HTTP route at all, on purpose (see `backend/audit.py`'s own docstring: the audit trail is
-meant to be read with the same read-only credential used everywhere else, including through the
-Managed MCP Server, with no application code in the path). Second, the MCP server and `ccloud`
+meant to be read with the same MCP credential used everywhere else, including through the
+Managed MCP Server -- see "MCP: what the credential actually grants" below for why that
+credential is not read-only -- with no application code in the path). Second, the MCP server and `ccloud`
 CLI are both real CockroachDB tooling used here, but neither is a runtime dependency of the
-request path above -- MCP is a parallel, judge-facing read path directly into CockroachDB, and
-`ccloud` (`infra/provision.sh`) is a provisioning-time tool, not something the Lambda calls.
+request path above -- MCP is a parallel, judge-facing path directly into CockroachDB (used here
+only to read, over a credential that is not actually restricted to reading -- see the next
+section), and `ccloud` (`infra/provision.sh`) is a provisioning-time tool, not something the
+Lambda calls.
+
+### MCP: what the credential actually grants
+
+The service account is `memorystand-mcp-readonly`
+(`a7f75cdd-04fb-4e66-889b-a1216e15f57d`), and the name is aspirational, not accurate. It
+originally held only `CLUSTER_DEVELOPER`, under which `select_query` returned "executing select
+query: unauthorized". Getting the MCP server working at all required also granting
+`CLUSTER_OPERATOR_WRITER` (displayed in the console as Cluster Developer / Cluster Operator) --
+Cockroach Labs' own docs require "the Cluster Admin role or the Cluster Operator role" for this
+server, and there is no read-only role that works with it. A genuinely read-only MCP identity is
+therefore not achievable against the managed server as it exists today; this identity is
+write-capable, full stop.
+
+Verified live with that role: the handshake to `https://cockroachlabs.cloud/mcp` returns
+`serverInfo {name: "cockroachdb-cloud", version: "1.0.0"}`; `select_query` returns
+`{"rows":[{"trust_tier":"unconfirmed","memories":118},{"trust_tier":"verified","memories":5}]}`;
+`explain_query` shows `vector search: True`. The string `mcp:read` does not appear in any script
+or config here -- it was never a real CockroachDB Cloud role, and every prior reference to it in
+this repo's docs was wrong.
+
+Tool availability is not permission: the MCP server offers `create_database`, `create_table`, and
+`insert_rows` to every identity regardless of role, including the one used here. `scripts/verify_mcp.py`
+automates the checks above; its write probe is opt-in behind `--probe-writes` and has not been
+run, so whether a write would actually be accepted or refused is untested, not "refused" -- that
+distinction matters and this document will not round it up. Two argument-naming traps worth
+recording since they produce a misleading error rather than an obvious one: `select_query` and
+`explain_query` take a `"query"` argument (not `"statement"`), and `create_table` takes a raw
+`"ddl"` string; getting the argument name wrong returns "must contain exactly one statement",
+which reads like a SQL problem and is not one.
 
 ## Memory lifecycle
 
@@ -96,7 +128,7 @@ sequenceDiagram
     DB-->>Mem: verdict = accepted
     Agent->>Dec: decide(action, rationale, consulted, produced=[new memory])
     Dec->>DB: insert agent_decisions
-    Ext->>Trust: confirm_outcome(decision_id, evidence) -- e.g. PagerDuty resolves
+    Ext->>Trust: confirm_outcome(tenant_id, decision_id, evidence), secret header -- e.g. PagerDuty resolves
     Trust->>Trust: assert_no_model_calls()
     Trust->>DB: record outcome + re-tier produced memories (one serializable txn)
     DB-->>Trust: trust_tier: unconfirmed -> verified
@@ -147,9 +179,11 @@ window (`verdict: unverifiable`) rather than pretending durability it does not h
 
 **`tool_audit`** is every governed call as a queryable SQL table, with native row-level TTL
 (`ttl_expire_after = '180 days'`) bounding its own growth -- no cron sweep to forget to run.
-Living in the same database as the memories means a judge can read it with the same read-only
+Living in the same database as the memories means a judge can read it with the same MCP
 credential used for everything else, including through the Managed MCP Server, with zero
-application code in that path.
+application code in that path -- that credential is write-capable rather than read-only (see
+"MCP: what the credential actually grants" above), but nothing in this project's own code path
+uses it to write.
 
 ### Why the vector index prefix is `(tenant_id, verdict, embedding)`
 
@@ -293,6 +327,12 @@ project exists to prevent.
   (`infra/keepwarm.sh`). `backend/snapshots.py`'s own `lambda_handler` -- the periodic
   belief-snapshot checkpoint job its docstring describes as an EventBridge Scheduler target -- is
   written and callable directly, but no `infra/*.sh` script yet provisions a schedule for it.
+- **On the live deployment, the Bedrock reasoning step does not run at all.** Bedrock quota on
+  this account is ~0, so every live `/decide` returns `reasoning_source: "fallback_heuristic"` and
+  `model_calls: 0`, with the action chosen by an explicit deterministic keyword rule in
+  `backend/agent.py`. The diagram above shows the model path because it is the designed path; it
+  is not what the deployed demo is currently doing. The limit below describes that path when it
+  runs.
 - **The Bedrock reasoning step in `/decide` is trusted for *which action* and *why*, not for
   facts.** `backend/agent.py` filters a model's cited memory ids down to ones that were actually
   recalled (catching a hallucinated id), but nothing catches a plausible-sounding misreading of a

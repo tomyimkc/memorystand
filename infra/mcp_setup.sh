@@ -72,7 +72,12 @@ CLUSTER_NAME="${CLUSTER_NAME:-standing}"
 CLUSTER_ID="${CLUSTER_ID:-}"
 SERVICE_ACCOUNT_NAME="${SERVICE_ACCOUNT_NAME:-memorystand-mcp-readonly}"
 API_KEY_NAME="${API_KEY_NAME:-memorystand-mcp-readonly-key}"
-MEMORYSTAND_MCP_ROLE="${MEMORYSTAND_MCP_ROLE:-CLUSTER_DEVELOPER}"
+# CLUSTER_DEVELOPER is NOT sufficient. Verified live: under it, the MCP server's
+# select_query returns "executing select query: unauthorized". Cockroach Labs' docs
+# require Cluster Admin or Cluster Operator, so CLUSTER_OPERATOR_WRITER is the least
+# privilege that actually works -- and it is WRITE-CAPABLE. There is no read-only role
+# for this server. That is a property of the managed server, not a choice made here.
+MEMORYSTAND_MCP_ROLE="${MEMORYSTAND_MCP_ROLE:-CLUSTER_OPERATOR_WRITER}"
 OUT_FILE="${OUT_FILE:-$HOME/.memorystand-mcp-key}"
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing required tool: $1" >&2; exit 1; }; }
@@ -102,7 +107,7 @@ sa_id="$(ccloud service-account list -o json | jq -r --arg n "$SERVICE_ACCOUNT_N
   'if type=="array" then .[] else (if type=="array" then .[] else (.service_accounts[]? // empty) end // empty) end | select(.name==$n) | .id' | head -1)"
 if [[ -z "$sa_id" ]]; then
   sa_id="$(ccloud service-account create "$SERVICE_ACCOUNT_NAME" \
-    --description "Read-only MCP identity for MemoryStand. Never used for writes." \
+    --description "MCP identity for MemoryStand. Write-capable: no read-only role works." \
     -o json | jq -r '.id')"
   echo "    created: ${sa_id}"
 else

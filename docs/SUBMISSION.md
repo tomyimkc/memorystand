@@ -60,7 +60,7 @@ then **Technical Implementation**. Prizes: 1st $5,000, 2nd $2,500, 3rd $1,250.
 
 | # | Field | Id | Required | Status |
 |---|---|---|---|---|
-| 1 | Demo app URL | 27812 | Yes | **OWNER ONLY** — blocked on deploy, see checklist below |
+| 1 | Demo app URL | 27812 | Yes | **OWNER ONLY** — deploy is live; paste `https://main.d19xad9aeccy3e.amplifyapp.com` (the Amplify dashboard), not the raw Lambda Function URL, which has no root route and 404s on `GET /` |
 | 2 | Testing credentials/instructions | 28078 | No | Drafted below |
 | 3 | Public repo URL | 27813 | Yes | **OWNER ONLY** — blocked on making the repo public, then `https://github.com/tomyimkc/memorystand` |
 | 4 | OSS license file URL | 27814 | Yes | `https://github.com/tomyimkc/memorystand/blob/main/LICENSE` (once public) |
@@ -100,9 +100,10 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > → cross-examine loop with no AWS account and no CockroachDB Cloud account. Embeddings fall back
 > to a deterministic local stub (`MEMORYSTAND_EMBED_STUB=1`, set automatically by the script and
 > announced on screen — a stub result is never presented as a real embedding). `pytest -q` runs
-> the 19-test suite. `python cli/memorystand.py recall --query "payments failover"` drives the CLI
-> directly. [If a deployed demo app exists by submission time: replace this paragraph with its URL
-> and any login notes it needs; keep this local path as a fallback for judges who prefer it.]
+> the 78-test suite. `python cli/memorystand.py recall --query "payments failover"` drives the CLI
+> directly. A deployed demo also exists now — see Field 1's URL,
+> `https://main.d19xad9aeccy3e.amplifyapp.com`, no account or login needed — this local path
+> remains as a fallback for judges who prefer to run it themselves.
 
 ### Field 5 — Which CockroachDB tools (pick ≥2; all four apply here)
 
@@ -132,10 +133,21 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > Every SQL statement and `EXPLAIN` plan in the skill was copy-pasted from a real session against
 > this project's own cluster, not written from documentation alone.
 >
-> **Cloud Managed MCP Server.** Wired as a read-only (`mcp:read`) service-account connection,
+> **Cloud Managed MCP Server.** Wired as a `memorystand-mcp-readonly` service-account connection,
 > used from Claude Code as the judge- and operator-facing inspection surface for the running
-> cluster — deliberately never in the write path, so a judge (or an operator) can query live state
-> without any route through this project's own application code.
+> cluster — deliberately never in this project's own write path. Verified live, twice: the
+> handshake to `https://cockroachlabs.cloud/mcp` returns `serverInfo {name: "cockroachdb-cloud",
+> version: "1.0.0"}`; `select_query` returns real rows
+> (`{"rows":[{"trust_tier":"unconfirmed","memories":118},{"trust_tier":"verified","memories":5}]}`);
+> `explain_query` confirms `vector search: True` on the live cluster. One honest correction from an
+> earlier draft: **there is no read-only role for this server.** Cockroach Labs' own docs require
+> "the Cluster Admin role or the Cluster Operator role," so the service account holds
+> `CLUSTER_DEVELOPER` **and** `CLUSTER_OPERATOR_WRITER` — it is write-capable, not read-only, and
+> the tool list (`create_database`, `create_table`, `insert_rows`) is offered to every identity
+> regardless of role; tool availability is not permission. `scripts/verify_mcp.py` automates the
+> handshake and query checks; its write probe is opt-in behind `--probe-writes` and has not been
+> run, so whether a write would actually be rejected server-side is untested, not verified either
+> way.
 >
 > **ccloud CLI.** `infra/provision.sh` provisions the CockroachDB Basic cluster on `--cloud AWS`,
 > creates the scoped SQL user, and prints the connection string non-interactively (`-o json`), so
@@ -149,18 +161,25 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > Store, Amazon CloudWatch Logs, AWS Amplify Hosting, and a CockroachDB cluster provisioned with
 > `--cloud AWS`.
 >
-> **BEFORE PASTING:** tick only what has actually been deployed by then. As of this writing the
-> deployment scripts are written and the Lambda package is verified to build and import inside
-> the real `public.ecr.aws/lambda/python:3.13` runtime, but the deploy has not been run against
-> a live account. Claiming a service that has never run would be the one kind of overstatement
-> this entire project argues against — and a judge can check.
+> As of this writing, `infra/provision.sh`, `infra/ssm_setup.sh`, `infra/deploy.sh`, and
+> `infra/deploy_frontend.sh` have all been run against a real AWS account: the Lambda is Active,
+> the CockroachDB cluster is real, and the Amplify dashboard is live at
+> `https://main.d19xad9aeccy3e.amplifyapp.com`. Every service listed above is deployed, not
+> aspirational — a judge can hit the dashboard directly. (The Lambda Function URL itself,
+> `https://ojao6oaxlk26mqfjwpuy7g4dy40tglyi.lambda-url.us-west-2.on.aws`, has no root route — a
+> browser hitting `/` gets a 404 by design — so it should not be pasted as the "live demo" link;
+> the Amplify dashboard is the one a judge should click first.)
 >
 > Note on the reasoning model: this project originally targeted Claude on Bedrock. Anthropic
 > models are refused from this operator's AWS account with `ValidationException: Access to
 > Anthropic models is not allowed from unsupported countries...` — a geo-restriction independent
 > of IAM and region. The reasoning model is now `amazon.nova-lite-v1:0`, which is AWS-native,
-> `ON_DEMAND`, and carries no such restriction. Full detail, including the on-demand-quota
-> situation for a brand-new AWS account, is in `docs/BEDROCK_QUOTA.md`.
+> `ON_DEMAND`, and carries no such restriction. In practice, on-demand quota for this brand-new
+> account is currently ~0, so every live `/decide` call today returns
+> `reasoning_source: fallback_heuristic` and `model_calls: 0` — the action comes from an explicit
+> deterministic keyword rule in `backend/agent.py`, not a live model call. That fallback is itself
+> a deliberate design choice, not a hidden gap (see Field 7): the trust-critical path never blocks
+> on Bedrock capacity. Full detail is in `docs/BEDROCK_QUOTA.md`.
 
 ### Field 7 — How meaningfully integrated
 
@@ -190,6 +209,20 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > keep-warm ping stop running, silently degrading Lambda cold-start latency and the tamper-evident
 > checkpoint cadence in `backend/snapshots.py`. **Remove Amplify Hosting** and there is no
 > judge-facing dashboard, only an API judges would have to `curl` by hand.
+>
+> Production hardening, not just feature-building: this session found and fixed four real
+> security issues, each backed by a regression test. `GET /diff?instant=` — unauthenticated —
+> interpolated its `AS OF SYSTEM TIME` value raw, because that clause can't be parameterised; it's
+> now an allow-list (HLC decimal, negative interval, ISO-8601), and a hostile `instant` now returns
+> `400` with the table intact. `trust._apply` matched on `decision_id` with no tenant predicate —
+> the only unscoped query in the codebase, and the one that promotes a memory to `verified` — so
+> `trust.grant_standing()` now takes `tenant_id` as a required positional argument, closing a
+> cross-tenant trust-escalation path. `POST /confirm_outcome`, the route that grants trust, was
+> not behind the shared secret while `/ingest` and `/decide` were — `frontend/app.js` literally
+> documented it as "no secret required (read-adjacent)"; it's now gated, and a live check without
+> the secret returns `401`. And the kill switch failed **open** on any SSM read error; it now
+> fails closed. A test asserts every `POST` route is secret-gated, so none of these four can
+> regress silently.
 
 ### Field 9 — Pre-existing code disclosure
 
@@ -246,25 +279,29 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > Claude Code (Anthropic) was used throughout for architecture discussion, SQL and Python
 > authoring, and documentation — disclosed in full in `DISCLOSURES.md`. Amazon Bedrock (Nova Lite
 > for reasoning, Titan Text Embeddings V2 for embeddings) is a **runtime component of the
-> submitted agent itself**, not an authoring tool, and is covered separately under AWS services.
+> submitted agent itself**, not an authoring tool, and is covered separately under AWS services —
+> see Field 6 for the honest caveat that live on-demand quota is currently ~0, so today's live
+> decisions run the deterministic fallback in `backend/agent.py`, not a Nova Lite call.
 
 ---
 
 ## Fields only the owner can answer
 
-Rows 1, 3, 10, 12, 13, 14, 16, 17, 18, 19, 20 above. In particular: field 1 (demo URL) and the
-final content of field 6 depend on `infra/deploy.sh` actually being run against real AWS
-credentials; field 3 depends on flipping the repo from private to public; field 10 needs the
-existing Mermaid source in `ARCHITECTURE.md` rendered to an image and uploaded; fields 12–14 and
-16–20 are personal/eligibility answers no one else can supply.
+Rows 1, 3, 10, 12, 13, 14, 16, 17, 18, 19, 20 above. In particular: field 1 (demo URL) is ready to
+paste now that `infra/deploy.sh` and `infra/deploy_frontend.sh` have been run against real AWS
+credentials — use the Amplify dashboard URL, not the raw Lambda Function URL (see the table
+above); field 3 depends on flipping the repo from private to public; field 10 needs the existing
+Mermaid source in `ARCHITECTURE.md` rendered to an image and uploaded; fields 12–14 and 16–20 are
+personal/eligibility answers no one else can supply.
 
 ---
 
 ## 48 hours before the deadline (by 2026-08-16 17:00 ET)
 
 - [ ] `infra/provision.sh` → `infra/ssm_setup.sh` → `infra/deploy.sh` → `infra/deploy_frontend.sh`
-      have been run against real AWS + `ccloud` credentials, or a deliberate, honest call has been
-      made to submit with only what actually ran.
+      have already been run once against real AWS + `ccloud` credentials (see Field 6) —
+      re-verify closer to the deadline that the deployment is still live, since a cluster or
+      Lambda can be torn down or rotated in the interim.
 - [ ] Repo is public; GitHub's own license badge shows Apache-2.0 in the "About" sidebar.
 - [ ] `git log -p` spot-checked for anything that shouldn't go public before flipping visibility —
       a private→public flip is not cleanly reversible once anyone has cloned it.

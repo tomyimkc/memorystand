@@ -11,7 +11,8 @@ run does NOT establish" below before drawing any conclusion from it.
   synthetic rows across 40 tenants at exactly 1,250 rows each
   (`scripts/loadtest.py --rows 50000 --tenants 40`), plus the 131-row curated demo tenant
   `9c8f6e5a-9d1a-4a1c-8f2e-3b6d1c7a4e10` (117 rows with `verdict='accepted'`) that the live
-  demo at `https://ojao6oaxlk26mqfjwpuy7g4dy40tglyi.lambda-url.us-west-2.on.aws` actually
+  API at `https://ojao6oaxlk26mqfjwpuy7g4dy40tglyi.lambda-url.us-west-2.on.aws` (the endpoint
+  behind the dashboard at <https://main.d19xad9aeccy3e.amplifyapp.com>) actually
   queries against.
 - The vector index is used at this scale on Cloud Basic, for the real
   `backend/memory.py::recall()` query shape: a `vector search` node on
@@ -148,9 +149,11 @@ EXPLAIN before it can be trusted to hit the index.
   250k run for that.
 - The un-indexed control (`agent_memories_noindex`) reached 36,300 of 50,000 rows before a
   `psycopg2.OperationalError: could not receive data from server: No route to host` killed
-  the seeding run. It was not re-run to completion as of this writing. No recall-latency
-  numbers are reported for this run as a result — see "What this run does NOT establish"
-  above.
+  the seeding run. It was not re-run to completion, and the partial table has since been
+  **dropped from the cluster** — a half-built control is worse than none, because it invites
+  precisely the comparison it cannot support. Do not go looking for it; it is gone. No
+  recall-latency numbers are reported for this run as a result — see "What this run does NOT
+  establish" above.
 - Seeding bypasses `backend.memory.remember`'s admission control (contradiction checks,
   embedding-neighbour comparison) by design, same as the 5k and 250k runs — this exercises
   the storage and index path, not the full write-time adjudication path.

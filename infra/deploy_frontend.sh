@@ -3,7 +3,15 @@
 #
 # MemoryStand -- deploy frontend/ (the static dashboard) to AWS Amplify Hosting.
 #
-# HONESTY NOTE, written before this script was ever run: the machine that wrote this
+# UPDATE: this script HAS now been run against a real AWS account. The Amplify app
+# "memorystand" exists and the dashboard answers at
+# https://main.d19xad9aeccy3e.amplifyapp.com (HTTP 200). The note below was written
+# before that and its condition -- "until someone with real credentials has run this
+# end to end and can point at a URL that actually answers" -- has been met. It is kept
+# because the discipline it describes was correct, and because a reader should be able
+# to see that the claim was earned rather than assumed.
+#
+# ORIGINAL HONESTY NOTE, written before this script was ever run: the machine that wrote this
 # script has no AWS credentials and no CockroachDB Cloud session (see the top of the repo
 # for how the memory layer itself is reached). This script has therefore been read
 # carefully against the AWS CLI's own `help` output for every subcommand it calls, and

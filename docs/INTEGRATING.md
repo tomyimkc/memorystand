@@ -2,8 +2,8 @@
 
 How another team actually wires this into their own agent, today, as of this writing. Three
 surfaces, in the order you should reach for them: the HTTP API (fully works, this is what your
-agent should call), the CockroachDB Cloud MCP server (read-only inspection, one honest caveat
-about the role), and the `memorystand` CLI (a human's tool, for a terminal, not a service
+agent should call), the CockroachDB Cloud MCP server (cluster inspection, with a role caveat
+you should read before adopting it), and the `memorystand` CLI (a human's tool, for a terminal, not a service
 integration point).
 
 ## 1. HTTP API — the surface that works
@@ -20,8 +20,14 @@ header, `x-memorystand-secret`, checked with `hmac.compare_digest` — see
 [`backend/handler.py`](../backend/handler.py) for the exact gating logic. If you're integrating
 this against your own deployment, that secret is whatever you set in
 `MEMORYSTAND_SHARED_SECRET` / the `/memorystand/shared_secret` SSM parameter; the examples below
-assume you have it in `$MEMORYSTAND_SECRET`. `/confirm_outcome` is a write path but is not
-secret-gated — it records an outcome your monitoring system reports, not a Bedrock-spending call.
+assume you have it in `$MEMORYSTAND_SECRET`.
+
+`/confirm_outcome` is gated too, and that is a deliberate correction: it was once left open on
+the reasoning that it "only records an outcome your monitoring system reports, not a
+Bedrock-spending call". That reasoning was wrong. It is the route that grants a memory its
+standing, so an ungated one let any caller promote any tenant's memories to `verified` — the
+exact failure this project exists to prevent. Gate by what a route changes, not by whether it
+spends money.
 
 Start by checking the deployment is actually up:
 
@@ -90,7 +96,9 @@ body and MemoryStand records them without touching the model or the fallback rul
 curl -s -X POST \
   https://ojao6oaxlk26mqfjwpuy7g4dy40tglyi.lambda-url.us-west-2.on.aws/confirm_outcome \
   -H "content-type: application/json" \
+  -H "x-memorystand-secret: $MEMORYSTAND_SECRET" \
   -d '{
+        "tenant_id": "9c8f6e5a-9d1a-4a1c-8f2e-3b6d1c7a4e10",
         "decision_id": "<decision_id from step 1>",
         "outcome": "success",
         "source": "pagerduty",
@@ -98,7 +106,9 @@ curl -s -X POST \
       }' | jq .
 ```
 
-`decision_id`, `outcome` (one of `success` / `rollback` / `false_positive`), `source` (one of
+`tenant_id` (which scopes the lookup — a decision belonging to another tenant is reported as not
+existing, so a decision id alone is not enough to promote anything), `decision_id`, `outcome`
+(one of `success` / `rollback` / `false_positive`), `source` (one of
 `pagerduty` / `metric` / `human` — a model's own opinion is deliberately not an accepted value,
 enforced in `backend/trust.py`), and `external_ref` are all required; `metric_delta` is
 optional. The response includes `promoted` and `demoted` memory-id lists and, again,
@@ -128,7 +138,7 @@ secret, required fields `tenant_id`, `agent_id`, `content`), pass its `memory_id
   an empty-but-valid answer. If your integration treats "no memories" and "memory is down" the
   same way, you will misread this API; they are deliberately distinguishable.
 
-## 2. MCP — read-only inspection of the cluster, with a caveat you should know before you grant it
+## 2. MCP — cluster inspection, and the least-privilege problem you cannot solve
 
 [`docs/MCP.md`](MCP.md) is the full writeup of how to connect Claude Code (or Cursor, Cline,
 Copilot — any MCP client) directly to the CockroachDB Cloud cluster behind MemoryStand, with
@@ -137,29 +147,36 @@ someone deciding whether to adopt that surface for their own integration or ops 
 thing you need to know that the rest of this project would rather not have to say plainly.
 
 **The role problem, stated up front.** This repo provisions a service account
-(`memorystand-mcp-readonly`) and grants it `Cluster Developer` — CockroachDB Cloud's most
-restrictive assignable cluster-scoped role. Verified live against that account this session:
-`select_query` through the MCP server returns `"executing select query: unauthorized"` under
-that role. Cockroach Labs' own documentation says the MCP server's read tools require **the
-Cluster Admin role or the Cluster Operator role** — both of which carry real administrative
-capability (Cluster Operator can manage databases, networks, backups, and jobs; Cluster Admin
-adds role assignment and cluster deletion on top of that). There is currently **no role in
-CockroachDB Cloud that is both assignable to a service account and sufficient to run
-`select_query` through the managed MCP server.** `docs/MCP.md`'s "read-only, by design" framing
-is about MemoryStand's own choice not to grant write tools — it is not a claim that a
-genuinely-read-only identity is achievable against this server today, and it isn't.
+(`memorystand-mcp-readonly`). It was first granted `Cluster Developer` — CockroachDB Cloud's most
+restrictive assignable cluster-scoped role — and under that role, verified live, `select_query`
+through the MCP server returns `"executing select query: unauthorized"`. Cockroach Labs' own
+documentation says the MCP server's read tools require **the Cluster Admin role or the Cluster
+Operator role**, both of which carry real administrative capability (Cluster Operator can manage
+databases, networks, backups and jobs; Cluster Admin adds role assignment and cluster deletion).
+There is **no role in CockroachDB Cloud that is both assignable to a service account and
+sufficient to run `select_query` through the managed MCP server.**
+
+So the connection you see working in this project was bought, deliberately, by granting
+`CLUSTER_OPERATOR_WRITER` alongside the developer role. **The identity is write-capable.** It is
+named `-readonly` for historical reasons and that name is now misleading; it is kept only so the
+account id in older logs still resolves. Read tools are the only ones this project calls, but
+that is a matter of what it chooses to invoke, not of what the credential is permitted to do.
 
 What that means for your integration: if you want an MCP identity that can actually run
-`select_query` / `explain_query` against your cluster, you currently have to grant it Cluster
-Operator or Cluster Admin — a write-capable identity — even though the only tools you intend to
-call are read ones. Decide that trade-off deliberately; don't assume the service-account path in
-`docs/MCP.md` gives you a working read-only credential, because as configured it does not run
-queries at all.
+`select_query` / `explain_query`, you must grant it Cluster Operator or Cluster Admin even though
+the only tools you intend to call are read ones. Make that trade-off deliberately. The
+least-privilege posture most teams would want here is not currently available.
 
-The alternative that does work today is Option A in `docs/MCP.md`: interactive OAuth login,
-picking "read" permissions in the browser consent screen. That's a human decision made once per
-login, not an enforced, revocable, auditable service identity — but it is the path that actually
-executes `select_query` successfully.
+The alternative is Option A in `docs/MCP.md`: interactive OAuth login, picking "read" permissions
+in the browser consent screen. That is a human decision made once per login rather than an
+enforced, revocable, auditable service identity — but it is the only path that runs `select_query`
+without a standing write-capable credential.
+
+Reproduce all of this yourself with [`scripts/verify_mcp.py`](../scripts/verify_mcp.py), which
+performs the handshake, runs the reads, and reports what the server allowed. Its write probe is
+opt-in behind `--probe-writes` and has not been run here, so whether the SQL layer would actually
+*refuse* a write from this identity is **untested** — the tool list offers `create_table` and
+`insert_rows` to every identity, and tool availability is not permission.
 
 Once you have a working identity (OAuth read grant, or a service account holding Cluster
 Operator/Admin), the connection itself is standard MCP-over-HTTP with an `Authorization: Bearer
@@ -237,11 +254,16 @@ Use `--json` if you're parsing programmatically; the plain-text framing is not a
 
 ## What I could not verify while writing this
 
-- The MCP connection itself — the actual `select_query` handshake against the live Cloud cluster
-  with a working credential — was not exercised from this checkout; `docs/MCP.md`'s three
-  queries were verified against a local CockroachDB instance, and the `unauthorized` result under
-  `Cluster Developer` was verified against the live service account, but no successful
-  `select_query` call against the live cluster was made this session.
+- Whether a write from the MCP identity would actually be *refused*. The account is now
+  write-capable by role, and `scripts/verify_mcp.py`'s write probe is opt-in and has not been
+  run. "We only call read tools" is a statement about this project's behaviour, not an enforced
+  guarantee.
+
+  (Superseded, kept because the sequence is the point: this section originally said no
+  successful `select_query` had been made against the live cluster. That was true when written
+  and is no longer. After granting `CLUSTER_OPERATOR_WRITER`, the full handshake, a trust-ladder
+  read returning `{"unconfirmed":118,"verified":5}`, and an `explain_query` showing a
+  `vector search` node were all verified live through the managed MCP server.)
 - Whether `ccloud audit list` (or any CockroachDB Cloud audit log) records individual MCP
   `select_query` calls is not documented anywhere Cockroach Labs publishes and was not checked
   empirically.

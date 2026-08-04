@@ -6,11 +6,21 @@ directly to the live cluster behind MemoryStand using Cockroach Labs' own
 and gives you three questions that show what this project actually does, in SQL a judge can read
 without trusting a single word of README copy.
 
-**Status of this page:** the SQL below was run and verified against a local CockroachDB v26.2.5
-instance seeded with MemoryStand's own fixture data (see the repo's `LIVE ENVIRONMENT` setup).
-The MCP *connection itself* is **untested**, because this development machine has no
-CockroachDB Cloud session and no way to create one. It will work unmodified against a real Cloud
-cluster the moment you authenticate — nothing about the queries below depends on being local.
+**Status of this page:** the MCP connection itself is now tested and working, live, against the
+real CockroachDB Cloud cluster — not simulated, and no longer the untested caveat this page used
+to carry. Verified this session, through the MCP server itself: the `initialize` handshake
+returns `serverInfo {name: "cockroachdb-cloud", version: "1.0.0"}`; `select_query` against
+`agent_memories` returns real rows (`{"rows":[{"trust_tier":"unconfirmed","memories":118},
+{"trust_tier":"verified","memories":5}]}`); and `explain_query` against the recall query returns
+a plan with `vector search: True`. `scripts/verify_mcp.py` automates the handshake-plus-reads
+half of this check — run it yourself to reproduce these numbers (see "How to connect" below).
+What is *not* tested is whether this identity's write access is actually enforced or refused —
+see "Why this identity is write-capable" below.
+
+The SQL in "Three questions to ask it" further down this page was run and verified separately,
+against a local CockroachDB v26.2.5 instance seeded with MemoryStand's own fixture data (see the
+repo's `LIVE ENVIRONMENT` setup) — the same SQL, unmodified, against the real Cloud cluster
+instead.
 
 ## What the MCP server is
 
@@ -18,8 +28,9 @@ Cockroach Labs runs a hosted MCP server at `https://cockroachlabs.cloud/mcp` tha
 client (Claude Code, Cursor, Cline, GitHub Copilot, Codex, …) query a CockroachDB Cloud cluster
 directly — list databases and tables, read a table's schema, and run `SELECT` / `EXPLAIN` / `SHOW`
 statements — without you writing any glue code. It is a Cockroach Labs product, not something
-MemoryStand built; MemoryStand's contribution here is wiring it up read-only, scoped to one
-cluster, against this specific schema.
+MemoryStand built; MemoryStand's contribution here is scoping it to one cluster, against this
+specific schema — not making it read-only, which turned out not to be achievable against this
+server (see "Why this identity is write-capable" below).
 
 **Verified facts about the server** (from Cockroach Labs' own docs, quoted, 2026-08-04):
 
@@ -35,8 +46,13 @@ cluster, against this specific schema.
 - **Read tools:** `list_clusters`, `get_cluster`, `list_databases`, `list_tables`,
   `get_table_schema`, `select_query` (runs a `SELECT`), `explain_query` (runs an `EXPLAIN`),
   `show_statement` (runs a `SHOW`), `show_running_queries`.
-- **Write tools exist and are separate:** `create_database`, `create_table`, `insert_rows`. This
-  matters — see "Why read-only, by design" below.
+- **Write tools exist and are offered to every identity, regardless of role:** `create_database`,
+  `create_table`, `insert_rows`. Tool availability is not permission — see "Why this identity is
+  write-capable" below.
+- **Tool argument names are load-bearing, and get this wrong silently:** `select_query` and
+  `explain_query` both take a `query` argument, not `statement`; `create_table` takes raw `ddl`.
+  Passing the wrong argument name doesn't fail with a helpful "unknown argument" — it comes back
+  as `must contain exactly one statement`, which reads like a SQL problem and isn't one.
 - **Guardrails Cockroach Labs enforces server-side, regardless of role:** one SQL statement per
   tool call, max 16,384 characters; each query times out after 20 seconds; each response is
   capped at 10 KiB; an unlimited `SELECT` gets `LIMIT 25` by default, an explicit `LIMIT` is
@@ -45,19 +61,25 @@ cluster, against this specific schema.
   to schema/config introspection; `explain_query` supports only `SELECT` / `INSERT` /
   `CREATE TABLE` (no `EXPLAIN ANALYZE`); and the `system`, `crdb_internal`, `pg_catalog`,
   `information_schema`, and `pg_extension` schemas are off-limits to every tool.
-- **Not documented on this page:** a dedicated "read-only mode" toggle (permission scope instead
-  comes from your OAuth consent choice, or your service account's role), and anything about what
-  lands in an audit log. `ccloud audit list` exists as a general CockroachDB Cloud CLI command
-  ("who performed the action, when, and what was changed" — see `SPIKE-RESULTS.md` spike 6), but
-  whether it captures individual MCP `select_query` calls is not stated anywhere Cockroach Labs
-  publishes, and this machine has no session to check empirically. Treat it as unconfirmed.
+- **There is no dedicated "read-only mode" toggle, and no read-only role that works.** Permission
+  scope comes from your OAuth consent choice or your service account's role — but Cockroach Labs'
+  own docs state the MCP server requires **the Cluster Admin role or the Cluster Operator role**.
+  Verified live: a service account holding only `CLUSTER_DEVELOPER` (the most restrictive
+  assignable cluster-scoped role) got `select_query: executing select query: unauthorized`. There
+  is no cluster-scoped role below Cluster Operator that this server accepts. See "Why this
+  identity is write-capable" below.
+- **Not documented on this page:** anything about what lands in an audit log. `ccloud audit list`
+  exists as a general CockroachDB Cloud CLI command ("who performed the action, when, and what was
+  changed" — see `SPIKE-RESULTS.md` spike 6), but whether it captures individual MCP
+  `select_query` calls is not stated anywhere Cockroach Labs publishes, and this page has not
+  checked it empirically. Treat it as unconfirmed.
 
 Source: <https://www.cockroachlabs.com/docs/cockroachcloud/connect-to-the-cockroachdb-cloud-mcp-server>
 (fetched 2026-08-04).
 
 ## How to connect
 
-### Option A — fastest: OAuth, read-only by hand
+### Option A — fastest: OAuth, by hand
 
 1. `claude mcp add cockroachdb-cloud https://cockroachlabs.cloud/mcp --transport http`
 2. Claude Code opens a browser. Log in, pick the organization, and when the "Authorize MCP
@@ -68,9 +90,14 @@ Source: <https://www.cockroachlabs.com/docs/cockroachcloud/connect-to-the-cockro
 
 This is the quickest path for a judge trying MemoryStand — no service account to create, no key
 to manage. Its downside is exactly what "pick permissions in a browser modal" implies: it is a
-human decision made once per login, not an enforced, revocable, auditable identity.
+human decision made once per login, not an enforced, revocable, auditable identity. And picking
+"read" in that modal is a consent choice, not a role grant — it was not tested through this page
+whether OAuth enforces anything beyond the account's own underlying role, and Cockroach Labs'
+documented requirement (Cluster Admin or Cluster Operator) reads as a property of the server, not
+of the auth method. Don't assume "read" here gets you something Option B's service account
+couldn't get with `CLUSTER_DEVELOPER`.
 
-### Option B — the one this repo ships: a dedicated read-only service account
+### Option B — the one this repo ships: a dedicated service account
 
 This repo's [`.mcp.json`](../.mcp.json) is already wired for this option:
 
@@ -96,39 +123,75 @@ ccloud auth login
 ./infra/mcp_setup.sh
 ```
 
-`infra/mcp_setup.sh` creates a service account named `memorystand-mcp-readonly`, grants it the
-most restrictive assignable cluster-scoped role CockroachDB Cloud has (`Cluster Developer` — see
-the role table below), scoped to *this one cluster only*, creates an API key, writes the key to
-`~/.memorystand-mcp-key` with file mode `600`, and prints the two `export` lines to run before
+`infra/mcp_setup.sh` creates a service account named `memorystand-mcp-readonly` (the name is a
+holdover from when read-only looked achievable — see the role table below for why it no longer
+is), grants it by default the most restrictive assignable cluster-scoped role CockroachDB Cloud
+has (`Cluster Developer`), scoped to *this one cluster only*, creates an API key, writes the key
+to `~/.memorystand-mcp-key` with file mode `600`, and prints the two `export` lines to run before
 starting Claude Code. The key is never printed to the terminal. See the script's own header
-comment for exactly which `ccloud` flags were confirmed and which one thing (the literal
-role-name string) could not be verified without a live session — the script fails loudly with a
-clear message if that guess is wrong, instead of silently granting a different scope.
+comment for exactly which `ccloud` flags were confirmed.
+
+**`Cluster Developer` alone is not enough — the MCP server rejects it.** Verified live:
+`select_query` against a `Cluster Developer`-only identity returns
+`executing select query: unauthorized`. The account this repo actually uses has since also been
+granted `Cluster Operator` (role name `CLUSTER_OPERATOR_WRITER`) on top of `Cluster Developer`,
+and with both roles `select_query`/`explain_query` work. `infra/mcp_setup.sh` does not grant that
+second role for you — it only ever requests `MEMORYSTAND_MCP_ROLE` (default `CLUSTER_DEVELOPER`)
+— so if you run it fresh, expect the same "unauthorized" error until you separately grant
+`Cluster Operator`, e.g. `ccloud role add <service-account-id> CLUSTER_OPERATOR_WRITER CLUSTER
+<cluster-id>` or the equivalent in the console. Once both roles are in place, run
+`scripts/verify_mcp.py` to confirm the connection actually works end to end (see its usage in the
+module docstring).
 
 | Role (display name) | What it can do | Used here? |
 |---|---|---|
-| Cluster Developer | Access the DB console. Nothing else in the permission table. | **Yes — this is what the MCP service account gets.** |
-| Cluster Operator | View cluster settings/stats; manage databases, networks, backups, jobs, metrics. | No |
+| Cluster Developer | Access the DB console. Nothing else in the permission table. | Yes — the default `infra/mcp_setup.sh` grant, but not sufficient by itself. |
+| Cluster Operator | View cluster settings/stats; manage databases, networks, backups, jobs, metrics. | **Yes — also granted, and required.** Cockroach Labs' MCP docs state the server requires this role or Cluster Admin; nothing weaker works. This role is write-capable. |
 | Cluster Admin | Everything Cluster Operator can, plus edit role assignments and delete the cluster. | No |
 
-## Why read-only, by design — not a limitation
+There is no row in this table that is both accepted by the MCP server and read-only. That is a
+property of the server, confirmed live against this cluster, not a choice this repo made.
 
-The MCP server exposes real write tools (`create_database`, `create_table`, `insert_rows`). The
-service account wired up here is granted a role with no write capability, on purpose, and that
-choice is load-bearing for the whole project, not an oversight:
+## Why this identity is write-capable — and what that does and doesn't mean
 
-MemoryStand's actual write path — `remember()` admitting a memory, `decide()` recording what an
-agent consulted and produced, `grant_standing()` promoting or demoting memories off a confirmed
-outcome — is not "run an `INSERT`." Each of those is a multi-statement, multi-table decision made
-inside one atomic transaction, with invariants a generic SQL tool has no way to know about (a
-memory's `verdict` and `trust_tier` are deliberately independent axes; a decision's
-`produced_memory_ids` is the only hook the outcome gate is allowed to promote through; nothing is
-ever deleted, only corrected by a newer memory that points back at the one it replaces).
-`insert_rows` through an MCP tool call cannot express any of that — it can only put rows in a
-table. Handing this service account write access wouldn't make the
-demo more impressive; it would make it possible to corrupt the memory store's invariants from
-outside the one code path that enforces them. Read-only is the correct security posture here, not
-a fallback.
+This page used to describe the service account as read-only by design. That turned out not to be
+achievable: Cockroach Labs' own docs require the Cluster Admin role or the Cluster Operator role
+for the MCP server, and `Cluster Developer` — the role this account started with — is
+unauthorized for `select_query`. So the account also holds `Cluster Operator`
+(`CLUSTER_OPERATOR_WRITER`) now, and by CockroachDB Cloud's own role definition that is
+write-capable, not read-only. Say so plainly rather than keep the old "read-only" framing.
+
+What "write-capable" does **not** mean here: it does not mean a write through this connection has
+been tried and has succeeded. The MCP server exposes real write tools (`create_database`,
+`create_table`, `insert_rows`) to every identity regardless of role — tool availability is not
+permission, and this account's role has never been used to actually call one of them.
+`scripts/verify_mcp.py` has a write probe for exactly this (`--probe-writes`: attempts
+`create_table` against a throwaway table name), and it is opt-in on purpose — a probe that
+succeeds leaves a real table on the live cluster with no MCP tool able to drop it again. That
+probe has not been run. Whether a write through this MCP connection is actually refused at the SQL
+layer is **untested**, not "refused" and not "allowed" — untested.
+
+Given that, the honest reason this matters is not "the role forbids it" — it doesn't, or at least
+that's untested — it's that MemoryStand's actual write path was never meant to be reachable this
+way in the first place. `remember()` admitting a memory, `decide()` recording what an agent
+consulted and produced, `grant_standing()` promoting or demoting memories off a confirmed outcome
+— none of that is "run an `INSERT`." Each is a multi-statement, multi-table decision made inside
+one atomic transaction, with invariants a generic SQL tool has no way to know about (a memory's
+`verdict` and `trust_tier` are deliberately independent axes; a decision's `produced_memory_ids`
+is the only hook the outcome gate is allowed to promote through; nothing is ever deleted, only
+corrected by a newer memory that points back at the one it replaces). `insert_rows` through an MCP
+tool call cannot express any of that — it can only put rows in a table, and if this account's
+`Cluster Operator` role does let that call succeed, the row it writes would bypass every one of
+those invariants.
+
+That is a real risk now, not a hypothetical one, precisely because the role turned out to require
+write capability. The mitigation is operational, not a permission boundary: nothing in
+MemoryStand's own code path (`backend/`, `cli/memorystand.py`) ever calls this MCP connection or
+this API key — it exists only for a human or an LLM client to run ad hoc `SELECT`/`EXPLAIN`
+queries against the cluster, and the write tools should simply never be invoked through it. If you
+are auditing this project, treat "never call `create_database` / `create_table` / `insert_rows`
+through this connection" as a rule you're relying on a human to follow, not one CockroachDB Cloud
+enforces for you.
 
 ## Three questions to ask it
 

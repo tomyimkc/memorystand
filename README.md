@@ -6,7 +6,11 @@
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-**Live demo: <https://ojao6oaxlk26mqfjwpuy7g4dy40tglyi.lambda-url.us-west-2.on.aws>** · [deployment status](docs/DEPLOY_STATUS.md)
+**Live demo (click this): <https://main.d19xad9aeccy3e.amplifyapp.com>** — the dashboard, deployed
+on AWS Amplify Hosting. The API it talks to is
+<https://ojao6oaxlk26mqfjwpuy7g4dy40tglyi.lambda-url.us-west-2.on.aws>, a JSON API with no root
+route (`GET /` returns 404 by design — it is not a page to open in a browser). ·
+[deployment status](docs/DEPLOY_STATUS.md)
 
 **Submission for the [CockroachDB × AWS Hackathon — Build with Agentic Memory](https://cockroachdb-ai.devpost.com).**
 
@@ -91,20 +95,22 @@ Everything marked ✅ was run against a real CockroachDB v26.2.5 cluster, not ju
 |---|---|
 | Schema, admission control, outcome gate, cross-examination | ✅ end to end |
 | Incident fixtures (101 records, 2 designed conflicts) | ✅ 99 admitted, 2 held |
-| Test suite (`pytest`) | ✅ **19/19 passing** |
+| Test suite (`pytest`) | ✅ **78 passing** |
 | Concurrency + TOCTOU proof (`scripts/race_demo.py`) | ✅ real `40001` captured |
 | Benchmark harness (`scripts/loadtest.py`) | ✅ 10k rows, numbers below |
 | Lambda handler, 7 routes, kill switch, degraded mode | ✅ exercised over HTTP |
 | Bedrock agent loop + deterministic fallback | ✅ fallback path verified |
 | `memorystand` CLI (6 subcommands) | ✅ |
-| Static dashboard (`frontend/`) | ✅ 4 panels + seeded-demo preview strip, no build step, driven against a live local API |
+| Static dashboard (`frontend/`) | ✅ 4 panels + seeded-demo preview strip, no build step; deployed live on AWS Amplify Hosting at <https://main.d19xad9aeccy3e.amplifyapp.com> |
 | Tamper-evident checkpoints (`backend/snapshots.py`) | ✅ |
 | Authored CockroachDB Agent Skill | ✅ upstream format |
 | One-command demo (`scripts/demo.sh`) | ✅ 8 beats, exit 0 |
-| ccloud provisioning (`infra/provision.sh`) | ✅ flags verified against `ccloud 0.8.23` |
-| AWS deploy scripts (`infra/deploy.sh`, `infra/deploy_frontend.sh`, IAM, SSM, keep-warm) | ⚠️ written, **never run** — no AWS account yet. See [docs/DEPLOY.md](docs/DEPLOY.md) for the exact judge-facing URL shape and what stays free. |
-| Bedrock with real credentials | ⏳ deterministic stub covers local runs |
-| Cloud cluster, MCP server wiring, video | ⬜ |
+| ccloud provisioning (`infra/provision.sh`) | ✅ flags verified against `ccloud 0.8.23`, and run for real — see cloud cluster row below |
+| AWS deploy scripts (`infra/provision.sh`, `infra/ssm_setup.sh`, `infra/deploy.sh`, `infra/deploy_frontend.sh`, IAM, SSM, keep-warm) | ✅ **all run against a real AWS account.** Lambda is Active, dashboard is live on Amplify. See [docs/DEPLOY.md](docs/DEPLOY.md) for the URL shape. |
+| Bedrock with real credentials | ⚠️ deployed and reachable, but this account's Bedrock quota is ~0 — every live `/decide` call falls back to the deterministic heuristic in `backend/agent.py` (`reasoning_source: fallback_heuristic`, `model_calls: 0`). No live call has actually been reasoned over by a model. |
+| Cloud cluster | ✅ CockroachDB Cloud BASIC, AWS us-west-2, CCL v26.2.1. `agent_memories` holds 50,131 rows: 40 synthetic tenants at 1,250 rows each, plus the curated demo tenant (131 rows, 117 accepted). |
+| MCP server wiring | ✅ working end to end (see [CockroachDB tools used](#cockroachdb-tools-used) for the honest access-level finding) |
+| Video | ⬜ |
 
 ## Measured results
 
@@ -183,6 +189,34 @@ Part 2 is the one a hostile reviewer should probe: two agents submitting contrad
 memories for the same entity at the same instant. Exactly one wins. That is the TOCTOU
 guard doing its job under real serializable conflict, not a mocked test.
 
+### Security fixes shipped against the live deployment
+
+All five found and fixed against the real Lambda, not in theory:
+
+- **SQL injection in `GET /diff?instant=`.** `AS OF SYSTEM TIME` cannot be parameterised, and the
+  value was being interpolated raw on an *unauthenticated* route. Now validated against an
+  allow-list (HLC decimal, negative interval, ISO-8601). Live check: a hostile `instant` now
+  returns HTTP 400 and the table is untouched.
+- **`trust._apply` had no tenant predicate** — the only unscoped query in the codebase, and the
+  one that promotes a memory to `verified`. `tenant_id` is now a required positional argument of
+  `trust.grant_standing(tenant_id, decision_id, evidence)`.
+- **`POST /confirm_outcome` wasn't behind the shared secret** while `/ingest` and `/decide` were —
+  `frontend/app.js` even documented it as "no secret required (read-adjacent)". It's the route
+  that grants trust. Now gated; a live check without the secret returns 401.
+- **The kill switch failed open:** any SSM read error defaulted to "off" (i.e. keep serving). It
+  now fails closed.
+- A test now asserts every POST route is secret-gated, so this class of bug can't regress silently.
+
+### Latency, fixed against the live deployment
+
+`/decide` used to return 502 after hanging for the full 30 s. Root cause: `MAX_ATTEMPTS=5` is an
+attempt budget, not a latency budget. Fixed with an explicit `DEADLINE_S`, plus disabling
+botocore's own hidden retries (an "8 s deadline" measured 18.1 s wall-clock until that was found),
+plus `backend/breaker.py`. Live, four consecutive `POST /decide` calls on one warm container, all
+HTTP 201: **23.776 s → 9.162 s → 0.851 s → 0.814 s.** `GET /health` now reports
+`circuit_breakers`; `POST /decide` responses include `rationale`, `reasoning_source`, and
+`model_calls`.
+
 ## Quickstart
 
 One command. No AWS account, no CockroachDB Cloud account, no Postgres install.
@@ -202,14 +236,14 @@ git clone <this-repo> && cd memorystand
 Then:
 
 ```bash
-.venv/bin/python -m pytest -q                                   # 19 tests
+.venv/bin/python -m pytest -q                                   # 78 tests
 .venv/bin/python cli/memorystand.py recall --query "payments failover"
 .venv/bin/python scripts/loadtest.py --rows 10000 --tenants 50  # reproduce the numbers below
 ```
 
-Deploying to real infrastructure instead (needs accounts; **never run against a real
-account as of this writing** — see [docs/DEPLOY.md](docs/DEPLOY.md) for the honest status,
-the exact judge-facing URL shape, and what stays free for a ~6-week judging window):
+Deploying to real infrastructure instead (needs accounts; **this has been run against a real
+AWS account** — the live demo above is the result — see [docs/DEPLOY.md](docs/DEPLOY.md) for the
+honest status, the exact judge-facing URL shape, and what stays free for a ~6-week judging window):
 
 ```bash
 ./infra/provision.sh              # CockroachDB Basic cluster, on AWS, via ccloud
@@ -224,8 +258,19 @@ the exact judge-facing URL shape, and what stays free for a ~6-week judging wind
   with a prefix-partitioned `VECTOR INDEX (tenant_id, verdict, embedding vector_cosine_ops)`.
   `verdict` is in the prefix deliberately: it is what makes the optimizer use the index at
   all, and it makes the ANN partition *be* "admitted memories of this tenant".
-- **Cloud Managed MCP Server** — a read-only (`mcp:read`) service account, used from Claude Code
-  as the judge- and operator-facing inspection surface. Never in the write path, by design.
+- **Cloud Managed MCP Server** — verified live end to end: handshake to
+  `https://cockroachlabs.cloud/mcp` returns `serverInfo {name: "cockroachdb-cloud", version:
+  "1.0.0"}`, `select_query` returns real rows, and `explain_query` confirms `vector search: True`.
+  Used from Claude Code as the judge- and operator-facing inspection surface, and never in the
+  application's write path, by design. The honest access-level finding: CockroachDB Cloud has no
+  read-only role that works with this MCP server — its docs require the Cluster Admin or Cluster
+  Operator role. The service account `memorystand-mcp-readonly` was first tried with only
+  `CLUSTER_DEVELOPER`, under which `select_query` returned "unauthorized"; it now also holds
+  `CLUSTER_OPERATOR_WRITER` (shown in the console as Cluster Developer / Cluster Operator), so the
+  identity is **write-capable**, not read-only. The server also *offers* `create_database`,
+  `create_table`, and `insert_rows` to every identity — tool availability is not permission.
+  `scripts/verify_mcp.py` automates this whole check; its write probe is opt-in behind
+  `--probe-writes` and has not been run, so whether writes are actually refused is untested.
 - **ccloud CLI** — `infra/provision.sh` provisions the cluster, SQL user and connection string
   non-interactively with `-o json`; `ccloud audit list` gives the org-level audit trail.
 - **Agent Skills** — an authored skill documenting the outcome-gated memory pattern.

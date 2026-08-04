@@ -2,9 +2,11 @@
 """Audit trail as a queryable SQL table rather than a log file to be grepped.
 
 ``tool_audit`` lives in the same database as the memories, which means a judge (or an
-operator, or an incident reviewer) can read the audit trail with the same read-only
+operator, or an incident reviewer) can read the audit trail with the same same
 credential they use for everything else -- including through the CockroachDB Cloud
-Managed MCP Server, with no application code in the path. Native row-level TTL bounds
+Managed MCP Server, with no application code in the path. (That credential is
+write-capable, not read-only: no read-only role works with the managed MCP server. See
+docs/INTEGRATING.md.) Native row-level TTL bounds
 its growth, so there is no cron job to forget to run.
 """
 

@@ -1,12 +1,20 @@
 # Deploying MemoryStand
 
-**Status as of this writing: nothing here has been deployed.** The machine that wrote
-this document has no AWS credentials and no CockroachDB Cloud session (`aws sts
-get-caller-identity` returns `NoCredentials`, `ccloud auth whoami` is not logged in), and
-cannot create either. Every script below has been read carefully against the AWS CLI's
-own `help` output, but none has been run against a real account. Do not treat anything
-in this file as "it works" until someone with real credentials has run it and can point
-at a URL that actually answers.
+**Status as of this writing: this has been deployed, for real.** `./infra/provision.sh`,
+`./infra/ssm_setup.sh`, `./infra/deploy.sh`, and `./infra/deploy_frontend.sh` have all
+been run against a real AWS account and a real CockroachDB Cloud cluster: the Lambda's
+`State` is `Active`, the CockroachDB Basic cluster is up and holds real data, and the
+dashboard is live on AWS Amplify Hosting answering `HTTP 200`. For the specific evidence
+behind that claim -- exact URLs, cluster IDs, row counts, and what each check actually
+returned -- see [DEPLOY_STATUS.md](DEPLOY_STATUS.md); that page is kept current as the
+deployment changes, this one is the how-to.
+
+What is still on a reader to supply: your own AWS credentials and your own CockroachDB
+Cloud (`ccloud`) session, if you want a copy of this running under your own account. The
+instructions below are the real path that produced the live deployment, written so
+anyone with those two things can reproduce it from scratch -- they deliberately don't
+hardcode this project's own app ID or Lambda URL ID (AWS assigns both per-deployment),
+so redeploying under a different account won't leave this file's shape wrong.
 
 ## What the judge-facing URL will look like
 
@@ -32,18 +40,27 @@ There are two independently deployed pieces:
 
    also not knowable until `deploy.sh` runs and prints it.
 
-The dashboard does not hardcode the API's URL (there is no way to, before the API
-exists) -- it is passed at share time as a query parameter:
+Once `deploy.sh` has printed a real API URL, paste it into `frontend/app.js` as the
+`DEPLOYED_API` constant *before* running `deploy_frontend.sh` -- that step is manual,
+`deploy_frontend.sh` does not do it for you. Do that and the bare dashboard URL becomes
+the one link to hand a judge; no `?api=` query parameter is needed. In code,
+`frontend/app.js`'s `API_BASE` picks `LOCAL_API`
+(`http://127.0.0.1:8077`, matching `scripts/run-local.sh`) when the page itself is
+being served from `localhost`/`127.0.0.1`/`file:`, and `DEPLOYED_API` otherwise; `?api=`
+still overrides either default, which is what lets `run-local.sh --serve` point this
+same file at a local backend and what lets anyone point a deployed dashboard at a
+different API without editing the file. So both of these work once the two scripts have
+run once:
 
 ```
+https://<BRANCH_NAME>.<amplify-app-id>.amplifyapp.com
 https://<BRANCH_NAME>.<amplify-app-id>.amplifyapp.com/?api=https://<lambda-url-id>.lambda-url.<region>.on.aws
 ```
 
-That combined URL, once both scripts have been run once, is the one link to hand a
-judge. `frontend/app.js`'s `API_BASE` reads `?api=` first and falls back to
-`http://127.0.0.1:8077` (this repo's local dev port, matching `scripts/run-local.sh`)
-only when `?api=` is absent -- so a judge who follows a link with `?api=` set never sees
-the local-dev fallback.
+One thing worth knowing before opening the API URL directly in a browser: it has no
+root route, so `GET /` on it returns `404 {"error":"not_found",...}` by design -- that
+404 is expected and is not a sign the deployment is broken; it just means that URL is
+an API to be called, not a page to hand a judge on its own.
 
 ## Deploy order
 
@@ -77,12 +94,16 @@ project's whole thesis is not overclaiming things nobody has checked:
 | **CockroachDB Basic (via ccloud, `--cloud AWS`)** | Basic tier has its own free monthly Request Unit and storage allowance | `infra/provision.sh` sets `--request-unit-limit 50000000 --storage-gib-limit 10` specifically to stay inside that allowance -- see the script's own comment. |
 | **Amazon Bedrock** (Nova Converse + Titan embeddings) | No free tier; billed per token/request | The only genuinely metered cost here, and it is small: `/decide` calls Bedrock only when the caller does *not* supply `action` itself (this dashboard always supplies it, so it skips Bedrock entirely -- see `frontend/app.js`'s API-contract comment), and `/ingest` embeds one short string per call. A judging window's worth of manual clicking is cents, not dollars. |
 
-**Bottom line, stated as an estimate because nobody has run these scripts against a
-paying account yet:** realistic cost for a 6-week judging window is at or near **$0.00**
-for hosting/compute/logs/scheduling, with the only real variable cost being Bedrock
-token usage from actual `/ingest` and model-reasoned `/decide` calls -- and this
-dashboard's own traffic pattern (caller-supplied actions, short content strings)
-minimizes even that. Verify current pricing before relying on this table:
+**Bottom line, still stated as an estimate rather than a measured bill** -- these scripts
+have now been run against a real account and the deployment has been live for days, but
+no full monthly billing cycle has closed yet to check this against: realistic cost for a
+6-week judging window is at or near **$0.00** for hosting/compute/logs/scheduling, with
+the only real variable cost being Bedrock token usage from actual `/ingest` and
+model-reasoned `/decide` calls. In practice that is currently near zero too: this
+account's Bedrock quota is ~0, so live `/decide` calls fall back to a deterministic
+rule and spend nothing. This dashboard's own traffic pattern
+(caller-supplied actions, short content strings) minimizes even that. Verify current
+pricing before relying on this table:
 <https://aws.amazon.com/amplify/pricing/>, <https://aws.amazon.com/lambda/pricing/>,
 <https://aws.amazon.com/systems-manager/pricing/>, and the CockroachDB Cloud / Bedrock
 pricing pages.

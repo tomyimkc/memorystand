@@ -93,7 +93,8 @@ after the second failure; the third and fourth return in under a second because 
 short-circuits straight to the deterministic fallback instead of dialing Bedrock at all. The
 local equivalent for `agent.propose()` shows the same shape: 12.35 s -> 8.66 s -> 0.00 s -> 0.00 s.
 
-Test suite: 55 passing (was 47); new file `tests/test_latency_budget.py`.
+Test suite: 78 passing (was 47); new files `tests/test_latency_budget.py` and
+`tests/test_security_invariants.py`.
 
 ## Honest state: the deployed agent is not reasoning with a model
 
@@ -131,7 +132,11 @@ Its write probe is opt-in behind `--probe-writes` and has not been run.
 
 ## Live and verified end to end
 
-**Demo URL: <https://ojao6oaxlk26mqfjwpuy7g4dy40tglyi.lambda-url.us-west-2.on.aws>**
+**Dashboard (click this): <https://main.d19xad9aeccy3e.amplifyapp.com>**
+
+**API endpoint it talks to: <https://ojao6oaxlk26mqfjwpuy7g4dy40tglyi.lambda-url.us-west-2.on.aws>**
+— a JSON API with no root route, so `GET /` returns 404 by design. It is not the demo; it is
+what the demo calls.
 
 | Route | Result |
 |---|---|
@@ -147,12 +152,39 @@ outcome, on a path that makes zero model calls -- with the caveat above that the
 itself is currently made by a deterministic fallback, not a model, because Bedrock quota is
 still zero.
 
+## Security holes found by adversarial review, and closed
+
+Four, all reachable from the public Function URL, none caught by the existing suite -- which
+tested that the system behaves well for a cooperative caller, not that it refuses a hostile one.
+
+| Hole | Now |
+|---|---|
+| SQL injection via `GET /diff?instant=` (AOST cannot be parameterised, so the value was interpolated raw, on an **unauthenticated** route) | allow-list of the three documented instant forms; live check returns **400**, table intact |
+| `trust._apply` matched on `decision_id` with **no tenant predicate** -- the only unscoped query in the codebase, and the one that promotes memories to `verified` | `tenant_id` is a required positional argument; another tenant's decision is reported identically to a nonexistent one |
+| `POST /confirm_outcome` was **not** behind the shared secret while `/ingest` and `/decide` were | gated; live check returns **401** without the secret |
+| The kill switch failed **open** -- any SSM read error defaulted to `"off"` | fails closed, and distinguishes "read failed" from "read the value off" |
+
+The pattern worth naming: the routes that got gated were the ones that obviously write
+*content*. The route that writes *trust* was missed because it reads like a callback. A test now
+asserts every `POST` route is gated, so the next one cannot be classified by feel.
+
+## MCP: resolved, at a price worth stating
+
+`select_query` returned `"executing select query: unauthorized"` under `CLUSTER_DEVELOPER`.
+Cockroach Labs requires Cluster Admin or Cluster Operator, and **no read-only role works with
+this server at all**. The service account was therefore also granted `CLUSTER_OPERATOR_WRITER`,
+and the connection now works end to end -- verified live: handshake to `cockroachdb-cloud`
+v1.0.0, a trust-ladder read returning `{"unconfirmed":118,"verified":5}`, and `explain_query`
+showing a `vector search` node.
+
+The identity is now **write-capable**. It is still named `-readonly`, which is misleading and
+kept only so older log entries resolve. Least privilege is not available here; that is a
+property of the managed server, not a choice this project made. Reproduce it all with
+`scripts/verify_mcp.py`. Its write probe is opt-in and has not been run, so whether a write
+would actually be refused is **untested**.
+
 ## Not yet run
 
-`deploy_frontend.sh` (Amplify). Not blocked -- sequenced after the API, and the API was where
-the blocker was.
-
-`mcp_setup.sh` has effectively been superseded by direct exploration (see above): the read-only
-service account exists and the MCP handshake works, but no role short of Cluster Admin/Cluster
-Operator makes `select_query` succeed. Read-only MCP access is unresolved rather than merely
-unattempted -- running `mcp_setup.sh` as originally written would not fix this.
+Nothing in the deploy path. `provision.sh`, `ssm_setup.sh`, `deploy.sh` and `deploy_frontend.sh`
+have all been run against a real account; the dashboard is live at
+<https://main.d19xad9aeccy3e.amplifyapp.com>.
