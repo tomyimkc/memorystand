@@ -236,11 +236,27 @@ def main() -> int:
               f"recall {s_['recall_on_good']:.1%}  precision {s_['precision']:.1%}")
     print()
 
+    # One case set is an anecdote. Re-generate the whole benchmark under independent seeds and
+    # check the conclusion survives -- if it only holds for the seed that was committed, it is
+    # a property of that draw and not of the rule.
+    robustness = []
+    for alt in (1, 7, 42, 1234, args.seed):
+        alt_cases = build_cases(args.cases, alt)
+        b = score("b", [(c, run_trust_the_caller(c)[0]) for c in alt_cases])
+        g = score("g", [(c, run_outcome_gated(c)[0]) for c in alt_cases])
+        robustness.append((alt, b, g))
+    print("robustness across independent case sets")
+    for alt, b, g in robustness:
+        print(f"  seed {alt:>9}: baseline FP={b['false_promotions']:>3} prec={b['precision']:.1%}"
+              f"   |   gated FP={g['false_promotions']:>2} prec={g['precision']:.1%} "
+              f"recall={g['recall_on_good']:.1%}")
+    print()
+
     # The llm_judge arm is implemented but cannot run here. Say so; do not estimate it.
     llm_note = _probe_llm_judge()
     print(f"llm_judge\n  {llm_note}\n")
 
-    _write_report(args, cases, mix, scores, latencies, flips, llm_note, sweep)
+    _write_report(args, cases, mix, scores, latencies, flips, llm_note, sweep, robustness)
     print(f"Report written to {args.report}")
     return 0
 
@@ -260,9 +276,15 @@ def _probe_llm_judge() -> str:
         return f"SKIPPED, not estimated: {type(exc).__name__}: {str(exc)[:160]}"
 
 
-def _write_report(args, cases, mix, scores, latencies, flips, llm_note, sweep) -> None:
+def _write_report(args, cases, mix, scores, latencies, flips, llm_note, sweep, robustness) -> None:
     tc, og = scores["trust_the_caller"], scores["outcome_gated"]
     caught = tc["false_promotions"] - og["false_promotions"]
+
+    robustness_rows = "\n".join(
+        f"| {alt} | {b['false_promotions']} | {b['precision']:.1%} | {g['false_promotions']} | "
+        f"{g['precision']:.1%} | {g['recall_on_good']:.1%} |"
+        for alt, b, g in robustness
+    )
 
     sweep_rows = "\n".join(
         f"| {tol:.0%} | {s_['false_promotions']} | {s_['recall_on_good']:.1%} | {s_['precision']:.1%} |"
@@ -334,6 +356,15 @@ wrongly left at `attested` costs an agent some usefulness, while one wrongly pro
 The `borderline` cases exist specifically so this benchmark is not trivially won. Without them
 the generated classes separate so cleanly that any threshold rule scores perfectly, which would
 measure the generator's assumptions rather than the rule.
+
+## Does it survive a different draw?
+
+The whole benchmark, regenerated under independent seeds. If the result only held for the seed
+that happened to be committed, it would be a property of that draw rather than of the rule.
+
+| seed | baseline false promotions | baseline precision | gated false promotions | gated precision | gated recall |
+|---:|---:|---:|---:|---:|---:|
+{robustness_rows}
 
 ## The third arm, not run
 

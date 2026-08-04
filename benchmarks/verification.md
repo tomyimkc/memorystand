@@ -12,39 +12,39 @@ latency never moved, or was already recovering, or got worse. Nobody lied, and t
 "restarting payments-service fixes p99 latency" is still false. Every system that takes the
 reporter's word promotes it to trusted and hands it to an agent at the next incident.
 
-## Case mix (300 cases)
+## Case mix (500 cases)
 
 | Kind | Count | Should promote |
 |---|---:|---|
-| correct — the action worked and the metric agrees | 171 | yes |
-| borderline — real improvement, meaningfully smaller than claimed | 8 | yes (contested) |
-| no_change — honest report, metric did not move | 59 | no |
-| regressed — honest report, metric got worse | 39 | no |
-| overstated — right direction, wildly wrong magnitude | 13 | no |
-| no_data — empty window, nothing to check against | 10 | no |
+| correct — the action worked and the metric agrees | 284 | yes |
+| borderline — real improvement, meaningfully smaller than claimed | 12 | yes (contested) |
+| no_change — honest report, metric did not move | 105 | no |
+| regressed — honest report, metric got worse | 54 | no |
+| overstated — right direction, wildly wrong magnitude | 27 | no |
+| no_data — empty window, nothing to check against | 18 | no |
 
 ## Results
 
 | | trust_the_caller | outcome_gated |
 |---|---:|---:|
-| False promotions | **121** | **0** |
+| False promotions | **204** | **0** |
 | False-promotion rate | 100.0% | 0.0% |
-| True promotions | 179 | 177 |
-| Recall on genuinely good outcomes | 100.0% | 98.9% |
-| Precision | 59.7% | 100.0% |
+| True promotions | 296 | 292 |
+| Recall on genuinely good outcomes | 100.0% | 98.6% |
+| Precision | 59.2% | 100.0% |
 | Differing runs out of 4 reruns | 0 | 0 |
-| Latency per check | 0.000 ms | 0.411 ms |
+| Latency per check | 0.000 ms | 0.249 ms |
 | Model calls | 0 | 0 |
 
-**121 memories** would have entered the store as trusted under the baseline and were
-refused by the gate. Of those, 111 are
+**204 memories** would have entered the store as trusted under the baseline and were
+refused by the gate. Of those, 186 are
 claims the metric actively contradicts — it did not move, moved the wrong way, or moved far
-less than reported — and 10 are claims with no data to check against at all,
+less than reported — and 18 are claims with no data to check against at all,
 refused because "cannot tell" is not "confirmed".
 
 ## The honest cost, and the knob that sets it
 
-`outcome_gated` recall is **98.9%** at the default 50% tolerance — every
+`outcome_gated` recall is **98.6%** at the default 50% tolerance — every
 point below 100% is a real outcome that genuinely happened and was refused anyway, because the
 observed change was too far from the claimed one to confirm. Those memories are not lost; they
 sit at `attested` instead of `verified`.
@@ -53,11 +53,11 @@ The trade is a knob, not a law, and reporting a single operating point would be 
 
 | `MEMORYSTAND_EVIDENCE_TOLERANCE` | False promotions | Recall on good outcomes | Precision |
 |---:|---:|---:|---:|
-| 15% | 0 | 96.6% | 100.0% |
-| 25% | 0 | 97.8% | 100.0% |
-| 50% | 0 | 98.9% | 100.0% |
-| 75% | 3 | 100.0% | 98.4% |
-| 100% | 42 | 100.0% | 81.0% |
+| 15% | 0 | 97.0% | 100.0% |
+| 25% | 0 | 98.0% | 100.0% |
+| 50% | 0 | 98.6% | 100.0% |
+| 75% | 4 | 99.7% | 98.7% |
+| 100% | 77 | 100.0% | 79.4% |
 
 Read the curve, not the headline. A tight tolerance refuses more honest reports; a loose one
 lets overstated claims through. **The gate is deliberately biased toward refusing**: a memory
@@ -67,6 +67,19 @@ wrongly left at `attested` costs an agent some usefulness, while one wrongly pro
 The `borderline` cases exist specifically so this benchmark is not trivially won. Without them
 the generated classes separate so cleanly that any threshold rule scores perfectly, which would
 measure the generator's assumptions rather than the rule.
+
+## Does it survive a different draw?
+
+The whole benchmark, regenerated under independent seeds. If the result only held for the seed
+that happened to be committed, it would be a property of that draw rather than of the rule.
+
+| seed | baseline false promotions | baseline precision | gated false promotions | gated precision | gated recall |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 229 | 54.2% | 0 | 100.0% | 98.9% |
+| 7 | 197 | 60.6% | 0 | 100.0% | 98.0% |
+| 42 | 211 | 57.8% | 0 | 100.0% | 98.3% |
+| 1234 | 211 | 57.8% | 0 | 100.0% | 99.3% |
+| 20260804 | 204 | 59.2% | 0 | 100.0% | 98.6% |
 
 ## The third arm, not run
 
@@ -87,7 +100,7 @@ contradiction".
 
 ## Reproduce
 
-    python benchmarks/verification_benchmark.py --cases 300 --repeats 5 --seed 20260804
+    python benchmarks/verification_benchmark.py --cases 500 --repeats 5 --seed 20260804
 
 ## Caveats
 

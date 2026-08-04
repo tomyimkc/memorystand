@@ -13,12 +13,13 @@ outcome reports:
 
 | | trust the caller | outcome-gated |
 |---|---:|---:|
-| Memories promoted without confirmation | **121** | **0** |
-| — of those, the metric actively contradicts | 111 | 0 |
-| — of those, no data existed to check against | 10 | 0 |
-| Precision | 59.7% | **100%** |
-| Recall on genuinely good outcomes | 100% | 98.9% |
+| Memories promoted without confirmation | **204** | **0** |
+| Precision | 59.2% | **100%** |
+| Recall on genuinely good outcomes | 100% | 98.6% |
 | Model calls | 0 | 0 |
+
+Regenerated under five independent seeds the baseline lets through 197–229 unconfirmed
+memories at 54–61% precision; the gate lets through **zero every time**, at 98.0–99.3% recall.
 
 The 1.1% of recall given up is the honest price, and it is a knob
 (`MEMORYSTAND_EVIDENCE_TOLERANCE`) with a published trade-off curve rather than a hidden
