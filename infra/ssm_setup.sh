@@ -96,7 +96,7 @@ put_param() {
     --value "$value" \
     --description "$description" \
     --region "$REGION" \
-    "${overwrite_flag[@]}" \
+    "${overwrite_flag[@]+"${overwrite_flag[@]}"}" \
     >/dev/null
 
   if [[ "$exists" == 1 ]]; then

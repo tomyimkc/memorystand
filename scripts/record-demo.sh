@@ -102,7 +102,7 @@ beat_seconds() {
 if [[ "$LIST_ONLY" -eq 1 ]]; then
   echo "MemoryStand recording beats (docs/VIDEO.md has the exact narration):"
   echo
-  for entry in "${BEAT_TITLES[@]}"; do
+  for entry in "${BEAT_TITLES[@]+"${BEAT_TITLES[@]}"}"; do
     n="${entry%%:*}"; t="${entry#*:}"
     printf "  %-2s %-70s  ~%ss\n" "$n" "$t" "$(beat_seconds "$n")"
   done
@@ -292,7 +292,7 @@ beat1_admit() {
     countdown
     show_cmd "$PYTHON cli/memorystand.py remember --content \"...trips after 800ms...\" --entity checkout-api --key circuit_breaker_timeout_ms --value 800 --source runbook:checkout-resiliency"
   fi
-  run_step "${CLI[@]}" remember \
+  run_step "${CLI[@]+"${CLI[@]}"}" remember \
     --content "checkout-api's circuit breaker to the payments gateway trips after 800ms of sustained p99 latency, per the resiliency runbook." \
     --entity checkout-api --key circuit_breaker_timeout_ms --value 800 \
     --source runbook:checkout-resiliency
@@ -306,7 +306,7 @@ beat2_slack() {
     countdown
     show_cmd "$PYTHON cli/memorystand.py remember --content \"...300ms after a recent change.\" --entity checkout-api --key circuit_breaker_timeout_ms --value 300 --source slack"
   fi
-  run_step "${CLI[@]}" remember \
+  run_step "${CLI[@]+"${CLI[@]}"}" remember \
     --content "Someone in #incidents Slack says checkout-api's breaker now trips at 300ms after a recent change." \
     --entity checkout-api --key circuit_breaker_timeout_ms --value 300 \
     --source slack
@@ -320,7 +320,7 @@ beat3_human_corrects() {
     countdown
     show_cmd "$PYTHON cli/memorystand.py remember --content \"Alice confirms... trips at 500ms...\" --entity checkout-api --key circuit_breaker_timeout_ms --value 500 --source human:alice"
   fi
-  run_step "${CLI[@]}" remember \
+  run_step "${CLI[@]+"${CLI[@]}"}" remember \
     --content "Alice (on-call lead) confirms after the 2026-07 tuning pass: checkout-api's circuit breaker to the payments gateway trips at 500ms, not 800ms and not 300ms. This is authoritative." \
     --entity checkout-api --key circuit_breaker_timeout_ms --value 500 \
     --source human:alice
@@ -344,14 +344,14 @@ beat4_alert_decide() {
     countdown
     show_cmd "$PYTHON cli/memorystand.py recall --query \"checkout-api circuit breaker timeout gateway latency incident\""
   fi
-  run_step "${CLI[@]}" recall --query "checkout-api circuit breaker timeout gateway latency incident"
+  run_step "${CLI[@]+"${CLI[@]}"}" recall --query "checkout-api circuit breaker timeout gateway latency incident"
 
   # The two calls below use --json so the full (unabbreviated) memory_id and
   # decision_id can be captured for the next beats. That means bypassing the
   # CLI's own colourised table for these two lines only; the summary below is
   # printed by hand instead, matching scripts/demo.sh's own step 4.
   local remember_json
-  remember_json="$("${CLI[@]}" remember --json \
+  remember_json="$("${CLI[@]+"${CLI[@]}"}" remember --json \
     --content "Proposed action: temporarily raise checkout-api's circuit breaker timeout to 1200ms while the payments gateway p99 latency spike (INC-7734) is ongoing, to reduce false-positive trips." \
     --entity checkout-api --key last_incident_action --value breaker_timeout_raised_to_1200ms_temp \
     --source agent:memorystand-oncall --task-id "$TASK_ID")"
@@ -362,11 +362,11 @@ beat4_alert_decide() {
   fi
 
   local consulted_ids
-  consulted_ids="$("${CLI[@]}" recall --json \
+  consulted_ids="$("${CLI[@]+"${CLI[@]}"}" recall --json \
     --query "checkout-api circuit breaker timeout gateway latency incident" | jq -r '[.[].memory_id] | join(",")')"
 
   local decide_json
-  decide_json="$("${CLI[@]}" decide --json \
+  decide_json="$("${CLI[@]+"${CLI[@]}"}" decide --json \
     --action raise_circuit_breaker_timeout \
     --rationale "p99 latency spike on the payments gateway (INC-7734); temporarily raising checkout-api's breaker timeout to cut false trips while the gateway recovers." \
     --query "checkout-api circuit breaker timeout gateway latency incident" \
@@ -390,7 +390,7 @@ beat5_grant_standing() {
     countdown
     show_cmd "$PYTHON cli/memorystand.py confirm --decision-id ${DECISION_ID:+$(short "$DECISION_ID")} --outcome success --source pagerduty --ref INC-7734"
   fi
-  run_step "${CLI[@]}" confirm \
+  run_step "${CLI[@]+"${CLI[@]}"}" confirm \
     --decision-id "$DECISION_ID" \
     --outcome success --source pagerduty --ref INC-7734
   if [[ "$QUIET" -eq 0 ]]; then gate_after 5; fi
@@ -403,7 +403,7 @@ beat6_cross_examine() {
     countdown
     show_cmd "$PYTHON cli/memorystand.py cross-examine --decision-id $(short "$DECISION_ID")"
   fi
-  run_step "${CLI[@]}" cross-examine --decision-id "$DECISION_ID"
+  run_step "${CLI[@]+"${CLI[@]}"}" cross-examine --decision-id "$DECISION_ID"
   if [[ "$QUIET" -eq 0 ]]; then gate_after 6; fi
 }
 
@@ -474,7 +474,7 @@ if [[ -n "$ONLY_BEAT" ]]; then
   QUIET=0
   "${BEAT_FUNCS[$ONLY_BEAT]}"
 else
-  for f in "${BEAT_FUNCS[@]}"; do
+  for f in "${BEAT_FUNCS[@]+"${BEAT_FUNCS[@]}"}"; do
     QUIET=0
     "$f"
   done

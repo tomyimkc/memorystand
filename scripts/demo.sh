@@ -136,13 +136,13 @@ for t in tool_audit agent_decisions belief_snapshots agent_memories; do
 done
 echo "cleared agent_memories, agent_decisions, belief_snapshots, tool_audit for $DEMO_TENANT"
 
-"${CLI[@]}" remember --content "redis-session's cache uses an LRU eviction policy, per the caching runbook." \
+"${CLI[@]+"${CLI[@]}"}" remember --content "redis-session's cache uses an LRU eviction policy, per the caching runbook." \
   --entity redis-session --key cache_eviction_policy --value lru \
   --source runbook:redis-config >/dev/null
-"${CLI[@]}" remember --content "auth-gateway issues tokens with a 3600 second TTL, per the auth runbook." \
+"${CLI[@]+"${CLI[@]}"}" remember --content "auth-gateway issues tokens with a 3600 second TTL, per the auth runbook." \
   --entity auth-gateway --key token_ttl_seconds --value 3600 \
   --source runbook:auth-config >/dev/null
-"${CLI[@]}" remember --content "notification-worker retries failed sends with exponential backoff, per the notification runbook." \
+"${CLI[@]+"${CLI[@]}"}" remember --content "notification-worker retries failed sends with exponential backoff, per the notification runbook." \
   --entity notification-worker --key retry_backoff_strategy --value exponential \
   --source runbook:notif-config >/dev/null
 echo "seeded 3 unrelated background memories (redis-session, auth-gateway, notification-worker)"
@@ -154,7 +154,7 @@ pause
 banner "1. Admit a runbook fact"
 say "A runbook says how checkout-api's circuit breaker to the payments gateway is tuned."
 
-"${CLI[@]}" remember \
+"${CLI[@]+"${CLI[@]}"}" remember \
   --content "checkout-api's circuit breaker to the payments gateway trips after 800ms of sustained p99 latency, per the resiliency runbook." \
   --entity checkout-api --key circuit_breaker_timeout_ms --value 800 \
   --source runbook:checkout-resiliency
@@ -170,7 +170,7 @@ say "NOTE: the CLI's held-for-review message below always reads \"sources rank e
 say "that phrasing is imprecise (this case is lower-authority, not tied); see"
 say "ARCHITECTURE.md's Known Limits. The verdict itself -- held, not admitted -- is correct."
 
-"${CLI[@]}" remember \
+"${CLI[@]+"${CLI[@]}"}" remember \
   --content "Someone in #incidents Slack says checkout-api's breaker now trips at 300ms after a recent change." \
   --entity checkout-api --key circuit_breaker_timeout_ms --value 300 \
   --source slack
@@ -184,7 +184,7 @@ say "The on-call lead signs off on the real number. A human source outranks a ru
 say "so this one is admitted AND replaces (supersedes) the original -- it is not deleted,"
 say "it is corrected. The Slack claim from step 2 is still just held; nobody has confirmed it."
 
-"${CLI[@]}" remember \
+"${CLI[@]+"${CLI[@]}"}" remember \
   --content "Alice (on-call lead) confirms after the 2026-07 tuning pass: checkout-api's circuit breaker to the payments gateway trips at 500ms, not 800ms and not 300ms. This is authoritative." \
   --entity checkout-api --key circuit_breaker_timeout_ms --value 500 \
   --source human:alice
@@ -207,23 +207,23 @@ banner "4. An alert arrives: the agent recalls, then proposes an action"
 say "INC-7734: the payments gateway's p99 latency is spiking. Before doing anything,"
 say "the on-call agent recalls what it currently believes about checkout-api's breaker."
 
-"${CLI[@]}" recall --query "checkout-api circuit breaker timeout gateway latency incident"
+"${CLI[@]+"${CLI[@]}"}" recall --query "checkout-api circuit breaker timeout gateway latency incident"
 pause
 
 say "It proposes a temporary mitigation -- written down as its own memory, produced by"
 say "the decision it is about to record, not merely consulted by it (see backend/decisions.py)."
 
-REMEMBER_JSON="$("${CLI[@]}" remember --json \
+REMEMBER_JSON="$("${CLI[@]+"${CLI[@]}"}" remember --json \
   --content "Proposed action: temporarily raise checkout-api's circuit breaker timeout to 1200ms while the payments gateway p99 latency spike (INC-7734) is ongoing, to reduce false-positive trips." \
   --entity checkout-api --key last_incident_action --value breaker_timeout_raised_to_1200ms_temp \
   --source agent:standing-oncall --task-id "$TASK_ID")"
 ACTION_MEMORY_ID="$(jq -r '.memory_id' <<<"$REMEMBER_JSON")"
 echo "  proposed action memory: $ACTION_MEMORY_ID  (verdict: $(jq -r '.verdict' <<<"$REMEMBER_JSON"))"
 
-CONSULTED_IDS="$("${CLI[@]}" recall --json \
+CONSULTED_IDS="$("${CLI[@]+"${CLI[@]}"}" recall --json \
   --query "checkout-api circuit breaker timeout gateway latency incident" | jq -r '[.[].memory_id] | join(",")')"
 
-DECIDE_JSON="$("${CLI[@]}" decide --json \
+DECIDE_JSON="$("${CLI[@]+"${CLI[@]}"}" decide --json \
   --action raise_circuit_breaker_timeout \
   --rationale "p99 latency spike on the payments gateway (INC-7734); temporarily raising checkout-api's breaker timeout to cut false trips while the gateway recovers." \
   --query "checkout-api circuit breaker timeout gateway latency incident" \
@@ -247,7 +247,7 @@ say "The incident resolves. This is the one call in the whole system that is all
 say "to change what is trusted, and backend/trust.py imports no model client at all --"
 say "assert_no_model_calls() checks that on this exact path, not just in a docstring."
 
-"${CLI[@]}" confirm \
+"${CLI[@]+"${CLI[@]}"}" confirm \
   --decision-id "$DECISION_ID" \
   --outcome success --source pagerduty --ref INC-7734
 echo
@@ -261,7 +261,7 @@ banner "6. Cross-examine: what the agent knew then, vs. what it knows now"
 say "SET TRANSACTION AS OF SYSTEM TIME pins a whole read to the instant this decision"
 say "was made, so this is a replay of the agent's actual belief state, not a guess at it."
 
-"${CLI[@]}" cross-examine --decision-id "$DECISION_ID"
+"${CLI[@]+"${CLI[@]}"}" cross-examine --decision-id "$DECISION_ID"
 pause
 
 # ---------------------------------------------------------------------------
