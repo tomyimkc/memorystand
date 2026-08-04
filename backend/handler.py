@@ -72,7 +72,7 @@ from backend import audit, db, decisions, embeddings, memory, replay, trust  # n
 # ---------------------------------------------------------------------------
 # Configuration: kill switch and shared secret, each SSM-backed with an env override.
 # ---------------------------------------------------------------------------
-AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
+AWS_REGION = os.environ.get("AWS_REGION", "us-west-2")
 
 KILL_SWITCH_ENV = "MEMORYSTAND_KILL_SWITCH"
 KILL_SWITCH_SSM_PARAM = os.environ.get("MEMORYSTAND_KILL_SWITCH_SSM_PARAM", "/memorystand/kill_switch")
@@ -85,7 +85,7 @@ SHARED_SECRET_HEADER = "x-memorystand-secret"
 WRITE_PATHS = {"/ingest", "/decide", "/confirm_outcome"}
 SECRET_GATED_PATHS = {"/ingest", "/decide"}
 
-CHAT_MODEL_ID = os.environ.get("MEMORYSTAND_CHAT_MODEL", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
+CHAT_MODEL_ID = os.environ.get("MEMORYSTAND_CHAT_MODEL", "amazon.nova-lite-v1:0")
 
 SSM_CACHE_TTL_S = 60.0
 _ssm_client: Any = None

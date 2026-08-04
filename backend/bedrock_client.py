@@ -32,9 +32,9 @@ from typing import Any
 # this must have requested access to whichever model id ends up here (Bedrock
 # console -> Model access), or every call raises ModelUnavailable and the agent
 # loop runs on its deterministic fallback instead.
-DEFAULT_MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+DEFAULT_MODEL_ID = "amazon.nova-lite-v1:0"
 MODEL_ID = os.environ.get("MEMORYSTAND_CHAT_MODEL", DEFAULT_MODEL_ID)
-REGION = os.environ.get("AWS_REGION", "us-east-1")
+REGION = os.environ.get("AWS_REGION", "us-west-2")
 
 # Retry policy for throttling only. Small and bounded for the same reason
 # backend/db.py's retry budget is small: a caller waiting on this is an on-call

@@ -56,7 +56,7 @@ REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." >/dev/null 2>&1 && pwd)"
 
 APP_NAME="${APP_NAME:-memorystand}"
 BRANCH_NAME="${BRANCH_NAME:-main}"
-REGION="${REGION:-${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}}"
+REGION="${REGION:-${AWS_REGION:-${AWS_DEFAULT_REGION:-us-west-2}}}"
 FRONTEND_DIR="$REPO_ROOT/frontend"
 BUILD_DIR="$REPO_ROOT/infra/build"
 ZIP_PATH="$BUILD_DIR/frontend.zip"

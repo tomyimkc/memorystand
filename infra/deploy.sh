@@ -30,7 +30,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." >/dev/null 2>&1 && pwd)"
 
 FUNCTION_NAME="${FUNCTION_NAME:-memorystand}"
-REGION="${REGION:-${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}}"
+REGION="${REGION:-${AWS_REGION:-${AWS_DEFAULT_REGION:-us-west-2}}}"
 ROLE_NAME="${ROLE_NAME:-memorystand-lambda-role}"
 RUNTIME="python3.13"
 HANDLER="backend.handler.handler"
@@ -273,7 +273,7 @@ print(json.dumps({"Variables": {
     "MEMORYSTAND_KILL_SWITCH_SSM_PARAM": "/memorystand/kill_switch",
     "MEMORYSTAND_SHARED_SECRET_SSM_PARAM": "/memorystand/shared_secret",
     "MEMORYSTAND_EMBED_MODEL": "amazon.titan-embed-text-v2:0",
-    "MEMORYSTAND_CHAT_MODEL": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "MEMORYSTAND_CHAT_MODEL": "amazon.nova-lite-v1:0",
 }}))
 ' > "$ENV_FILE" )
 unset DSN_VALUE

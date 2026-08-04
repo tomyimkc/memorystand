@@ -25,7 +25,7 @@ REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." >/dev/null 2>&1 && pwd)"
 USER_NAME="${USER_NAME:-memorystand-deployer}"
 POLICY_NAME="${POLICY_NAME:-MemoryStandDeployer}"
 PROFILE="${PROFILE:-memorystand}"
-REGION="${REGION:-us-east-1}"
+REGION="${REGION:-us-west-2}"
 POLICY_SRC="$REPO_ROOT/infra/deployer_policy.json"
 
 say() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }

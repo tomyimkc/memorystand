@@ -26,7 +26,7 @@
 set -euo pipefail
 
 FUNCTION_NAME="${FUNCTION_NAME:-memorystand}"
-REGION="${REGION:-${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}}"
+REGION="${REGION:-${AWS_REGION:-${AWS_DEFAULT_REGION:-us-west-2}}}"
 INTERVAL_MINUTES="${INTERVAL_MINUTES:-5}"
 END_DATE="${END_DATE:-2026-09-16T00:00:00Z}"  # one day past the 2026-09-15 requirement, as a buffer
 

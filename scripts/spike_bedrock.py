@@ -24,9 +24,9 @@ try:
 except ImportError:  # pragma: no cover - operator-facing message
     sys.exit("boto3 not installed. Run: pip install -r requirements.txt")
 
-REGION = os.environ.get("AWS_REGION", "us-east-1")
+REGION = os.environ.get("AWS_REGION", "us-west-2")
 EMBED_MODEL = os.environ.get("EMBED_MODEL_ID", "amazon.titan-embed-text-v2:0")
-CHAT_MODEL = os.environ.get("CHAT_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
+CHAT_MODEL = os.environ.get("CHAT_MODEL_ID", "amazon.nova-lite-v1:0")
 EMBED_DIMS = 512
 
 results: list[dict] = []
