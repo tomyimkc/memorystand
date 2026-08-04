@@ -1,7 +1,12 @@
 -- MemoryStand — agentic memory on CockroachDB
 -- SPDX-License-Identifier: Apache-2.0
 --
--- Apply with:  cockroach sql --url "$COCKROACH_DSN" -f db/schema.sql
+-- Apply with:  python db/migrate.py --schema
+--
+-- (`cockroach sql --url ... -f ...` also works, but only if you have the CockroachDB CLI
+-- installed -- a plain developer machine has neither it nor psql. db/migrate.py uses the
+-- psycopg2 driver this repo already depends on. Locally, ./scripts/run-local.sh applies
+-- this for you via the CLI inside the container.)
 --          or: psql "$COCKROACH_DSN" -f db/schema.sql
 --
 -- DESIGN NOTE (the one that matters): there is ONE memory table, not a

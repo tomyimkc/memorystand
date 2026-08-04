@@ -31,7 +31,12 @@
 --
 -- Idempotent: re-running it is a no-op that succeeds.
 --
---   cockroach sql --url "$MEMORYSTAND_DSN" -f db/migrations/001_attested_trust_tier.sql
+--   python db/migrate.py            # applies anything unapplied, idempotent
+--   python db/migrate.py --status   # show what is applied and what is pending
+--
+-- Do NOT reach for `cockroach sql -f` here: that requires the CockroachDB CLI, which is not
+-- installed on a plain developer machine (neither is psql). db/migrate.py uses psycopg2,
+-- which this repo already depends on and already uses to reach the same cluster.
 
 ALTER TABLE agent_memories DROP CONSTRAINT IF EXISTS check_trust_tier;
 

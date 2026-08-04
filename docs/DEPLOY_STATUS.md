@@ -190,8 +190,12 @@ the code that writes `attested` is therefore **committed but not deployed**. Tha
 deliberate: the live `CHECK` constraint still permits only three tiers, so a Lambda deployed
 ahead of the migration would fail every `/confirm_outcome` that lands on the attested path.
 
-    cockroach sql --url "$MEMORYSTAND_DSN" -f db/migrations/001_attested_trust_tier.sql
+    python db/migrate.py                 # idempotent; --status to see what is pending
     REGION=us-west-2 ./infra/deploy.sh
+
+(An earlier version of this page said to run `cockroach sql --url ... -f ...`. That was wrong:
+it needs the CockroachDB CLI, which is not installed on a plain macOS machine, and neither is
+`psql`. `db/migrate.py` uses the psycopg2 driver the repo already depends on.)
 
 The migration rewrites one CHECK constraint. No rows are read, written or moved, every existing
 value stays valid, and re-running it is a no-op.
@@ -204,11 +208,18 @@ degrades exactly as designed rather than failing open:
     AccessDenied when calling GetMetricStatistics
 
 `unavailable` grants nothing, so an unchecked claim cannot reach `verified`. The policy JSON in
-`infra/iam_policy.json` and `infra/deployer_policy.json` is already updated; applying it is:
+`infra/iam_policy.json` and `infra/deployer_policy.json` is already updated. Applying it:
 
-    AWS_PROFILE=memorystand ./infra/update_deployer_policy.sh
-    aws iam put-role-policy --role-name memorystand-lambda-role \
-      --policy-name memorystand-lambda --policy-document file://infra/iam_policy.json
+    # 1. Deployer user (local testing). Needs an ADMIN credential, by design -- the scoped
+    #    deploy identity refuses to widen its own permissions, since an identity that can
+    #    widen itself is not scoped.
+    AWS_PROFILE=default ./infra/update_deployer_policy.sh
+
+    # 2. Lambda execution role. Do NOT hand-apply infra/iam_policy.json with put-role-policy:
+    #    it is a TEMPLATE containing ACCOUNT_ID placeholders and human-readable comment keys
+    #    that IAM rejects with MalformedPolicyDocument. deploy.sh renders it (substituting
+    #    ACCOUNT_ID/REGION, stripping non-IAM keys) and applies it for you.
+    REGION=us-west-2 ./infra/deploy.sh
 
 ## Not yet run
 
