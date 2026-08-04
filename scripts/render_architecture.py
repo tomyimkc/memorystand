@@ -443,7 +443,8 @@ def main() -> int:
         width=3,
         dashed=True,
     )
-    edge_label(draw, (950, 197), "evidence.verify() BEFORE recording", color=bf.GREEN, size=14, max_width=420)
+    edge_label(draw, (600, 1042), "evidence.verify() runs BEFORE anything is recorded",
+               color=bf.GREEN, size=14, max_width=430)
 
     # Gray lane -> CockroachDB (short, reads only).
     poly_arrow(draw, [(900, 862), (930, 862)], bf.MUTED, width=3)
