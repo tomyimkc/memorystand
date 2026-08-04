@@ -330,6 +330,126 @@
     margin-right: auto;
   }
 
+  /* ---------- panel 3: trust ladder explainer ---------- */
+  .trust-ladder {
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    padding: 14px 16px;
+    background: var(--panel-2);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .trust-ladder h3 {
+    margin: 0;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+  }
+  .trust-ladder-rungs {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  .trust-ladder-rungs .rung { display: flex; flex-direction: column; gap: 6px; }
+  .trust-ladder-rungs .rung p { margin: 0; font-size: 12px; color: var(--text-dim); }
+  .trust-ladder-note {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: var(--text-faint);
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+  }
+  @media (max-width: 720px) {
+    .trust-ladder-rungs { grid-template-columns: 1fr 1fr; }
+  }
+
+  /* ---------- panel 3: resulting trust tier + verification ---------- */
+  .verification-block {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border-light);
+    background: var(--panel-2);
+  }
+  .verification-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .verification-row .verification-explain {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-dim);
+    flex: 1 1 260px;
+  }
+  .verification-status-line { margin: 0; font-size: 13px; color: var(--text-dim); }
+  .verification-status-line b { color: var(--text); font-weight: 600; }
+
+  .observed-claimed {
+    display: flex;
+    gap: 14px;
+  }
+  .observed-claimed .oc-item {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    padding: 10px 14px;
+    text-align: center;
+  }
+  .observed-claimed.mismatch .oc-item { border-color: var(--red); }
+  .observed-claimed.match .oc-item { border-color: var(--green); }
+  .observed-claimed .oc-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-faint);
+    margin-bottom: 4px;
+  }
+  .observed-claimed .oc-value {
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  /* ---------- panel 3: deliberate refusal (HTTP 400, gate working as designed) ---------- */
+  /* Deliberately NOT .error-banner styling -- a refusal here is the feature succeeding, not a
+     broken request, so it gets its own green-bordered treatment instead of a flat red banner. */
+  .refusal-banner {
+    border: 1px solid var(--green);
+    background: var(--panel-2);
+    border-radius: 8px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .refusal-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .refusal-explain { margin: 0; font-size: 13px; color: var(--text-dim); }
+  .refusal-detail {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text);
+    font-family: var(--mono);
+    background: var(--panel);
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    padding: 8px 10px;
+  }
+
   .tier-columns {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -561,6 +681,35 @@
       Report what actually happened. Memories that decision <em>produced</em> are promoted
       or demoted based on that outcome — never on a model's opinion of itself.
     </p>
+
+    <div class="trust-ladder" id="trustLadder">
+      <h3>The trust ladder</h3>
+      <div class="trust-ladder-rungs">
+        <div class="rung">
+          <span class="badge gray">unconfirmed</span>
+          <p>No outcome has been reported for this decision yet.</p>
+        </div>
+        <div class="rung">
+          <span class="badge amber">attested</span>
+          <p>An outcome was reported, but this deployment could not independently re-check it
+            (no PagerDuty token; a human sign-off has no system of record to re-query).</p>
+        </div>
+        <div class="rung">
+          <span class="badge green">verified</span>
+          <p>Re-queried against the external system of record (CloudWatch), which agreed.</p>
+        </div>
+        <div class="rung">
+          <span class="badge red">disputed</span>
+          <p>The reported outcome was a rollback, a false positive, or the external system of
+            record disagreed with the claim.</p>
+        </div>
+      </div>
+      <p class="trust-ladder-note">
+        Verification is delayed by design: confirming an outcome moments after a decision often
+        lands on <b>unavailable</b> because the "after" metric window is still in the future —
+        that is expected behaviour, not a broken feature.
+      </p>
+    </div>
 
     <div class="model-calls-hero" id="modelCallsHero">
       <div class="mc-label">model calls on this path</div>

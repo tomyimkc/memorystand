@@ -167,7 +167,8 @@
   function trustBadgeClass(tier) {
     if (tier === "verified") return "green";
     if (tier === "disputed") return "red";
-    return "amber"; // unconfirmed / unknown
+    if (tier === "attested") return "amber";
+    return "gray"; // unconfirmed / unknown / no trust tier yet
   }
 
   function verdictBadgeClass(verdict) {
@@ -193,6 +194,54 @@
     if (outcome === "rollback") return "rolled back";
     if (outcome === "false_positive") return "false positive";
     return outcome || "unknown";
+  }
+
+  function trustTierLabel(tier) {
+    if (tier === "verified") return "verified";
+    if (tier === "attested") return "attested";
+    if (tier === "disputed") return "disputed";
+    return "unconfirmed";
+  }
+
+  // The attested-vs-verified distinction is the whole point of this project -- this is the
+  // one sentence of explanation that travels with the badge every place it is shown.
+  function trustTierExplain(tier) {
+    if (tier === "verified") return "Re-queried against the external system of record (CloudWatch), which agreed.";
+    if (tier === "attested") return "An outcome was reported, but this deployment could not independently re-check it -- no PagerDuty token, or a human sign-off with no system of record to re-query.";
+    if (tier === "disputed") return "The reported outcome was a rollback or a false positive.";
+    return "No outcome has been reported for this decision yet.";
+  }
+
+  function verificationStatusLabel(status) {
+    if (status === "confirmed") return "confirmed";
+    if (status === "contradicted") return "contradicted";
+    if (status === "unavailable") return "unavailable";
+    if (status === "not_verifiable") return "not verifiable";
+    return status || "unknown";
+  }
+
+  function verificationStatusExplain(status) {
+    if (status === "confirmed") return "The external system of record was re-queried and agreed with the claim.";
+    if (status === "contradicted") return "The external system of record was re-queried and disagreed with the claim.";
+    if (status === "unavailable") return "The external system of record could not be reached, or had no datapoints in the relevant window yet -- expected right after a fresh decision.";
+    if (status === "not_verifiable") return "This source (PagerDuty / human) has no machine-checkable record here to re-query.";
+    return "";
+  }
+
+  // Shared by the success path (verification.status === "confirmed") and the refusal path
+  // (HTTP 400, verification.status === "contradicted") -- both show the same claimed-vs-observed
+  // pair, just with a different border colour (see .observed-claimed.match / .mismatch in CSS).
+  function observedClaimedRow(v, modifierClass) {
+    return el("div", { class: "observed-claimed" + (modifierClass ? " " + modifierClass : "") }, [
+      el("div", { class: "oc-item" }, [
+        el("div", { class: "oc-label", text: "claimed" }),
+        el("div", { class: "oc-value", text: fmtNum(v.claimed, 2) }),
+      ]),
+      el("div", { class: "oc-item" }, [
+        el("div", { class: "oc-label", text: "observed" }),
+        el("div", { class: "oc-value", text: fmtNum(v.observed, 2) }),
+      ]),
+    ]);
   }
 
   function memoryRow(m) {
@@ -687,6 +736,14 @@
       confirmSubmit.disabled = false;
       confirmSubmit.textContent = "Confirm outcome";
 
+      // HTTP 400 from this route is not a broken request -- it is the outcome gate refusing
+      // to record a claim the external system of record disagrees with. Render it as a
+      // deliberate, first-class outcome instead of falling through to the generic error banner.
+      if (result.status === 400 && result.data) {
+        renderConfirmRefusal(confirmResult, result);
+        return;
+      }
+
       if (!result.ok || !result.data) {
         renderError(confirmResult, result);
         return;
@@ -736,6 +793,43 @@
     ]);
     confirmResult.appendChild(columns);
 
+    // -------- resulting trust tier + verification -- the feature this whole submission
+    // leads with, so it gets its own prominent block rather than living only in "raw response".
+    var tier = data.trust_tier;
+    var tierRow = el("div", { class: "verification-row" }, [
+      el("span", {
+        class: "badge " + trustBadgeClass(tier),
+        text: tier ? trustTierLabel(tier) : "no memories produced",
+      }),
+      el("p", {
+        class: "verification-explain",
+        text: tier
+          ? trustTierExplain(tier)
+          : "This decision did not produce any memories, so there is nothing to promote or demote.",
+      }),
+    ]);
+
+    var verificationChildren = [tierRow];
+    var verification = data.verification || null;
+    if (verification && verification.status) {
+      verificationChildren.push(
+        el("p", { class: "verification-status-line" }, [
+          document.createTextNode("verification: "),
+          el("b", { text: verificationStatusLabel(verification.status) }),
+          document.createTextNode(" — " + verificationStatusExplain(verification.status)),
+        ])
+      );
+      if (verification.observed !== undefined || verification.claimed !== undefined) {
+        verificationChildren.push(
+          observedClaimedRow(verification, verification.status === "confirmed" ? "match" : "")
+        );
+      }
+      if (verification.detail) {
+        verificationChildren.push(el("p", { class: "verification-status-line", text: verification.detail }));
+      }
+    }
+    confirmResult.appendChild(el("div", { class: "verification-block" }, verificationChildren));
+
     // The model-calls-hero itself lives outside confirmResult (see #modelCallsHero in
     // index.html) so it stays visible -- showing the honest static "0" -- through every
     // loading/error state this panel goes through, instead of only appearing after a
@@ -743,6 +837,42 @@
     updateModelCallsHero(data.model_calls, data);
 
     confirmResult.appendChild(rawJsonBlock(data));
+  }
+
+  // A 400 here means the outcome gate did its job: the claimed result did not match what the
+  // external system of record shows, so nothing was promoted and nothing was recorded. This
+  // gets its own renderer -- reusing the generic red .error-banner would make the single most
+  // persuasive state this dashboard can show look like a broken request instead of the feature
+  // working as designed.
+  function renderConfirmRefusal(container, result) {
+    clear(container);
+
+    var data = result.data || {};
+    var verification = data.verification || {};
+    var detail = data.detail || data.error || verification.detail || errorMessage(result);
+
+    container.appendChild(
+      el("div", { class: "refusal-banner" }, [
+        el("div", { class: "refusal-title" }, [
+          el("span", { class: "badge red", text: "refused" }),
+          el("span", { text: "the outcome gate rejected this claim" }),
+        ]),
+        el("p", {
+          class: "refusal-explain",
+          text:
+            "This is the trust-promotion feature working as designed: the claimed outcome did " +
+            "not match the external system of record, so the request was refused with HTTP 400 " +
+            "and nothing was recorded. Nothing to fix here.",
+        }),
+        el("p", { class: "refusal-detail", text: String(detail) }),
+      ])
+    );
+
+    if (verification.observed !== undefined || verification.claimed !== undefined) {
+      container.appendChild(observedClaimedRow(verification, "mismatch"));
+    }
+
+    container.appendChild(rawJsonBlock(data));
   }
 
   // ============================================================ Panel 4
