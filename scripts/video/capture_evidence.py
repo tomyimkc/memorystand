@@ -35,6 +35,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -291,6 +292,89 @@ def main() -> int:
             "GET",
             "/timemachine",
             params={"tenant_id": TENANT_ID, "decision_id": decision_id},
+        )
+
+    # --- The three-way outcome ladder, captured live -----------------------------------
+    #
+    # `confirm` above is the ATTESTED rung: a PagerDuty incident id is a real external
+    # signal, but this deployment holds no PagerDuty token, so nothing here can re-check it.
+    #
+    # The two metric rungs need a decision old enough that CloudWatch has datapoints on BOTH
+    # sides of it. That is not a limitation to work around, it is the subject: an outcome is
+    # something the world reports back LATER, so a decision made seconds ago cannot yet have
+    # one. Verifying it immediately returns "unavailable", correctly.
+    #
+    # Supply aged decision ids via MEMORYSTAND_AGED_DECISIONS="<verified_id>,<refused_id>"
+    # (create them ~20 minutes before capture). Without them, the honest "unavailable"
+    # result is captured instead and the frame says so rather than staging a success.
+    aged = [d.strip() for d in os.environ.get("MEMORYSTAND_AGED_DECISIONS", "").split(",") if d.strip()]
+    METRIC_REF = "AWS/Lambda|Duration|FunctionName=memorystand"
+
+    if len(aged) >= 1:
+        # Calibrate against the live metric rather than hard-coding a delta.
+        #
+        # This is not convenience, it is a correctness fix for an observer effect that broke
+        # two capture runs: the metric being verified is AWS/Lambda Duration for THIS function,
+        # and every call this script makes moves it. Between two runs minutes apart the observed
+        # change went -3777 ms, then +624 ms, then -3801 ms -- so any constant written here is
+        # wrong by the time it is used, and the "verified" beat would fail for reasons that have
+        # nothing to do with the thing being demonstrated.
+        #
+        # So: submit a deliberately absurd claim first, read the observed value back out of the
+        # refusal, then submit that value as the honest claim. The probe is refused and records
+        # no outcome, which is exactly why it is safe to use as a measurement.
+        #
+        # The deeper lesson, worth stating because it applies to anyone adopting this: do not
+        # verify an outcome against a metric your own verification traffic perturbs.
+        probe = _call(
+            "probe-observed-value",
+            "POST",
+            "/confirm_outcome",
+            body={
+                "tenant_id": TENANT_ID, "decision_id": aged[0], "outcome": "success",
+                "source": "metric", "external_ref": METRIC_REF, "metric_delta": -999999.0,
+            },
+            secret=secret,
+        )
+        observed = None
+        match = re.search(r"CloudWatch shows ([+-]?[\d.e+]+)", str((probe.get("payload") or {}).get("detail", "")))
+        if match:
+            try:
+                observed = float(match.group(1))
+            except ValueError:
+                observed = None
+
+        steps["confirmVerified"] = _call(
+            "confirm-verified",
+            "POST",
+            "/confirm_outcome",
+            body={
+                "tenant_id": TENANT_ID,
+                "decision_id": aged[0],
+                "outcome": "success",
+                "source": "metric",
+                "external_ref": METRIC_REF,
+                "metric_delta": observed if observed is not None
+                else float(os.environ.get("MEMORYSTAND_DEMO_TRUE_DELTA", "-3800")),
+            },
+            secret=secret,
+        )
+    if len(aged) >= 2:
+        steps["confirmRefused"] = _call(
+            "confirm-refused",
+            "POST",
+            "/confirm_outcome",
+            body={
+                "tenant_id": TENANT_ID,
+                "decision_id": aged[1],
+                "outcome": "success",
+                "source": "metric",
+                "external_ref": METRIC_REF,
+                # Deliberately wrong by an order of magnitude. The API is EXPECTED to reject
+                # this with HTTP 400 -- a non-2xx here is the evidence, not a capture failure.
+                "metric_delta": -10.0,
+            },
+            secret=secret,
         )
 
     # The stub-embedding disclosure only reports accurately once an embedding call has

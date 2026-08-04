@@ -126,6 +126,22 @@ It is genuinely adjacent and arrives at the same instinct from the other end: Go
 promotion at **write** time by analysing the agent's own traces; MemoryStand governs it at
 **outcome** time by re-querying something outside the agent entirely. Neither subsumes the other.
 
+Stated as a list, because these are the specific concessions:
+
+- **Retracting a belief when its justification fails is 1979 work** — Doyle's Truth Maintenance
+  System. This project does not claim that idea as its own.
+- **Outcome-indexed retention is 1986 work** — CHEF and case-based reasoning kept cases indexed
+  by whether the plan actually worked, and tuned index strength on observed success or failure.
+- **The trust ladder is not new either** — NELL split candidate from promoted beliefs above a
+  0.9 threshold from 2010, though on its own extractors corroborating each other.
+- **Trust updating only on observed outcomes is 2003 work** — EigenTrust and the Beta reputation
+  system, applied to peers rather than to memories.
+- **Bitemporal replay and write-time contradiction checking are shipped features elsewhere** —
+  Zep/Graphiti, Mem0, MemTX. Here they are implementation choices, not novelty claims.
+- **What is unusual is the enforcement**: a 2026 memory system that refuses to let a model grade
+  its own memory, re-checks the external signal before it counts, and fails a runtime guard if a
+  model client becomes reachable even one import away.
+
 ### So what is actually different: who is allowed to decide a memory is true
 
 Every shipping agent-memory system answers "is this memory still true?" by asking a model.
