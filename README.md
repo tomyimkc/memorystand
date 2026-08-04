@@ -1,8 +1,30 @@
 # MemoryStand — memory that has to stand up
 
-> **A memory layer for on-call AI agents that refuses to call a belief "verified" until something
-> outside the model corroborates it** — a resolved incident, a recovered metric, a human's
-> sign-off. Never the model grading its own work.
+> **Every shipping agent-memory system asks a model whether its own memory is true.**
+> MemoryStand asks CloudWatch — and refuses the promotion when CloudWatch disagrees.
+
+A memory layer for on-call AI agents that will not call a belief `verified` until something
+outside the model corroborates it: a recovered metric, re-queried and checked; a resolved
+incident; a human's sign-off. The promotion path makes **zero model calls**, and that is
+enforced by a runtime guard, not by a convention.
+
+Measured, not asserted — [benchmarks/verification.md](benchmarks/verification.md), 300 labelled
+outcome reports:
+
+| | trust the caller | outcome-gated |
+|---|---:|---:|
+| Memories promoted without confirmation | **121** | **0** |
+| — of those, the metric actively contradicts | 111 | 0 |
+| — of those, no data existed to check against | 10 | 0 |
+| Precision | 59.7% | **100%** |
+| Recall on genuinely good outcomes | 100% | 98.9% |
+| Model calls | 0 | 0 |
+
+The 1.1% of recall given up is the honest price, and it is a knob
+(`MEMORYSTAND_EVIDENCE_TOLERANCE`) with a published trade-off curve rather than a hidden
+default. The failure being caught is not fraud — it is an engineer who restarts a service at
+02:00, sees the page clear, and reports in good faith that the restart fixed it when the metric
+never moved. That is how a memory store fills up with true-sounding operational folklore.
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
@@ -14,8 +36,12 @@ route (`GET /` returns 404 by design — it is not a page to open in a browser).
 
 **Submission for the [CockroachDB × AWS Hackathon — Build with Agentic Memory](https://cockroachdb-ai.devpost.com).**
 
-> 🚧 **Under construction.** Started 2026-08-03. See [SPIKE-RESULTS.md](SPIKE-RESULTS.md) for what
-> has actually been verified so far, including what failed.
+> **Built 2026-08-03 onward.** Deployed and verified against real AWS and CockroachDB Cloud —
+> see [docs/DEPLOY_STATUS.md](docs/DEPLOY_STATUS.md), which records the failures found along the
+> way (an SQL injection, a cross-tenant trust escalation, an ungated trust-granting route, a
+> fail-open kill switch) alongside the fixes. Two things are pending and named there: a schema
+> migration and a CloudWatch IAM grant, without which `verified` is unreachable in production.
+> [SPIKE-RESULTS.md](SPIKE-RESULTS.md) has the earlier spike record, including what failed.
 
 ---
 
