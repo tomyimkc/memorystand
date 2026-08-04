@@ -25,7 +25,7 @@ flowchart TB
         Health["GET /health<br/>db version, GC window, kill-switch, embedding provenance"]
     end
 
-    Bedrock["Amazon Bedrock<br/>Converse (Claude 3.5 Haiku) for reasoning<br/>Titan Text Embeddings V2 for embeddings"]
+    Bedrock["Amazon Bedrock<br/>Converse (Claude Haiku 4.5) for reasoning<br/>Titan Text Embeddings V2 for embeddings"]
     CRDB[("CockroachDB<br/>agent_memories - agent_decisions<br/>belief_snapshots - tool_audit")]
     SSM["AWS SSM Parameter Store<br/>/memorystand/dsn (SecureString)<br/>/memorystand/shared_secret (SecureString)<br/>/memorystand/kill_switch (String)"]
     CW["Amazon CloudWatch Logs<br/>/aws/lambda/memorystand, 14-day retention<br/>one structured JSON line per request"]

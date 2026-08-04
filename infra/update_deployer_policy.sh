@@ -35,8 +35,34 @@ ACCOUNT_ID="$(python3 -c 'import json,sys;print(json.load(sys.stdin)["Account"])
 echo "    account $ACCOUNT_ID as $(python3 -c 'import json,sys;print(json.load(sys.stdin)["Arn"])' <<<"$ident")"
 
 POLICY_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/${POLICY_NAME}"
-aws iam get-policy --policy-arn "$POLICY_ARN" >/dev/null 2>&1 \
-  || die "no policy $POLICY_ARN. Run ./infra/bootstrap_deployer.sh first."
+
+# The deployer identity deliberately cannot read or modify its own policy -- that is the
+# whole point of least privilege, and it means THIS script must run as an admin credential.
+# Detect that case by name so the error is the real one rather than a downstream mystery.
+CALLER_ARN="$(python3 -c 'import json,sys;print(json.load(sys.stdin)["Arn"])' <<<"$ident")"
+if [[ "$CALLER_ARN" == *":user/${USER_NAME:-memorystand-deployer}" ]]; then
+  cat >&2 <<EOF
+You are running as the scoped deploy identity ($CALLER_ARN).
+
+By design it cannot change its own permissions -- an identity that can widen itself is not
+really scoped. Re-run with an admin credential instead:
+
+    AWS_PROFILE=default ./infra/update_deployer_policy.sh
+  or
+    unset AWS_PROFILE && aws login && ./infra/update_deployer_policy.sh
+
+Nothing was changed.
+EOF
+  exit 1
+fi
+
+# Separate "not allowed to look" from "not there". Conflating them sends you to bootstrap
+# for a policy that already exists, where you then hit a different denial entirely.
+probe="$(aws iam get-policy --policy-arn "$POLICY_ARN" 2>&1)" || true
+case "$probe" in
+  *NoSuchEntity*) die "no policy $POLICY_ARN. Run ./infra/bootstrap_deployer.sh first." ;;
+  *AccessDenied*) die "this credential cannot read $POLICY_ARN. Use an admin credential (AWS_PROFILE=default)." ;;
+esac
 
 RENDERED="$(mktemp)"; trap 'rm -f "$RENDERED"' EXIT
 python3 - "$POLICY_SRC" "$ACCOUNT_ID" > "$RENDERED" <<'PY'

@@ -28,6 +28,10 @@ Before anything else, in the AWS console:
 
 ## 2. Create the deployer user
 
+**Shortcut:** `./infra/bootstrap_deployer.sh` does sections 2–4 for you, given any admin
+credential (`aws login` is easiest). It writes the secret straight into `~/.aws/credentials`
+without ever printing it. The manual path below is the same thing by hand.
+
 IAM → Users → **Create user**
 
 - User name: `memorystand-deployer`
@@ -41,9 +45,13 @@ paste `infra/deployer_policy.json` with `ACCOUNT_ID` replaced by your 12-digit a
 Name it `MemoryStandDeployer`. Attach it to the user.
 
 > The policy grants Lambda/Amplify/SSM/scheduler actions scoped to resources named
-> `memorystand*`, plus `bedrock:InvokeModel` on exactly two named model ARNs. It cannot touch
-> anything else in your account. If a script later fails on a missing permission, widen it
-> deliberately — the failure message names the action.
+> `memorystand*`, plus `bedrock:InvokeModel` on one named inference profile and its two
+> underlying foundation models. It cannot touch anything else in your account.
+>
+> It also, deliberately, cannot modify **itself** — no `iam:CreatePolicy`, no
+> `iam:GetPolicy`. An identity that can widen its own permissions is not really scoped.
+> Changing it therefore requires an admin credential:
+> `AWS_PROFILE=default ./infra/update_deployer_policy.sh`
 
 ## 3. Create the access key
 
@@ -79,7 +87,7 @@ becomes possible — nothing before it will work, and nothing after it needs the
 Bedrock models are opt-in per account. Console → **Amazon Bedrock** → **Model access** →
 **Modify model access**, and enable:
 
-- **Anthropic Claude 3.5 Haiku** — the agent's reasoning
+- **Anthropic Claude Haiku 4.5** — the agent's reasoning
 - **Amazon Titan Text Embeddings V2** — every memory's embedding
 
 For these models approval is usually immediate. Verify from the terminal:

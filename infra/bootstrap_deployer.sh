@@ -55,6 +55,20 @@ echo "    as      $CALLER_ARN"
 case "$CALLER_ARN" in
   *":root") echo "    note: this is the ROOT identity. Fine for this one bootstrap step;" ;
             echo "          the whole point of what follows is that you stop using it." ;;
+  *":user/$USER_NAME")
+    cat >&2 <<EOF
+
+You are already running AS $USER_NAME, so this has been bootstrapped before.
+
+That identity intentionally cannot create IAM policies or users -- it is scoped to
+memorystand* resources and nothing else. Re-running here can only fail.
+
+  - To CHANGE its permissions:  AWS_PROFILE=default ./infra/update_deployer_policy.sh
+  - To rebuild it from nothing: unset AWS_PROFILE && aws login && ./infra/bootstrap_deployer.sh
+
+Nothing was changed.
+EOF
+    exit 1 ;;
 esac
 
 say "Rendering the policy for account $ACCOUNT_ID"
@@ -145,7 +159,7 @@ Done. Use the scoped profile from here on:
 
 Still to do by hand in the console (nothing can automate them):
   1. Enable MFA on the root account, then stop using root.
-  2. Bedrock -> Model access -> enable Claude 3.5 Haiku and Titan Text Embeddings V2.
+  2. Bedrock -> Model access -> enable Claude Haiku 4.5 and Titan Text Embeddings V2.
   3. Billing -> Budgets -> a \$20 monthly cost budget. Bedrock has no free tier and the
      demo endpoint is public.
 
