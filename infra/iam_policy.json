@@ -1,11 +1,18 @@
 {
+  "Comment": [
+    "",
+    "kms:Decrypt uses Resource '*': Resource * is safe here ONLY because of the kms:ViaService condition below: it permits decrypt exclusively through SSM in this region. Pinning the AWS-managed key ARN would require kms:DescribeKey at deploy time, which is a wider permission than the thing it protects."
+  ],
   "Version": "2012-10-17",
   "Id": "standing-lambda-execution-policy",
   "Statement": [
     {
       "Sid": "InvokeNamedBedrockModelsOnly",
       "Effect": "Allow",
-      "Action": ["bedrock:InvokeModel", "bedrock:Converse"],
+      "Action": [
+        "bedrock:InvokeModel",
+        "bedrock:Converse"
+      ],
       "Resource": [
         "arn:aws:bedrock:REGION:ACCOUNT_ID:inference-profile/amazon.nova-lite-v1:0",
         "arn:aws:bedrock:*::foundation-model/amazon.nova-lite-v1:0",
@@ -25,7 +32,7 @@
       "Sid": "DecryptMemoryStandSecureStringsOnly",
       "Effect": "Allow",
       "Action": "kms:Decrypt",
-      "Resource": "KMS_KEY_ARN_PLACEHOLDER",
+      "Resource": "*",
       "Condition": {
         "StringEquals": {
           "kms:ViaService": "ssm.REGION.amazonaws.com"

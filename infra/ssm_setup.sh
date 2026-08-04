@@ -127,7 +127,7 @@ put_param "/memorystand/kill_switch" "String" "off" \
   "MemoryStand: 'on' makes the Lambda refuse writes without a redeploy (operator kill switch)"
 
 echo
-echo "Done. Parameter names created/updated under /standing/ (values were never printed):"
+echo "Done. Parameter names created/updated under /memorystand/ (values were never printed):"
 echo "  /memorystand/dsn"
 echo "  /memorystand/shared_secret"
 echo "  /memorystand/kill_switch"

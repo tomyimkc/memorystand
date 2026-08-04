@@ -91,9 +91,13 @@ def index(doc):
     out = {}
     for st in doc.get("Statement", []):
         a, r = st.get("Action", []), st.get("Resource", [])
+        # Conditions matter as much as actions and resources: the KMS statement is
+        # scoped BY CONDITION to one region, so a region change is invisible unless
+        # conditions are diffed too. That nearly shipped unnoticed.
         out[st.get("Sid", "<no-sid>")] = (
             frozenset(a if isinstance(a, list) else [a]),
             frozenset(r if isinstance(r, list) else [r]),
+            json.dumps(st.get("Condition", {}), sort_keys=True),
         )
     return out
 
@@ -101,9 +105,9 @@ live, new = index(load(sys.argv[1])), index(load(sys.argv[2]))
 
 changed = False
 for sid in sorted(set(live) | set(new)):
-    la, lr = live.get(sid, (frozenset(), frozenset()))
-    na, nr = new.get(sid, (frozenset(), frozenset()))
-    if (la, lr) == (na, nr):
+    la, lr, lc = live.get(sid, (frozenset(), frozenset(), "{}"))
+    na, nr, nc = new.get(sid, (frozenset(), frozenset(), "{}"))
+    if (la, lr, lc) == (na, nr, nc):
         continue
     changed = True
     label = "+ new statement" if sid not in live else "- removed" if sid not in new else "~ changed"
@@ -119,6 +123,8 @@ for sid in sorted(set(live) | set(new)):
         print("        + resource  %s" % x)
     for x in sorted(lr - nr):
         print("        - resource  %s" % x)
+    if lc != nc:
+        print("        ~ condition %s  ->  %s" % (lc, nc))
 
 if not changed:
     print("    (identical -- nothing to apply)")

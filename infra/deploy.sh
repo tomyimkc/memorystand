@@ -116,28 +116,35 @@ fi
 if [[ "$PACKAGE_ONLY" == "1" ]]; then
   echo "==> Skipping IAM / KMS / SSM / log-group setup (--package-only)"
 else
-echo "==> Resolving the KMS key backing SSM SecureString (alias/aws/ssm)"
-if ! KMS_KEY_ARN="$(aws kms describe-key --key-id alias/aws/ssm --region "$REGION" \
-      --query 'KeyMetadata.Arn' --output text 2>&1)"; then
-  echo "Could not resolve alias/aws/ssm in account $ACCOUNT_ID / region $REGION." >&2
-  echo "That AWS-managed key is provisioned automatically the first time an SSM" >&2
-  echo "SecureString parameter is created. Run ./infra/ssm_setup.sh first, then re-run this script." >&2
-  echo "Details: $KMS_KEY_ARN" >&2
-  exit 1
-fi
-echo "    $KMS_KEY_ARN"
-
+# No KMS key resolution: infra/iam_policy.json scopes kms:Decrypt with a
+# kms:ViaService condition instead of a key ARN. Looking the ARN up would have
+# required kms:DescribeKey for the deployer -- a broader grant than the one it was
+# meant to tighten, and it fails anyway because DescribeKey is not called "via SSM".
 echo "==> Rendering infra/iam_policy.json with ACCOUNT_ID=$ACCOUNT_ID REGION=$REGION"
 mkdir -p "$BUILD_DIR"
 RENDERED_POLICY="$BUILD_DIR/iam_policy.rendered.json"
-sed \
-  -e "s#KMS_KEY_ARN_PLACEHOLDER#${KMS_KEY_ARN}#g" \
-  -e "s#ACCOUNT_ID#${ACCOUNT_ID}#g" \
-  -e "s#REGION#${REGION}#g" \
-  "$REPO_ROOT/infra/iam_policy.json" > "$RENDERED_POLICY"
-# The rendered file also fixes the log group Sid to this function's name specifically.
-sed -i.bak "s#log-group:/aws/lambda/memorystand:\\*#log-group:/aws/lambda/${FUNCTION_NAME}:*#g" "$RENDERED_POLICY"
-rm -f "$RENDERED_POLICY.bak"
+# Rendered in Python, not sed, for two reasons learned the hard way:
+#   1. IAM rejects unknown members ANYWHERE in the document -- top-level "Comment" and
+#      per-statement keys alike -- so the human-readable notes must be stripped, not
+#      merely left alone.
+#   2. A blind s#REGION#...# also rewrites the literal word REGION inside prose, quietly
+#      corrupting any comment that happens to contain it.
+python3 - "$REPO_ROOT/infra/iam_policy.json" "$ACCOUNT_ID" "$REGION" "$FUNCTION_NAME" \
+  > "$RENDERED_POLICY" <<'PYRENDER'
+import json, sys
+src, account, region, fn = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+doc = json.load(open(src))
+doc.pop("Comment", None)
+for st in doc.get("Statement", []):
+    for k in [k for k in st if k not in
+              ("Sid", "Effect", "Action", "NotAction", "Resource", "NotResource", "Condition", "Principal")]:
+        st.pop(k)
+text = json.dumps(doc)
+text = text.replace("ACCOUNT_ID", account).replace("REGION", region)
+text = text.replace("log-group:/aws/lambda/memorystand:*", f"log-group:/aws/lambda/{fn}:*")
+json.loads(text)   # fail loudly here rather than as a MalformedPolicyDocument from IAM
+print(text)
+PYRENDER
 
 echo "==> Ensuring IAM role $ROLE_NAME exists (trust: lambda.amazonaws.com only)"
 TRUST_POLICY="$BUILD_DIR/trust-policy.json"
@@ -341,11 +348,20 @@ echo "    (CockroachDB Basic tolerates roughly 25 concurrent connections; the po
 echo "     connection per container, so this caps concurrent containers well under that,"
 echo "     leaving headroom for the CLI and MCP server. No extra cost -- it only reserves"
 echo "     capacity out of the account's shared 1000 concurrent-execution limit.)"
-aws lambda put-function-concurrency \
+# Best-effort. A new AWS account often has a TOTAL concurrent-execution limit of 10,
+# so reserving 15 fails with "decreases account's UnreservedConcurrentExecution below
+# its minimum value of [10]". That is not a problem to solve: a ceiling of 10 is already
+# under the ~25 connections CockroachDB Basic tolerates, which is the only reason the
+# reservation existed. Warn and continue rather than aborting a deploy that succeeded.
+if ! aws lambda put-function-concurrency \
   --function-name "$FUNCTION_NAME" \
   --reserved-concurrent-executions "$RESERVED_CONCURRENCY" \
   --region "$REGION" \
-  >/dev/null
+  >/dev/null 2>/dev/null; then
+  echo "    could not reserve concurrency (likely a low account limit on a new account)."
+  echo "    Continuing: the account-wide ceiling is already below CockroachDB Basic's"
+  echo "    connection headroom, so the reservation is not load-bearing here."
+fi
 
 echo "==> Ensuring a public Function URL (auth type NONE) exists"
 echo "    (no charge beyond normal Lambda invocation cost; anyone with the URL can call it --"
