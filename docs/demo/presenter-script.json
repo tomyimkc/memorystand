@@ -1,114 +1,165 @@
 {
   "schemaVersion": 1,
-  "title": "MemoryStand — presenter cut",
-  "targetDurationSeconds": 90,
+  "title": "MemoryStand \u2014 presenter cut",
+  "targetDurationSeconds": 84.6,
   "candidateOnly": true,
   "canClaimAGI": false,
   "presenterDisclosure": "Presenter synthesised from the author's own photograph.",
   "_notes": [
-    "Six beats at 15s. Under the 3:00 hackathon ceiling with room to spare, and short enough",
-    "that a judge finishes it. The evidence-deck cut (docs/demo/video-timeline.json) stays in",
-    "the repo as the long-form artifact; this is the submission video.",
+    "MEASURED CONSTRAINTS of grok image_to_video, established before building on them:",
+    "  - a clip is ~6.04s at 24fps, 496x608 PORTRAIT. Duration is not controllable, so the",
+    "    script is written in SHOTS of <=20 spoken words rather than 15s beats.",
+    "  - it generates AUDIO as well as video, and if you do not give it words IT INVENTS THEM.",
+    "    An early test with a motion-only prompt came back saying 'So, to summarize the key",
+    "    findings from our analysis, we can conclude that the results are promising' -- generic",
+    "    filler nobody wrote. Shipping that would put invented words in the author's mouth, in a",
+    "    project whose entire argument is that unverified claims must be labelled.",
+    "  - given the exact line it reproduces it verbatim. So every shot passes its line, and",
+    "    make_clips.py TRANSCRIBES each generated clip and fails the shot if it drifts.",
     "",
-    "Every number spoken here is measured and traceable:",
-    "  beat 2 numbers  -> benchmarks/poisoning.md",
-    "  beat 3 numbers  -> benchmarks/poisoning.md (control_honest column)",
-    "  beat 4 recall   -> live /decide response, README quotes it verbatim",
-    "  beat 5 refusal  -> live /confirm_outcome, 400 with the CloudWatch delta",
-    "  beat 6 prior art-> README 'Prior art, stated honestly'",
-    "",
-    "Word counts are sized for ~145 wpm, which is the rate the narration renders at. A 15s",
-    "beat is ~36 words; going over means the clip runs past its own panel animation."
+    "Every number spoken is traceable:",
+    "  shots 3a/3b -> benchmarks/poisoning.md (incl. the control_honest column)",
+    "  shot 4b     -> backend/trust.py, assert_no_model_calls",
+    "  shots 5a/5b -> live /decide response, quoted verbatim in README",
+    "  shot 6a     -> README 'Prior art, stated honestly'"
   ],
   "beats": [
     {
       "id": "01-claim",
-      "seconds": 15,
+      "seconds": 12.1,
       "presenterSide": "LEFT",
       "panel": "headline",
-      "speech": "Every shipping agent-memory system asks a model whether its own memory is true. Mem0, Zep, AWS AgentCore. MemoryStand asks CloudWatch instead — and refuses the promotion when CloudWatch disagrees.",
       "panelData": {
         "kind": "quote",
         "lines": [
-          "Mem0 — an LLM picks ADD/UPDATE/DELETE. No confidence score at all.",
-          "Zep — an LLM sets validity windows. \"Model-inferred, not authoritative.\"",
-          "AWS AgentCore — extraction and consolidation are LLM prompts. No verification API."
+          "Mem0 \u2014 an LLM picks ADD/UPDATE/DELETE. No confidence score at all.",
+          "Zep \u2014 an LLM sets validity windows. \"Model-inferred, not authoritative.\"",
+          "AWS AgentCore \u2014 extraction and consolidation are LLM prompts. No verification API."
         ],
         "footnote": "Each line cites the vendor's own docs or issue tracker. See README."
-      }
+      },
+      "shots": [
+        "Every shipping agent-memory system asks a model whether its own memory is true. Mem0, Zep, AWS AgentCore.",
+        "MemoryStand asks CloudWatch instead \u2014 and refuses the promotion when CloudWatch disagrees."
+      ]
     },
     {
       "id": "02-the-failure",
-      "seconds": 15,
+      "seconds": 18.1,
       "presenterSide": "RIGHT",
       "panel": "story",
-      "speech": "The failure isn't fraud. It's an engineer at two in the morning who restarts a service, watches the page clear, and reports in good faith that the restart fixed it — when the metric never moved.",
       "panelData": {
         "kind": "story",
         "headline": "Nobody lied. The memory is still false.",
         "body": "And it will be handed to an agent at the next incident. That is how a memory store fills with true-sounding operational folklore."
-      }
+      },
+      "shots": [
+        "The failure isn't fraud.",
+        "It's an engineer at two in the morning who restarts a service, watches the page clear, and reports in good faith that the restart fixed it \u2014",
+        "when the metric never moved."
+      ]
     },
     {
       "id": "03-measured",
-      "seconds": 15,
+      "seconds": 12.1,
       "presenterSide": "LEFT",
       "panel": "table",
-      "speech": "So we measured it. Six hundred poisoned claims, plus honest ones as a control. Trusting the caller admits every attack. An LLM judge blocks every attack — and every honest claim too.",
       "panelData": {
         "kind": "table",
-        "columns": ["", "attacks → verified", "honest admitted"],
-        "rows": [
-          ["trust the caller", "100%", "100%"],
-          ["LLM-as-judge", "0%", "0%"],
-          ["outcome-gated", "0%", "100%"]
+        "columns": [
+          "",
+          "attacks \u2192 verified",
+          "honest admitted"
         ],
-        "footnote": "benchmarks/poisoning.md · judge arm run live, not estimated"
-      }
+        "rows": [
+          [
+            "trust the caller",
+            "100%",
+            "100%"
+          ],
+          [
+            "LLM-as-judge",
+            "0%",
+            "0%"
+          ],
+          [
+            "outcome-gated",
+            "0%",
+            "100%"
+          ]
+        ],
+        "footnote": "benchmarks/poisoning.md \u00b7 judge arm run live, not estimated"
+      },
+      "shots": [
+        "So we measured it. Six hundred poisoned claims, plus honest ones as a control. Trusting the caller admits every attack.",
+        "An LLM judge blocks every attack \u2014 and every honest claim too."
+      ]
     },
     {
       "id": "04-only-one-works",
-      "seconds": 15,
+      "seconds": 18.1,
       "presenterSide": "RIGHT",
       "panel": "callout",
-      "speech": "A defence that refuses all evidence stops all poisoning, and is useless. Only the outcome gate tells the two apart — and it does it with zero model calls on the promotion path.",
       "panelData": {
         "kind": "callout",
         "big": "0",
         "label": "model calls on the promotion path",
         "body": "backend/trust.py imports no model client, and a runtime guard fails if one becomes reachable even one import away."
-      }
+      },
+      "shots": [
+        "A defence that refuses all evidence stops all poisoning, and is useless.",
+        "Only the outcome gate tells the two apart \u2014",
+        "and it does it with zero model calls on the promotion path."
+      ]
     },
     {
       "id": "05-trust-beats-proximity",
-      "seconds": 15,
+      "seconds": 12.1,
       "presenterSide": "LEFT",
       "panel": "recall",
-      "speech": "Here it is deciding. Two candidate memories: the nearer one is unconfirmed, the further one was checked against CloudWatch. Proximity said one thing. Trust said another. Trust won.",
       "panelData": {
         "kind": "recall",
         "rows": [
-          {"id": "22207f6e", "distance": "0.414", "tier": "unconfirmed", "value": "restart_service", "chosen": false},
-          {"id": "fb3b7ec0", "distance": "0.565", "tier": "verified", "value": "scale_up", "chosen": true}
+          {
+            "id": "22207f6e",
+            "distance": "0.414",
+            "tier": "unconfirmed",
+            "value": "restart_service",
+            "chosen": false
+          },
+          {
+            "id": "fb3b7ec0",
+            "distance": "0.565",
+            "tier": "verified",
+            "value": "scale_up",
+            "chosen": true
+          }
         ],
-        "footnote": "live /decide · reasoning_source: fallback_memory · model_calls: 0"
-      }
+        "footnote": "live /decide \u00b7 reasoning_source: fallback_memory \u00b7 model_calls: 0"
+      },
+      "shots": [
+        "Here it is deciding. Two candidate memories: the nearer one is unconfirmed, the further one was checked against CloudWatch.",
+        "Proximity said one thing. Trust said another. Trust won."
+      ]
     },
     {
       "id": "06-close",
-      "seconds": 15,
+      "seconds": 12.1,
       "presenterSide": "RIGHT",
       "panel": "close",
-      "speech": "None of this is a new idea. Doyle's truth maintenance systems retracted beliefs in 1979. What's unusual is a 2026 memory system that won't let a model grade its own memory — and enforces it.",
       "panelData": {
         "kind": "close",
         "lines": [
-          "Doyle, JTMS, 1979 — a belief holds only while its justification does",
-          "CHEF, 1986 — cases retained by whether the plan actually worked",
-          "NELL, 2010 — a candidate/promoted trust ladder"
+          "Doyle, JTMS, 1979 \u2014 a belief holds only while its justification does",
+          "CHEF, 1986 \u2014 cases retained by whether the plan actually worked",
+          "NELL, 2010 \u2014 a candidate/promoted trust ladder"
         ],
-        "footnote": "github.com/tomyimkc/memorystand · candidateOnly · no AGI claim"
-      }
+        "footnote": "github.com/tomyimkc/memorystand \u00b7 candidateOnly \u00b7 no AGI claim"
+      },
+      "shots": [
+        "None of this is a new idea. Doyle's truth maintenance systems retracted beliefs in 1979.",
+        "What's unusual is a 2026 memory system that won't let a model grade its own memory \u2014 and enforces it."
+      ]
     }
   ]
 }
