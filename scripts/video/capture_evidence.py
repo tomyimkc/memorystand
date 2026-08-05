@@ -326,12 +326,24 @@ def main() -> int:
         #
         # The deeper lesson, worth stating because it applies to anyone adopting this: do not
         # verify an outcome against a metric your own verification traffic perturbs.
+        # The probe needs its OWN decision to burn.
+        #
+        # It used to reuse aged[0]: an absurd claim was CONTRADICTED, which trust.grant_standing
+        # refuses outright without recording anything, so the decision stayed available for the
+        # real call. Adding the entity check changed that -- an entity mismatch is
+        # ENTITY_MISMATCH, not CONTRADICTED, and that path RECORDS the outcome as attested. The
+        # probe silently consumed the decision it was measuring for, and the next call failed
+        # with "already has outcome".
+        #
+        # A measurement that mutates its subject is not a measurement. It gets its own decision
+        # now; supply a third id in MEMORYSTAND_AGED_DECISIONS.
+        probe_decision = aged[2] if len(aged) >= 3 else aged[0]
         probe = _call(
             "probe-observed-value",
             "POST",
             "/confirm_outcome",
             body={
-                "tenant_id": TENANT_ID, "decision_id": aged[0], "outcome": "success",
+                "tenant_id": TENANT_ID, "decision_id": probe_decision, "outcome": "success",
                 "source": "metric", "external_ref": METRIC_REF, "metric_delta": -999999.0,
             },
             secret=secret,

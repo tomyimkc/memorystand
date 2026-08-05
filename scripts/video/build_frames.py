@@ -636,20 +636,27 @@ def _scene_04_agent_decides(scene: dict[str, Any], evidence: dict[str, Any], des
     text(
         draw,
         (122, y + 6),
-        "Ranking shown is the real live response. Under the stub, distance is not\nsemantic -- see the disclosure at right.",
+        "Ranking shown is the real live response. Under the stub, distance is\nLEXICAL -- token overlap, not meaning. See the disclosure at right.",
         size=16,
         color=FAINT,
         max_width=870,
     )
 
-    rounded_panel(image, (1070, 260, 1840, 700), fill=PANEL_2, outline=RED)
-    y = text(draw, (1102, 286), "DISCLOSURE  ·  STUB EMBEDDINGS", size=20, color=RED, bold=True) + 22
+    decide = step_payload(evidence, "decide")
+    src = str(decide.get("reasoning_source") or "unknown")
+    calls = decide.get("model_calls")
+    rounded_panel(image, (1070, 200, 1840, 250), fill=PANEL_2, outline=GREEN)
+    text(draw, (1102, 214), f"REASONED BY: {src}   ·   model_calls: {calls}",
+         size=20, color=GREEN, bold=True, max_width=690)
+
+    rounded_panel(image, (1070, 268, 1840, 700), fill=PANEL_2, outline=RED)
+    y = text(draw, (1102, 292), "DISCLOSURE  ·  STUB EMBEDDINGS", size=20, color=RED, bold=True) + 22
     y = (
         text(
             draw,
             (1102, y),
-            "This AWS account has near-zero Bedrock quota. Embeddings fall back to a "
-            "deterministic local stub -- a hash of the text, with no semantic meaning.",
+            "This AWS account has zero Bedrock quota. Embeddings fall back to a local "
+            "stub: lexical token overlap, not semantic. Synonyms will not match.",
             size=24,
             color=INK,
             bold=True,
@@ -661,7 +668,7 @@ def _scene_04_agent_decides(scene: dict[str, Any], evidence: dict[str, Any], des
         text(
             draw,
             (1102, y),
-            "Latency numbers stay real. Relevance ranking does not.",
+            "Latency stays real. Ranking matches wording, not meaning.",
             size=22,
             color=AMBER,
             bold=True,
