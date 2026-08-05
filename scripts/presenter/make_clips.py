@@ -56,9 +56,80 @@ RECEIPT = REPO_ROOT / "docs" / "demo" / "presenter-verification.json"
 # Below this, the clip is not saying what it was told and must not be used.
 MIN_SIMILARITY = 0.72
 
+# MEASURED, NOT ASSUMED. image_to_video accepts 6 or 10 seconds and nothing else -- asking for 15
+# returns "`duration` must be either 6 or 10 seconds. Got 15." and generates nothing.
+#
+# 10 is the right choice and not merely the bigger one. The generator fits the line it is given
+# into the clip it is given, so a 6s clip forces the delivery: the 6s shots came back at 3.3-4.7
+# words per second, which sounds hurried because it is. At 10s a 20-word line lands in 8.54s --
+# 2.34 words/sec, an unhurried presenting pace -- and each beat becomes one or two long takes
+# instead of three short ones, so the cut stops chopping sentences in half.
+#
+# The corollary is that shot length is now a WRITING constraint: 19-23 words per shot. Fewer and
+# the clip pads with silence; more and he starts racing the clock again.
+DURATION_S = 10
+WORDS_MIN, WORDS_MAX = 17, 24
+
+
+# Spoken numbers and written numbers are the same claim. The transcriber always returns digits.
+_UNITS = {
+    "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+    "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13,
+    "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17, "eighteen": 18,
+    "nineteen": 19, "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60,
+    "seventy": 70, "eighty": 80, "ninety": 90,
+}
+_SCALES = {"hundred": 100, "thousand": 1000, "million": 1_000_000}
+
+
+def _numberise(tokens: list[str]) -> list[str]:
+    """Fold runs of number words into the digits the transcriber would have written.
+
+    WHY THIS EXISTS. Two shots were failed by the similarity gate for saying exactly what they
+    were told. The script asks for "minus fourteen thousand two hundred"; whisper hears
+    "minus 14,200". Word-for-word that is four tokens against one, and the shot scored 0.53
+    against a 0.72 threshold -- a false alarm on a perfect take.
+
+    The tempting fix is to lower the threshold. That would be the wrong fix: it buys these two
+    shots by weakening the gate against the failure it exists to catch, which is the generator
+    inventing whole sentences. Comparing numbers AS NUMBERS keeps the gate exactly as strict
+    about words while making it correct about digits.
+    """
+    out: list[str] = []
+    total = chunk = 0
+    active = False
+
+    def flush():
+        nonlocal total, chunk, active
+        if active:
+            out.append(str(total + chunk))
+        total = chunk = 0
+        active = False
+
+    for token in tokens:
+        if token in _UNITS:
+            chunk += _UNITS[token]
+            active = True
+        elif token in _SCALES and active:
+            scale = _SCALES[token]
+            if scale == 100:
+                chunk *= 100
+            else:
+                total += (chunk or 1) * scale
+                chunk = 0
+        elif token == "and" and active:
+            continue  # "two hundred and five" is one number, not a conjunction
+        else:
+            flush()
+            out.append(token)
+    flush()
+    return out
+
 
 def _norm(text: str) -> list[str]:
-    return re.sub(r"[^a-z0-9 ]", " ", text.lower()).split()
+    # Strip digit-group separators first so "14,200" is one token, not two.
+    text = re.sub(r"(?<=\d),(?=\d)", "", text.lower())
+    return _numberise(re.sub(r"[^a-z0-9 ]", " ", text).split())
 
 
 def similarity(asked: str, heard: str) -> float:
@@ -83,18 +154,39 @@ def transcribe(mp4: Path) -> str:
     return " ".join(s.text for s in segs).strip()
 
 
-def generate(beat_id: str, index: int, line: str, base: Path, out: Path) -> bool:
+def last_frame(mp4: Path, out: Path) -> Path:
+    """Grab a clip's final frame, to seed the next shot from.
+
+    This is what makes a two-shot beat play as one continuous take. Both shots share a first
+    frame with the previous shot's last, so the cut between them lands on identical pixels and
+    reads as a single unbroken take rather than a jump cut on the same framing -- which is what
+    the six-second version looked like, and it looked like an editing mistake.
+    """
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-sseof", "-0.05", "-i", str(mp4),
+         "-update", "1", "-frames:v", "1", "-y", str(out)],
+        check=True,
+    )
+    if not out.is_file():
+        raise SystemExit(f"could not extract the last frame of {mp4.name}")
+    return out
+
+
+def generate(line: str, source: Path, out: Path) -> bool:
     prompt = (
         f"Call image_to_video exactly once with:\n"
-        f"  image: {base}\n"
+        f"  image: {source}\n"
+        f"  duration: {DURATION_S}\n"
         f'  prompt: The man speaks these exact words to camera, and says nothing else: "{line}" '
         f"Natural lip sync to those words, subtle head motion and blinking, relaxed and "
         f"credible. The camera holds still and the background stays unchanged.\n\n"
         f"Save the result to exactly: {out}\n"
         f"Do not create any other assets."
     )
-    subprocess.run(["grok", "-p", prompt], capture_output=True, text=True, timeout=900)
-    return out.is_file()
+    subprocess.run(["grok", "-p", prompt], capture_output=True, text=True, timeout=1500)
+    # Never report success on the strength of the CLI's exit code alone -- an earlier render step
+    # in this pipeline printed "wrote" three times over an empty directory.
+    return out.is_file() and out.stat().st_size > 50_000
 
 
 def main() -> int:
@@ -118,7 +210,9 @@ def main() -> int:
         receipt = json.loads(RECEIPT.read_text()).get("shots", {})
 
     for beat in beats:
-        base = BASE_DIR / f"{beat['id']}.png"
+        # Beats may share a base frame -- the presenter only has to be composed left or right,
+        # and generating a fresh portrait per beat buys drift, not variety.
+        base = BASE_DIR / f"{beat.get('baseFrom', beat['id'])}.png"
         if not base.is_file():
             print(f"  {beat['id']}: no base frame -- run make_base_frames.sh first")
             missing += len(beat["shots"])
@@ -128,9 +222,21 @@ def main() -> int:
             out = CLIP_DIR / f"{beat['id']}-{i}.mp4"
             tag = f"{beat['id']}-{i}"
 
+            # A continuous beat seeds each shot after the first from its predecessor's last
+            # frame, so the whole beat plays as one take.
+            source = base
+            if i and beat.get("continuous", True):
+                previous = CLIP_DIR / f"{beat['id']}-{i - 1}.mp4"
+                if previous.is_file():
+                    source = last_frame(previous, CLIP_DIR / f"{beat['id']}-{i - 1}-last.png")
+
             if not out.is_file() and not args.verify_only:
-                print(f"==> {tag}: generating ({len(line.split())} words)")
-                if not generate(beat["id"], i, line, base, out):
+                words = len(line.split())
+                if not WORDS_MIN <= words <= WORDS_MAX:
+                    print(f"    {tag}: {words} words is outside {WORDS_MIN}-{WORDS_MAX} for a "
+                          f"{DURATION_S}s shot -- it will rush or pad. Rewrite the line.")
+                print(f"==> {tag}: generating ({words} words, {DURATION_S}s, from {source.name})")
+                if not generate(line, source, out):
                     print(f"    FAILED: {out} was not written")
                     missing += 1
                     continue
@@ -157,6 +263,13 @@ def main() -> int:
                 print(f"        asked: {line}")
                 print(f"        heard: {heard}")
                 print(f"        -> delete {out.name} and rerun; do NOT ship this shot")
+
+    # A full pass owns the whole receipt. Without this, shots from a previous cut of the script
+    # linger as passing entries for clips no longer in the film -- a receipt that vouches for
+    # footage nobody is shipping is worse than no receipt.
+    if not args.beat:
+        current = {f"{b['id']}-{i}" for b in beats for i in range(len(b["shots"]))}
+        receipt = {k: v for k, v in receipt.items() if k in current}
 
     RECEIPT.write_text(json.dumps(
         {"minSimilarity": MIN_SIMILARITY, "shots": dict(sorted(receipt.items()))}, indent=2

@@ -119,9 +119,13 @@ def draw_recall(draw, box, data):
         if chosen:
             bf.text(draw, (x1 - 250, y + 12), "CHOSEN", size=26, color=bf.GREEN, bold=True)
         y += 118
-    return bf.text(draw, (x0 + 34, y + 6),
-                   "The closer memory lost to the more trusted one.",
-                   size=30, color=bf.INK, bold=True, max_width=x1 - x0 - 68)
+    y = bf.text(draw, (x0 + 34, y + 6),
+                "The closer memory lost to the more trusted one.",
+                size=30, color=bf.INK, bold=True, max_width=x1 - x0 - 68)
+    if data.get("note"):
+        y = bf.text(draw, (x0 + 34, y + 26), data["note"], size=21, color=bf.MUTED,
+                    max_width=x1 - x0 - 68, spacing=6)
+    return y
 
 
 def draw_close(draw, box, data):
@@ -135,9 +139,69 @@ def draw_close(draw, box, data):
                    max_width=x1 - x0 - 68)
 
 
+def draw_schema(draw, box, data):
+    """The CockroachDB memory layer, as the actual DDL and the actual recall query.
+
+    Shown as code rather than paraphrased into a diagram, because "a vector column inside the
+    same relational table" is a claim a judge can check in one glance against db/schema.sql, and
+    a box-and-arrow drawing of it would not be.
+    """
+    x0, y0, x1, y1 = box
+    y = y0 + 34
+    colour = bf.INK
+    for line in data["code"]:
+        if not line:
+            y += 16
+            colour = bf.INK
+            continue
+        # An indented line continues the statement above it, so it keeps that statement's
+        # colour -- the index's column list is part of the VECTOR INDEX, not a new thought.
+        if not line.startswith(" "):
+            colour = bf.GREEN if line.split(" ")[0] in {"VECTOR", "WHERE", "ORDER"} else bf.INK
+        y = bf.text(draw, (x0 + 34, y), line, size=25, color=colour, mono=True,
+                    max_width=x1 - x0 - 68) + 8
+    return bf.text(draw, (x0 + 34, y + 26), data["note"], size=22, color=bf.MUTED,
+                   max_width=x1 - x0 - 68, spacing=6)
+
+
+def draw_admission(draw, box, data):
+    """Three real ingest receipts: what was written, and what the store did with it."""
+    x0, y0, x1, y1 = box
+    y = y0 + 36
+    for row in data["rows"]:
+        held = row["verdict"] != "accepted"
+        colour = bf.AMBER if held else bf.GREEN
+        bf.text(draw, (x0 + 34, y), row["source"], size=27, color=bf.INK, max_width=430)
+        bf.text(draw, (x0 + 470, y), row["value"], size=29, color=bf.INK, bold=True, mono=True)
+        bf.text(draw, (x0 + 610, y), row["verdict"], size=27, color=colour, bold=True)
+        y += 62
+    return bf.text(draw, (x0 + 34, y + 20), data["reason"], size=21, color=bf.MUTED,
+                   max_width=x1 - x0 - 68, spacing=6)
+
+
+def draw_oracle(draw, box, data):
+    """Two live confirm_outcome calls -- one the metric supports, one it does not."""
+    x0, y0, x1, y1 = box
+    bf.text(draw, (x0 + 34, y0 + 34), "claimed", size=20, color=bf.MUTED, bold=True)
+    bf.text(draw, (x0 + 300, y0 + 34), "CloudWatch", size=20, color=bf.MUTED, bold=True)
+    bf.text(draw, (x0 + 590, y0 + 34), "verdict", size=20, color=bf.MUTED, bold=True)
+    y = y0 + 82
+    for row in data["rows"]:
+        refused = row["verdict"] == "refused"
+        colour = bf.AMBER if refused else bf.GREEN
+        bf.text(draw, (x0 + 34, y), row["claimed"], size=30, color=bf.INK, bold=True, mono=True)
+        bf.text(draw, (x0 + 300, y), row["observed"], size=30, color=bf.INK, bold=True, mono=True)
+        bf.text(draw, (x0 + 590, y), f"{row['verdict']}  {row['status']}", size=28,
+                color=colour, bold=True)
+        y += 66
+    return bf.text(draw, (x0 + 34, y + 18), data["note"], size=22, color=bf.MUTED,
+                   max_width=x1 - x0 - 68, spacing=6)
+
+
 DRAW = {
     "quote": draw_quote, "story": draw_story, "table": draw_table,
     "callout": draw_callout, "recall": draw_recall, "close": draw_close,
+    "schema": draw_schema, "admission": draw_admission, "oracle": draw_oracle,
 }
 
 

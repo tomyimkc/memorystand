@@ -1,74 +1,140 @@
 {
-  "schemaVersion": 1,
-  "title": "MemoryStand \u2014 presenter cut",
-  "targetDurationSeconds": 84.6,
+  "schemaVersion": 2,
+  "title": "MemoryStand — presenter cut",
+  "targetDurationSeconds": 146,
   "candidateOnly": true,
   "canClaimAGI": false,
   "presenterDisclosure": "Presenter synthesised from the author's own photograph.",
   "_notes": [
     "MEASURED CONSTRAINTS of grok image_to_video, established before building on them:",
-    "  - a clip is ~6.04s at 24fps, 496x608 PORTRAIT. Duration is not controllable, so the",
-    "    script is written in SHOTS of <=20 spoken words rather than 15s beats.",
-    "  - it generates AUDIO as well as video, and if you do not give it words IT INVENTS THEM.",
-    "    An early test with a motion-only prompt came back saying 'So, to summarize the key",
-    "    findings from our analysis, we can conclude that the results are promising' -- generic",
-    "    filler nobody wrote. Shipping that would put invented words in the author's mouth, in a",
-    "    project whose entire argument is that unverified claims must be labelled.",
-    "  - given the exact line it reproduces it verbatim. So every shot passes its line, and",
-    "    make_clips.py TRANSCRIBES each generated clip and fails the shot if it drifts.",
+    "  - duration accepts 6 or 10 ONLY. Asking for 15 returns '`duration` must be either 6 or",
+    "    10 seconds. Got 15.' and generates nothing.",
+    "  - 10s is chosen over 6s for PACE, not length. The generator fits the line it is given into",
+    "    the clip it is given: the 6s cut delivered 3.3-4.7 words/sec, which sounds hurried",
+    "    because it is. At 10s a 20-word line lands in 8.54s -- 2.34 words/sec. So every shot is",
+    "    written to 17-24 words, and make_clips.py warns when a line falls outside that.",
+    "  - shots after the first in a beat are seeded from the previous shot's LAST FRAME, so a beat",
+    "    plays as one unbroken take instead of a jump cut on identical framing.",
+    "  - it generates AUDIO as well as video, and if you do not give it words IT INVENTS THEM. An",
+    "    early motion-only prompt came back saying 'So, to summarize the key findings from our",
+    "    analysis, we can conclude that the results are promising' -- filler nobody wrote. So every",
+    "    shot passes its exact line, and make_clips.py TRANSCRIBES the result and fails on drift.",
+    "",
+    "WHAT THE SECOND VERSION FIXED. The first cut carried two false claims:",
+    "  - 'six hundred poisoned claims, plus honest ones as a control' overcounted by 60. The five",
+    "    attack classes sum to 540 (60+60+60+300+60); the 600 in poisoning.md's own heading",
+    "    ALREADY includes the 60 control_honest cases. 540 attacks + 60 controls = 600 total.",
+    "  - a panel read 'reasoning_source: fallback_memory, model_calls: 0'. Live /decide returns",
+    "    anthropic:claude-haiku-4-5 with model_calls: 1 and has since the standby provider was",
+    "    wired. The zero-model-calls claim is true of the PROMOTION path, which is a different",
+    "    path, and beat 07 now says exactly that instead of blurring them.",
+    "It also never once said 'CockroachDB', while the contest requires the video demonstrate the",
+    "CockroachDB memory layer at work. Beats 03, 04 and 06 exist to fix that.",
     "",
     "Every number spoken is traceable:",
-    "  shots 3a/3b -> benchmarks/poisoning.md (incl. the control_honest column)",
-    "  shot 4b     -> backend/trust.py, assert_no_model_calls",
-    "  shots 5a/5b -> live /decide response, quoted verbatim in README",
-    "  shot 6a     -> README 'Prior art, stated honestly'"
+    "  beat 03 -> db/schema.sql:63,74 and backend/memory.py:369-381",
+    "  beat 04 -> live POST /ingest, artifacts/video/capture/evidence.json 2026-08-05T09:40Z",
+    "  beat 05 -> benchmarks/poisoning.md:14-19 (class n) and :31-47 (per-arm results)",
+    "  beat 06 -> live POST /confirm_outcome, same capture",
+    "  beat 07 -> recorded /decide run quoted in README.md:25-26; today's live values in the panel",
+    "  beat 08 -> README 'Prior art, stated honestly'",
+    "ADVERSARIAL PASS. 24 refuters over 8 beats x 3 lenses raised 7 disputes; an adjudicator that re-checked each against the repo upheld 2 and rejected 5. Upheld: 'refuses every honest claim' implied the judge arm saw all 60 controls when poisoning.md:65 shows n=6; and calling the two-candidate recall 'live' when the panel itself labels it a recorded run and today's live /decide returns five memories tied at distance 0.547. Rejected, correctly: 01-claim restates README.md:3's own headline thesis with the caveats on the panel beside it, and 04-admission matches the capture artifact exactly -- capture_evidence.py:55-64 documents that reusing the seeded tenant is WHY the runbook and Slack values come back held against a leftover human 500."
   ],
   "beats": [
     {
       "id": "01-claim",
-      "seconds": 12.1,
       "presenterSide": "LEFT",
-      "panel": "headline",
+      "baseFrom": "01-claim",
       "panelData": {
         "kind": "quote",
         "lines": [
-          "Mem0 \u2014 an LLM picks ADD/UPDATE/DELETE. No confidence score at all.",
-          "Zep \u2014 an LLM sets validity windows. \"Model-inferred, not authoritative.\"",
-          "AWS AgentCore \u2014 extraction and consolidation are LLM prompts. No verification API."
+          "Mem0 — an LLM picks ADD/UPDATE/DELETE. No confidence score at all.",
+          "Zep — an LLM sets validity windows. \"Model-inferred, not authoritative.\"",
+          "AWS AgentCore — extraction and consolidation are LLM prompts. No verification API."
         ],
         "footnote": "Each line cites the vendor's own docs or issue tracker. See README."
       },
       "shots": [
-        "Every shipping agent-memory system asks a model whether its own memory is true. Mem0, Zep, AWS AgentCore.",
-        "MemoryStand asks CloudWatch instead \u2014 and refuses the promotion when CloudWatch disagrees."
+        "Every shipping agent-memory system asks a language model whether its own memory is true. Mem0, Zep, AWS AgentCore."
       ]
     },
     {
       "id": "02-the-failure",
-      "seconds": 18.1,
       "presenterSide": "RIGHT",
-      "panel": "story",
+      "baseFrom": "02-the-failure",
       "panelData": {
         "kind": "story",
         "headline": "Nobody lied. The memory is still false.",
         "body": "And it will be handed to an agent at the next incident. That is how a memory store fills with true-sounding operational folklore."
       },
       "shots": [
-        "The failure isn't fraud.",
-        "It's an engineer at two in the morning who restarts a service, watches the page clear, and reports in good faith that the restart fixed it \u2014",
-        "when the metric never moved."
+        "The failure isn't fraud. It's an engineer at two in the morning who restarts a service and watches the page clear.",
+        "They report in good faith that the restart fixed it, when the metric never moved. Nobody lied. The memory is false."
       ]
     },
     {
-      "id": "03-measured",
-      "seconds": 12.1,
+      "id": "03-memory-layer",
       "presenterSide": "LEFT",
-      "panel": "table",
+      "baseFrom": "03-measured",
+      "panelData": {
+        "kind": "schema",
+        "code": [
+          "embedding  VECTOR(512)",
+          "",
+          "VECTOR INDEX agent_memories_tenant_idx",
+          "  (tenant_id, verdict, embedding vector_cosine_ops)",
+          "",
+          "WHERE  tenant_id = %s AND verdict = 'accepted'",
+          "ORDER BY  embedding <=> %s   LIMIT %s"
+        ],
+        "note": "Admission is checked inside the vector search. Trust tier comes back as a column and is ranked afterwards, in code.",
+        "footnote": "db/schema.sql:63,74 · backend/memory.py:369-381"
+      },
+      "shots": [
+        "That memory lives in CockroachDB. Every row keeps its embedding in a native vector column, beside the ordinary relational fields.",
+        "The vector index is prefixed by tenant and admission verdict, so one statement filters and ranks by cosine distance."
+      ]
+    },
+    {
+      "id": "04-admission",
+      "presenterSide": "RIGHT",
+      "baseFrom": "04-only-one-works",
+      "panelData": {
+        "kind": "admission",
+        "rows": [
+          {
+            "source": "human — on-call lead",
+            "value": "500",
+            "verdict": "accepted"
+          },
+          {
+            "source": "runbook",
+            "value": "800",
+            "verdict": "held"
+          },
+          {
+            "source": "Slack hearsay",
+            "value": "300",
+            "verdict": "held"
+          }
+        ],
+        "reason": "contradicts memory 025d7524 which asserts '500'; sources rank equal, so a human decides",
+        "footnote": "live POST /ingest · captured 2026-08-05T09:40Z"
+      },
+      "shots": [
+        "Writing a memory is not automatic. Every claim is admitted or held, and the reason is stored beside it.",
+        "Slack says three hundred. The runbook says eight hundred. Both contradict a human-confirmed five hundred, so both are held."
+      ]
+    },
+    {
+      "id": "05-measured",
+      "presenterSide": "LEFT",
+      "baseFrom": "05-trust-beats-proximity",
       "panelData": {
         "kind": "table",
         "columns": [
           "",
-          "attacks \u2192 verified",
+          "attacks → verified",
           "honest admitted"
         ],
         "rows": [
@@ -88,35 +154,45 @@
             "100%"
           ]
         ],
-        "footnote": "benchmarks/poisoning.md \u00b7 judge arm run live, not estimated"
+        "footnote": "540 attacks + 60 honest controls · poisoning.md:14-19, 31-47 · judge arm n=6/class"
       },
       "shots": [
-        "So we measured it. Six hundred poisoned claims, plus honest ones as a control. Trusting the caller admits every attack.",
-        "An LLM judge blocks every attack \u2014 and every honest claim too."
+        "We measured it. Five hundred forty poisoned attempts across five attack types, plus sixty honest controls to catch false refusals.",
+        "Trust the caller and every attack reaches verified. Use an LLM judge, and it refuses all six honest claims it actually tested."
       ]
     },
     {
-      "id": "04-only-one-works",
-      "seconds": 18.1,
+      "id": "06-oracle",
       "presenterSide": "RIGHT",
-      "panel": "callout",
+      "baseFrom": "06-close",
       "panelData": {
-        "kind": "callout",
-        "big": "0",
-        "label": "model calls on the promotion path",
-        "body": "backend/trust.py imports no model client, and a runtime guard fails if one becomes reachable even one import away."
+        "kind": "oracle",
+        "rows": [
+          {
+            "claimed": "−14,200.0",
+            "observed": "−14,204.91",
+            "verdict": "confirmed",
+            "status": "200"
+          },
+          {
+            "claimed": "−10.0",
+            "observed": "−14,200",
+            "verdict": "refused",
+            "status": "400"
+          }
+        ],
+        "note": "outcome_rejected — \"a disagreement beyond the 50% tolerance\"",
+        "footnote": "live POST /confirm_outcome · captured 2026-08-05T09:40Z"
       },
       "shots": [
-        "A defence that refuses all evidence stops all poisoning, and is useless.",
-        "Only the outcome gate tells the two apart \u2014",
-        "and it does it with zero model calls on the promotion path."
+        "Only the outcome gate tells them apart, because it does not ask a model. It re-queries CloudWatch itself.",
+        "Claimed minus fourteen thousand two hundred. CloudWatch said minus fourteen thousand two hundred and five. Confirmed. Claim minus ten, refused."
       ]
     },
     {
-      "id": "05-trust-beats-proximity",
-      "seconds": 12.1,
+      "id": "07-deciding",
       "presenterSide": "LEFT",
-      "panel": "recall",
+      "baseFrom": "07-deciding",
       "panelData": {
         "kind": "recall",
         "rows": [
@@ -135,30 +211,30 @@
             "chosen": true
           }
         ],
-        "footnote": "live /decide \u00b7 reasoning_source: fallback_memory \u00b7 model_calls: 0"
+        "note": "live /decide today: reasoning_source anthropic:claude-haiku-4-5, model_calls 1.  The PROMOTION path is the one that makes none — trust.py imports no model client.",
+        "footnote": "recorded /decide run, README.md:25-26 · tiers re-confirmed live 2026-08-05T09:40Z"
       },
       "shots": [
-        "Here it is deciding. Two candidate memories: the nearer one is unconfirmed, the further one was checked against CloudWatch.",
-        "Proximity said one thing. Trust said another. Trust won."
+        "Here's a recorded decide run: two candidate memories, the nearer one unconfirmed, the further one checked against CloudWatch.",
+        "Proximity said one thing. Trust said another. Trust won — and the promotion path itself made zero model calls."
       ]
     },
     {
-      "id": "06-close",
-      "seconds": 12.1,
+      "id": "08-close",
       "presenterSide": "RIGHT",
-      "panel": "close",
+      "baseFrom": "08-close",
       "panelData": {
         "kind": "close",
         "lines": [
-          "Doyle, JTMS, 1979 \u2014 a belief holds only while its justification does",
-          "CHEF, 1986 \u2014 cases retained by whether the plan actually worked",
-          "NELL, 2010 \u2014 a candidate/promoted trust ladder"
+          "Doyle, JTMS, 1979 — a belief holds only while its justification does",
+          "CHEF, 1986 — cases retained by whether the plan actually worked",
+          "NELL, 2010 — a candidate/promoted trust ladder"
         ],
-        "footnote": "github.com/tomyimkc/memorystand \u00b7 candidateOnly \u00b7 no AGI claim"
+        "footnote": "github.com/tomyimkc/memorystand · candidateOnly · no AGI claim"
       },
       "shots": [
-        "None of this is a new idea. Doyle's truth maintenance systems retracted beliefs in 1979.",
-        "What's unusual is a 2026 memory system that won't let a model grade its own memory \u2014 and enforces it."
+        "This is for whoever is on call at two in the morning, with an agent suggesting what worked last time.",
+        "None of it is a new idea. Doyle retracted beliefs in 1979. What's unusual is enforcing it in 2026."
       ]
     }
   ]
