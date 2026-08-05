@@ -197,16 +197,18 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > browser hitting `/` gets a 404 by design — so it should not be pasted as the "live demo" link;
 > the Amplify dashboard is the one a judge should click first.)
 >
-> Note on the reasoning model: this project originally targeted Claude on Bedrock. Anthropic
-> models are refused from this operator's AWS account with `ValidationException: Access to
-> Anthropic models is not allowed from unsupported countries...` — a geo-restriction independent
-> of IAM and region. The reasoning model is now `amazon.nova-lite-v1:0`, which is AWS-native,
-> `ON_DEMAND`, and carries no such restriction. In practice, on-demand quota for this brand-new
-> account is currently ~0, so every live `/decide` call today returns
-> `reasoning_source: fallback_heuristic` and `model_calls: 0` — the action comes from an explicit
-> deterministic keyword rule in `backend/agent.py`, not a live model call. That fallback is itself
-> a deliberate design choice, not a hidden gap (see Field 7): the trust-critical path never blocks
-> on Bedrock capacity. Full detail is in `docs/BEDROCK_QUOTA.md`.
+> Note on the reasoning model — stated plainly because this project's whole argument is that a
+> claim must name what produced it. Bedrock is tried first and stays the preferred provider, but
+> it never answers on this account: Claude on Bedrock is geo-refused (`ValidationException: Access
+> to Anthropic models is not allowed from unsupported countries...`) and the AWS-native fallback
+> `amazon.nova-lite-v1:0` has ~0 on-demand quota on this brand-new account. So live `/decide`
+> reasons through a **third-party Anthropic-compatible router, `api.teamorouter.com`, serving
+> `claude-haiku-4-5`** — a deliberate, disclosed standby. `reasoning_source` names it
+> (`api.teamorouter.com:claude-haiku-4-5`, `model_calls: 1`), derived from the endpoint rather
+> than hand-written, and the moment Bedrock quota lands it takes over with no code change. Prompts
+> and the API key traverse that third party; the **promotion path does not** — `backend/trust.py`
+> imports no model client and a runtime guard enforces it. Full detail in
+> [`../DISCLOSURES.md`](../DISCLOSURES.md) and `docs/BEDROCK_QUOTA.md`.
 
 ### Field 7 — How meaningfully integrated
 
@@ -346,10 +348,11 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 >
 > **Runtime, not authoring.** Amazon Bedrock is a component of the submitted agent itself and is
 > covered under AWS services — see Field 6. Honest caveat: on-demand Bedrock quota on this account
-> is 0, so embeddings fall back to a deterministic lexical stub, and `/decide` reasons through an
-> Anthropic-shaped standby provider (`anthropic:claude-haiku-4-5`, `model_calls: 1` in the live
-> capture of 2026-08-05). The **promotion** path is model-free by construction and stays that way:
-> `backend/trust.py` imports no model client, and a runtime guard fails if one becomes reachable.
+> is 0, so embeddings fall back to a deterministic lexical stub, and `/decide` reasons through a
+> third-party Anthropic-compatible router (`api.teamorouter.com:claude-haiku-4-5`, `model_calls: 1`
+> live) whose label is derived from the endpoint so it cannot misname the route. The **promotion**
+> path is model-free by construction and stays that way: `backend/trust.py` imports no model
+> client, and a runtime guard fails if one becomes reachable.
 
 ---
 

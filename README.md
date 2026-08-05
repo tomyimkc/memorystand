@@ -3,21 +3,26 @@
 > **Every shipping agent-memory system asks a model whether its own memory is true.**
 > MemoryStand asks CloudWatch — and refuses the promotion when CloudWatch disagrees.
 
-**The agent reasons over its own memory, and the trust ladder is what it reasons over.** Live,
-on the deployed API:
+**The agent reasons over its own memory, and the trust ladder is what it reasons over.** A real
+`/decide` against the deployed API, quoted verbatim:
 
 ```
-reasoning_source: anthropic:claude-haiku-4-5    model_calls: 1
-action: restart_service
+reasoning_source: api.teamorouter.com:claude-haiku-4-5    model_calls: 1
+action: open_incident
 
-rationale: During INC-4610, a payments-service p99 latency spike was resolved by
-restarting payments-service after pausing ledger-worker-cg first. The current
-alert matches that pattern.
+rationale: The recalled memories show a consistent pattern: every prior incident
+involving checkout-api circuit breaker timeouts during payments gateway latency
+spikes has been resolved by temporarily raising the timeout to 1200ms. However,
+this is a repeated issue across multiple incidents (at least 5 documented cases)
+... opening an incident allows escalation to address the root cause.
 ```
 
 Amazon Bedrock is tried first and stays the preferred provider — this account has 0 Bedrock
 inference quota in every region, and the moment that changes it takes over with no code change.
-`reasoning_source` always names the provider that actually answered.
+Until then the standby is a third-party Anthropic-compatible router, and `reasoning_source` names
+it rather than pretending otherwise: the label is derived from the endpoint, not hand-written, so
+it always names the provider that actually answered. Full context in
+[`DISCLOSURES.md`](DISCLOSURES.md).
 
 **And when no model is available at all, memory still decides — with zero model calls.** Live:
 
@@ -264,7 +269,7 @@ Everything marked ✅ was run against a real CockroachDB v26.2.5 cluster, not ju
 | One-command demo (`scripts/demo.sh`) | ✅ 8 beats, exit 0 |
 | ccloud provisioning (`infra/provision.sh`) | ✅ flags verified against `ccloud 0.8.23`, and run for real — see cloud cluster row below |
 | AWS deploy scripts (`infra/provision.sh`, `infra/ssm_setup.sh`, `infra/deploy.sh`, `infra/deploy_frontend.sh`, IAM, SSM, keep-warm) | ✅ **all run against a real AWS account.** Lambda is Active, dashboard is live on Amplify. See [docs/DEPLOY.md](docs/DEPLOY.md) for the URL shape. |
-| Bedrock with real credentials | ⚠️ deployed and reachable, but this account's Bedrock quota is ~0 — every live `/decide` call falls back to the deterministic heuristic in `backend/agent.py` (`reasoning_source: fallback_heuristic`, `model_calls: 0`). No live call has actually been reasoned over by a model. |
+| Reasoning provider | ⚠️ Bedrock is tried first but this account's Bedrock quota is ~0, so it never answers. Live `/decide` reasons through a third-party Anthropic-compatible router (`reasoning_source: api.teamorouter.com:claude-haiku-4-5`, `model_calls: 1`) — a deliberate, disclosed standby, see [`DISCLOSURES.md`](DISCLOSURES.md). The promotion path stays model-free regardless. |
 | Cloud cluster | ✅ CockroachDB Cloud BASIC, AWS us-west-2, CCL v26.2.1. `agent_memories` holds 50,131 rows: 40 synthetic tenants at 1,250 rows each, plus the curated demo tenant (131 rows, 117 accepted). |
 | MCP server wiring | ✅ working end to end (see [CockroachDB tools used](#cockroachdb-tools-used) for the honest access-level finding) |
 | Video | ⬜ |

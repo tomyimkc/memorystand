@@ -98,14 +98,27 @@ Test suite: 132 passing (was 47); new files `tests/test_latency_budget.py` and
 
 ## Honest state: the deployed agent is not reasoning with a model
 
-`GET /health`'s `circuit_breakers` field spends a lot of its time `"open"` right now, for a
-mundane reason: Bedrock quota on this account is still effectively zero. Every live
-`POST /decide` currently returns `reasoning_source: "fallback_heuristic"` and `model_calls: 0` --
-the action is chosen by an explicit deterministic keyword rule in `backend/agent.py`, not by a
-model, and the `rationale` string in the response says so verbatim. Do not describe the deployed
-agent as "reasoning with an LLM"; it currently is not. That is a different, incidental zero from
-the `confirm_outcome` / trust-promotion path's zero model calls (`backend/trust.py`), which is a
-deliberate design property and is genuine.
+`GET /health`'s Bedrock `circuit_breakers` field spends much of its time `"open"`, for a mundane
+reason: Bedrock quota on this account is effectively zero, so the Bedrock attempt always fails and
+the chain falls through to the standby. Live `POST /decide` reasons through a third-party
+Anthropic-compatible router and returns `reasoning_source: "api.teamorouter.com:claude-haiku-4-5"`
+with `model_calls: 1` — the label is derived from the endpoint, see `../DISCLOSURES.md`. This is a
+deliberate, disclosed standby, and the deployed agent **does** reason with a model.
+
+That is a different zero from the `confirm_outcome` / trust-promotion path's **zero model calls**
+(`backend/trust.py`): the promotion path imports no model client and a runtime guard enforces it,
+so no model — Bedrock, router, or otherwise — is ever in the path that grants trust. That zero is
+the deliberate, genuine one.
+
+**Reproducing this deployment.** The router is not the code default (which is the safe
+`api.anthropic.com`); the live Lambda is deliberately deployed against it:
+
+```
+MEMORYSTAND_ANTHROPIC_BASE_URL=https://api.teamorouter.com bash infra/deploy.sh
+```
+
+The router API key lives in the SSM SecureString `/memorystand/anthropic_api_key`, never in the
+repo, and **must be rotated after the contest.**
 
 ## Explored: the CockroachDB Cloud MCP server
 
