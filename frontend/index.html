@@ -294,6 +294,8 @@
   .memory-row .memory-id { font-family: var(--mono); color: var(--text-dim); }
   .memory-row .memory-content { font-size: 13px; color: var(--text); }
   .memory-row .memory-attr { font-size: 12px; color: var(--text-faint); font-family: var(--mono); }
+  .memory-row .memory-rank { font-family: var(--mono); font-size: 11px; color: var(--text-faint); min-width: 20px; }
+  .memory-row.chosen { border-color: var(--green); }
 
   .kv-line { font-size: 13px; color: var(--text-dim); }
   .kv-line b { color: var(--text); font-weight: 600; }
@@ -450,6 +452,29 @@
     padding: 8px 10px;
   }
 
+  /* ---------- panel 1: closer-memory-overruled-by-trust callout ---------- */
+  /* Same visual language as .refusal-banner below (a green border marks the feature
+     proving itself, not an error) -- this is the single most persuasive moment this
+     dashboard can show: a nearer memory losing to a more trusted one, zero model calls. */
+  .overrule-banner {
+    border: 1px solid var(--green);
+    background: var(--panel-2);
+    border-radius: 8px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .overrule-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .overrule-explain { margin: 0; font-size: 13px; color: var(--text-dim); }
+
   .tier-columns {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -576,7 +601,10 @@
     </div>
     <p class="panel-sub">
       Post a synthetic alert. The agent recalls what it knows, then records the action it
-      took and why — every consulted memory is shown with its trust tier.
+      took and why — every consulted memory is shown ranked by distance with its trust
+      tier. Leave "Proposed action" blank to let the agent decide for itself instead of
+      supplying one — with no model in the loop, that means the highest-trust memory that
+      names an action wins, even over a closer one.
     </p>
 
     <form class="panel-form" id="form-decide">
@@ -585,8 +613,8 @@
         <textarea id="decideQuery" required placeholder="payments-service p99 latency above 2s, error rate climbing">payments-service p99 latency above 2s, error rate climbing</textarea>
       </div>
       <div class="field">
-        <label for="decideAction">Proposed action</label>
-        <input type="text" id="decideAction" required value="restart_service">
+        <label for="decideAction">Proposed action <span class="hint">(optional — blank lets the agent decide)</span></label>
+        <input type="text" id="decideAction" value="restart_service" placeholder="leave blank to let the agent decide">
       </div>
       <div class="field">
         <label for="decideK">Memories to consult (k)</label>

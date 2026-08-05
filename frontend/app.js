@@ -21,11 +21,20 @@
 //     -> backend.memory.recall(tenant_id, agent_id, query, k) for "consulted",
 //        then backend.decisions.decide(tenant_id, agent_id, action, rationale,
 //        [m.memory_id for m in consulted], produced_memory_ids,
-//        requires_approval, task_id). Supplying `action` skips handler.py's
-//        Bedrock reasoning fallback entirely (reasoning_source:"caller_supplied"),
-//        which is what this dashboard always does -- no AWS creds required.
+//        requires_approval, task_id). `action` is optional: supplying it skips
+//        handler.py's reasoning fallback entirely (reasoning_source:
+//        "caller_supplied"), which is this dashboard's default (the "Proposed
+//        action" field is pre-filled but not required -- see panel 1). Leaving
+//        it blank lets backend.agent.propose() decide instead: it tries the
+//        configured Bedrock model first (reasoning_source:"bedrock:<model>"),
+//        and on ModelUnavailable -- guaranteed on this deployment, Bedrock quota
+//        is 0 -- falls back deterministically to the highest-trust recalled
+//        memory that names an action (reasoning_source:"fallback_memory"), or a
+//        fixed keyword table if none do (reasoning_source:"fallback_heuristic").
+//        No AWS creds are required for either fallback path.
 //     response: { decision_id, decided_at, action, status ("taken" |
-//                 "held_for_approval"), produced: string[], reasoning_source,
+//                 "held_for_approval"), produced: string[], rationale,
+//                 reasoning_source, model_calls,
 //                 consulted: [ { memory_id, content, entity, attribute_key,
 //                 attribute_value, trust_tier, confidence, source, distance,
 //                 verdict } ] }
@@ -228,6 +237,35 @@
     return "";
   }
 
+  // reasoning_source says which path actually picked /decide's action -- shown next to
+  // every decision so "did a model do this?" never requires reading the raw response.
+  function reasoningSourceLabel(source) {
+    if (source === "caller_supplied") return "supplied by caller";
+    if (source === "fallback_memory") return "memory decided";
+    if (source === "fallback_heuristic") return "keyword table decided";
+    if (typeof source === "string" && source.indexOf("bedrock:") === 0) return "model decided";
+    return source || "unknown";
+  }
+
+  // On THIS deployment reasoning_source is never a bedrock: value -- Bedrock quota is 0,
+  // see docs/BEDROCK_QUOTA.md -- so that branch is included for completeness, honestly
+  // labelled as not what actually happens here.
+  function reasoningSourceExplain(source) {
+    if (source === "caller_supplied") {
+      return "This request handed /decide a ready-made action, so the agent's own reasoning path (model or memory fallback) never ran.";
+    }
+    if (source === "fallback_memory") {
+      return "A memory decided: no model was consulted (Bedrock quota is 0 on this deployment) -- a recalled memory named this action and outranked the keyword table because it has trust standing from a real outcome.";
+    }
+    if (source === "fallback_heuristic") {
+      return "A keyword table decided: no model was consulted, and no recalled memory named an action either, so a fixed keyword table picked this one instead.";
+    }
+    if (typeof source === "string" && source.indexOf("bedrock:") === 0) {
+      return "The model decided: " + source.slice("bedrock:".length) + " proposed this action, grounded in the recalled memories below. This is not what happens on this deployment -- Bedrock quota is 0 here -- shown for completeness only.";
+    }
+    return "";
+  }
+
   // Shared by the success path (verification.status === "confirmed") and the refusal path
   // (HTTP 400, verification.status === "contradicted") -- both show the same claimed-vs-observed
   // pair, just with a different border colour (see .observed-claimed.match / .mismatch in CSS).
@@ -244,15 +282,26 @@
     ]);
   }
 
-  function memoryRow(m) {
-    var top = el("div", { class: "memory-top" }, [
-      el("span", { class: "badge " + trustBadgeClass(m.trust_tier), text: m.trust_tier || "unconfirmed" }),
-      el("span", { class: "memory-id", text: shortId(m.memory_id) }),
-      m.distance !== undefined && m.distance !== null
-        ? el("span", { class: "memory-attr", text: "distance " + fmtNum(m.distance) })
-        : null,
-      m.source ? el("span", { class: "memory-attr", text: "source: " + m.source }) : null,
-    ]);
+  // `opts.rank` (1-based) and `opts.isChosen` are optional decorations used by panel 1's
+  // ranked consulted-memories list (see renderDecideResult below); every other caller
+  // (the seeded-demo preview, panel 4's "believed at decision time") omits `opts` and
+  // gets exactly the row this always rendered.
+  function memoryRow(m, opts) {
+    opts = opts || {};
+    var topChildren = [];
+    if (opts.rank !== undefined && opts.rank !== null) {
+      topChildren.push(el("span", { class: "memory-rank", text: "#" + opts.rank }));
+    }
+    topChildren.push(el("span", { class: "badge " + trustBadgeClass(m.trust_tier), text: m.trust_tier || "unconfirmed" }));
+    topChildren.push(el("span", { class: "memory-id", text: shortId(m.memory_id) }));
+    if (m.distance !== undefined && m.distance !== null) {
+      topChildren.push(el("span", { class: "memory-attr", text: "distance " + fmtNum(m.distance) }));
+    }
+    if (m.source) topChildren.push(el("span", { class: "memory-attr", text: "source: " + m.source }));
+    if (opts.isChosen) {
+      topChildren.push(el("span", { class: "badge green", text: "chose this action" }));
+    }
+    var top = el("div", { class: "memory-top" }, topChildren);
     var attrLine = null;
     if (m.entity || m.attribute_key) {
       attrLine = el("div", {
@@ -261,7 +310,7 @@
       });
     }
     var content = el("div", { class: "memory-content", text: m.content || "" });
-    return el("div", { class: "memory-row" }, [top, attrLine, content]);
+    return el("div", { class: "memory-row" + (opts.isChosen ? " chosen" : "") }, [top, attrLine, content]);
   }
 
   // -------------------------------------------------------------- API layer
@@ -488,7 +537,10 @@
       tenant_id: tenantId(),
       agent_id: agentId(),
       query: $("decideQuery").value,
-      action: $("decideAction").value,
+      // Blank on purpose is a real, supported request: omitting `action` lets the agent's
+      // own reasoning path (memory fallback or model) pick one instead of the caller
+      // dictating it -- see the reasoning_source explanation rendered below.
+      action: $("decideAction").value.trim() || null,
       rationale: $("decideRationale").value,
       k: parseInt($("decideK").value, 10) || 5,
       task_id: $("decideTaskId").value.trim() || null,
@@ -520,6 +572,19 @@
     });
   });
 
+  // Only reasoning_source "fallback_memory" lets this dashboard name the exact memory
+  // that decided the action: backend/agent.py::_fallback_action writes "Chosen from
+  // memory <id> (trust_tier=<tier>)" verbatim into the rationale it returns, specifically
+  // so that fact is recoverable here without reimplementing its action-matching
+  // heuristic (the allow-list of actions, the attribute_value-then-content matching) a
+  // second time in this file. Every other reasoning_source is left alone rather than
+  // guessed at -- a wrong guess here would be worse than showing nothing.
+  function chosenMemoryIdFromRationale(rationale) {
+    if (!rationale) return null;
+    var m = /Chosen from memory (\S+) \(trust_tier=/.exec(rationale);
+    return m ? m[1] : null;
+  }
+
   function renderDecideResult(data) {
     clear(decideResult);
 
@@ -537,19 +602,77 @@
     ]);
     decideResult.appendChild(hero);
 
-    var consulted = data.consulted || [];
+    // model_calls and reasoning_source belong right next to the decision itself, not
+    // only next to the outcome gate in panel 3 -- this is the honest answer to "did a
+    // model make this call?" for the specific decision above.
+    var modelCalls = typeof data.model_calls === "number" ? data.model_calls : 0;
+    decideResult.appendChild(
+      el("div", { class: "kv-line" }, [
+        el("span", { class: "badge " + (modelCalls === 0 ? "green" : "red"), text: "model calls: " + modelCalls }),
+        document.createTextNode("  reasoning_source: "),
+        el("b", { text: reasoningSourceLabel(data.reasoning_source) + " (" + (data.reasoning_source || "unknown") + ")" }),
+      ])
+    );
+    var reasoningExplain = reasoningSourceExplain(data.reasoning_source);
+    if (reasoningExplain) {
+      decideResult.appendChild(el("p", { class: "verification-status-line", text: reasoningExplain }));
+    }
+
+    var consulted = (data.consulted || []).slice();
     decideResult.appendChild(
       el("div", { class: "kv-line" }, [
         el("b", { text: String(consulted.length) }),
-        document.createTextNode(" memory(ies) consulted:"),
+        document.createTextNode(" memory(ies) consulted, ranked nearest first:"),
       ])
     );
+
     if (consulted.length === 0) {
       decideResult.appendChild(el("p", { class: "tier-empty", text: "no accepted memories matched this query yet" }));
     } else {
-      consulted.forEach(function (m) {
-        decideResult.appendChild(memoryRow(m));
+      // Rank by vector distance ourselves rather than trusting response order -- recall()
+      // happens to already return nearest-first, but the ranking shown on screen should
+      // hold even if that ordering ever changes upstream.
+      var ranked = consulted.slice().sort(function (a, b) {
+        var da = typeof a.distance === "number" ? a.distance : Infinity;
+        var db = typeof b.distance === "number" ? b.distance : Infinity;
+        return da - db;
       });
+
+      var chosenId = data.reasoning_source === "fallback_memory" ? chosenMemoryIdFromRationale(data.rationale) : null;
+      var chosen = chosenId ? ranked.filter(function (m) { return m.memory_id === chosenId; })[0] || null : null;
+      var nearest = ranked[0] || null;
+
+      ranked.forEach(function (m, i) {
+        decideResult.appendChild(
+          memoryRow(m, { rank: i + 1, isChosen: !!(chosen && m.memory_id === chosen.memory_id) })
+        );
+      });
+
+      // This is the entire product argument in one on-screen moment: a memory closer in
+      // vector space lost to one with more trust standing, and nothing here asked a model.
+      if (chosen && nearest && chosen.memory_id !== nearest.memory_id) {
+        decideResult.appendChild(
+          el("div", { class: "overrule-banner" }, [
+            el("div", { class: "overrule-title" }, [
+              el("span", { class: "badge green", text: "trust beat proximity" }),
+              el("span", { text: "a closer memory was overruled by higher trust" }),
+            ]),
+            el("p", { class: "overrule-explain" }, [
+              document.createTextNode(
+                "Memory " + shortId(nearest.memory_id) + " (distance " + fmtNum(nearest.distance) + ", " +
+                trustTierLabel(nearest.trust_tier) + ") was the closer vector match, but memory " +
+                shortId(chosen.memory_id) + " (distance " + fmtNum(chosen.distance) + ", " +
+                trustTierLabel(chosen.trust_tier) + ") decided the action instead, because it has trust " +
+                "standing the closer memory does not. No model was consulted."
+              ),
+            ]),
+          ])
+        );
+      } else if (chosen) {
+        decideResult.appendChild(
+          el("p", { class: "kv-line", text: "The memory that decided the action was also the nearest match here -- proximity and trust agreed." })
+        );
+      }
     }
 
     if (data.produced && data.produced.length) {

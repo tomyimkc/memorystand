@@ -103,7 +103,7 @@ def _stale_verified(conn, tenant_id: str | None) -> list[dict[str, Any]]:
                    m.trust_checked_at,
                    d.decision_id::string AS decision_id, d.decided_at,
                    d.outcome, d.outcome_source, d.outcome_external_ref,
-                   d.outcome_metric_delta
+                   d.outcome_metric_delta, m.entity
             FROM agent_memories m
             JOIN agent_decisions d
               ON m.memory_id = ANY(d.produced_memory_ids) AND d.tenant_id = m.tenant_id
@@ -169,6 +169,7 @@ def sweep(tenant_id: str | None = None, *, dry_run: bool = False) -> dict[str, A
                 row.get("outcome_external_ref") or "",
                 row.get("outcome_metric_delta"),
                 row.get("decided_at"),
+                entity=row.get("entity"),
             )
 
             if check.status == evidence.CONFIRMED:

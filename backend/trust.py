@@ -218,7 +218,7 @@ def _apply(
 
 
 def _decided_at(tenant_id: str, decision_id: str):
-    """Read just the decision's timestamp, so evidence can be checked before the write txn.
+    """Read the decision's timestamp and subject, so evidence can be checked before the write.
 
     Deliberately a separate small read rather than doing the external check inside
     ``_apply``: ``_apply`` runs under ``retry_serializable``, and a CloudWatch round trip
@@ -229,13 +229,26 @@ def _decided_at(tenant_id: str, decision_id: str):
     conn = db.get_conn()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # The entity comes along because evidence has to be checked against the SUBJECT of
+            # the claim, not just the number. A confirmable metric filed under the wrong
+            # service was a clean path to `verified` until benchmarks/poisoning_benchmark.py
+            # found it.
             cur.execute(
-                "SELECT decided_at FROM agent_decisions WHERE decision_id = %s AND tenant_id = %s",
+                """
+                SELECT d.decided_at,
+                       (SELECT m.entity FROM agent_memories m
+                        WHERE m.memory_id = ANY(d.produced_memory_ids)
+                          AND m.tenant_id = d.tenant_id
+                          AND m.entity IS NOT NULL
+                        LIMIT 1) AS entity
+                FROM agent_decisions d
+                WHERE d.decision_id = %s AND d.tenant_id = %s
+                """,
                 (decision_id, tenant_id),
             )
             row = cur.fetchone()
         conn.commit()
-        return row["decided_at"] if row else None
+        return (row["decided_at"], row["entity"]) if row else (None, None)
     finally:
         db.put_conn(conn)
 
@@ -259,7 +272,8 @@ def grant_standing(tenant_id: str, decision_id: str, evidence: dict[str, Any]) -
     # the half of the central claim that used to be missing: _validate only ever confirmed
     # that external_ref was a non-empty string, so "an external signal said so" was
     # something the caller asserted rather than something anyone checked.
-    verification = evidence_check.verify(source, ref, delta, _decided_at(tenant_id, decision_id))
+    decided_at, entity = _decided_at(tenant_id, decision_id)
+    verification = evidence_check.verify(source, ref, delta, decided_at, entity=entity)
     if verification.status == evidence_check.CONTRADICTED:
         raise OutcomeRejected(
             f"the external system of record disagrees: {verification.detail}"
