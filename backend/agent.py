@@ -114,12 +114,80 @@ _FALLBACK_RULES: tuple[tuple[str, str], ...] = (
 _FALLBACK_DEFAULT_ACTION = "open_incident"
 
 
-def _fallback_action(alert_text: str) -> str:
+# How much a memory's trust tier counts when two memories disagree. Deliberately ordered, not
+# scored: a memory an external system of record confirmed outranks one somebody merely reported,
+# which outranks one nothing has ever backed. `disputed` is absent on purpose -- a memory whose
+# outcome was a rollback or a false positive must never steer an action, so it is filtered out
+# rather than given a low weight it could still win with.
+_TIER_RANK = {"verified": 3, "attested": 2, "unconfirmed": 1}
+
+
+def _action_from_memory(row: dict[str, Any]) -> str | None:
+    """Does this memory actually name an action from the allow-list?
+
+    Structured fields first: a memory carrying attribute_value='scale_up' is asserting the
+    remediation directly, which is stronger evidence than the same word appearing in prose.
+    Falling back to the content text catches the seeded incident memories, which describe what
+    was done in sentences rather than in an attribute.
+    """
+    value = str(row.get("attribute_value") or "").strip().lower()
+    if value in ALLOWED_ACTIONS:
+        return value
+    haystack = f"{row.get('attribute_key') or ''} {row.get('content') or ''}".lower()
+    for action in ALLOWED_ACTIONS:
+        if action == "no_action":
+            continue
+        if action.replace("_", " ") in haystack or action in haystack:
+            return action
+    return None
+
+
+def _fallback_action(alert_text: str, recalled: list[dict] | None = None) -> tuple[str, str]:
+    """Choose an action deterministically, letting MEMORY outrank the keyword table.
+
+    Why this exists. The previous version took only ``alert_text`` and never looked at the
+    recalled memories at all -- so on a deployment with no model quota, which is this one,
+    memory was retrieved, displayed, and then ignored. Every action came from matching a word
+    in the alert. A project whose entire argument is "memory is the thing that makes an agent
+    useful" cannot have a live decision path that memory does not touch.
+
+    So the rule is now: if a memory that has survived contact with reality names an action,
+    take it, and say which memory and which tier decided. Only if nothing recalled names an
+    action does the keyword table apply.
+
+    This is still zero model calls and still fully auditable -- the returned reason names the
+    exact memory_id -- but it makes ``trust_tier`` load-bearing rather than decorative. A
+    verified memory now changes what the agent does, which is the claim, and it is
+    demonstrable without any model at all.
+
+    Returns (action, reason) so the caller can explain itself honestly.
+    """
+    usable = [
+        r for r in (recalled or [])
+        if r.get("trust_tier") in _TIER_RANK and _action_from_memory(r)
+    ]
+    if usable:
+        # Highest trust wins; ties break on the closest vector match, which is the order
+        # recall() already returned them in.
+        best = max(usable, key=lambda r: _TIER_RANK[r["trust_tier"]])
+        action = _action_from_memory(best)
+        return action, (
+            f"Chosen from memory {best['memory_id']} (trust_tier={best['trust_tier']}), which "
+            f"records {action!r} for this situation. No model was consulted; the memory "
+            "outranked the keyword table because reality has backed it."
+        )
+
     lowered = alert_text.lower()
     for keyword, action in _FALLBACK_RULES:
         if keyword in lowered:
-            return action
-    return _FALLBACK_DEFAULT_ACTION
+            return action, (
+                f"No recalled memory named an action, so this fell through to the keyword "
+                f"table: {keyword!r} implies {action!r}. Nothing in memory informed this."
+            )
+    return _FALLBACK_DEFAULT_ACTION, (
+        "No recalled memory named an action and no keyword matched, so this is the default "
+        f"action ({_FALLBACK_DEFAULT_ACTION!r}). Nothing in memory informed this."
+    )
 
 
 def _alert_text(alert: dict[str, Any]) -> str:
@@ -203,12 +271,11 @@ def propose(situation: str, recalled: list[dict[str, Any]]) -> dict[str, Any]:
         rationale = str(proposal["rationale"])
         source = f"bedrock:{bedrock_client.MODEL_ID}"
     except bedrock_client.ModelUnavailable as exc:
-        action = _fallback_action(situation)
+        action, why = _fallback_action(situation, recalled)
         rationale = (
-            f"Deterministic fallback: the reasoning model was unavailable ({exc}). "
-            "Action chosen from an explicit keyword rule, not by a model."
+            f"Deterministic fallback: the reasoning model was unavailable ({exc}). {why}"
         )
-        source = "fallback_heuristic"
+        source = "fallback_memory" if "Chosen from memory" in why else "fallback_heuristic"
     return {
         "action": action,
         "rationale": rationale,

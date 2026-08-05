@@ -20,6 +20,7 @@ import hashlib
 import math
 import os
 import random
+import re
 import time
 
 from . import breaker
@@ -68,12 +69,54 @@ def _get_client():
     return _client
 
 
+_TOKEN_RE = re.compile(r"[a-z0-9_]+")
+
+
 def _stub_embedding(text: str) -> list[float]:
-    """Deterministic unit vector derived from the text digest."""
-    seed = int.from_bytes(hashlib.sha256(text.encode("utf-8")).digest()[:8], "big")
-    rng = random.Random(seed)
-    vec = [rng.gauss(0.0, 1.0) for _ in range(EMBED_DIMS)]
-    norm = math.sqrt(sum(v * v for v in vec)) or 1.0
+    """Deterministic LEXICAL embedding by feature hashing. Not semantic -- say so, always.
+
+    The previous stub hashed the WHOLE string into one seed and emitted a random gaussian
+    vector. That is fine as a placeholder and disastrous as a retriever: two nearly identical
+    sentences got entirely unrelated vectors, so cosine similarity was pure noise. Recall still
+    returned five rows with plausible-looking distances, which is worse than returning nothing
+    -- it looked like ranking while being arbitrary. On this deployment, where Bedrock quota is
+    0 and the stub is always in use, that meant the memory layer could not actually retrieve
+    the relevant memory even when the query quoted it almost verbatim.
+
+    Feature hashing fixes the part that can be fixed without a model: each token is hashed into
+    one of EMBED_DIMS buckets and accumulated with sublinear term frequency, then the vector is
+    L2-normalised so cosine similarity behaves. Texts that share words now score close
+    together, which is genuine lexical retrieval.
+
+    What it still is NOT: semantic. "restart the service" and "bounce the process" share no
+    tokens and will not match. That limitation is real and is reported in provenance() rather
+    than hidden, because a lexical retriever presented as a semantic one is exactly the kind of
+    unearned claim this project exists to argue against. Titan embeddings replace this
+    automatically the moment quota exists.
+    """
+    counts: dict[int, float] = {}
+    for token in _TOKEN_RE.findall(text.lower()):
+        # Signed hashing: the sign bit reduces collision bias, so two unrelated tokens landing
+        # in the same bucket are as likely to cancel as to reinforce.
+        digest = hashlib.blake2b(token.encode("utf-8"), digest_size=8).digest()
+        h = int.from_bytes(digest, "big")
+        bucket = h % EMBED_DIMS
+        sign = 1.0 if (h >> 63) & 1 else -1.0
+        counts[bucket] = counts.get(bucket, 0.0) + sign
+
+    vec = [0.0] * EMBED_DIMS
+    for bucket, raw in counts.items():
+        # Sublinear TF: a word repeated ten times should not dominate a word used once.
+        vec[bucket] = math.copysign(1.0 + math.log(abs(raw)), raw) if raw else 0.0
+
+    norm = math.sqrt(sum(v * v for v in vec))
+    if not norm:
+        # Empty or token-free text. Fall back to a stable non-zero vector so the value is a
+        # legal VECTOR(512) and cosine distance stays defined.
+        seed = int.from_bytes(hashlib.sha256(text.encode("utf-8")).digest()[:8], "big")
+        rng = random.Random(seed)
+        vec = [rng.gauss(0.0, 1.0) for _ in range(EMBED_DIMS)]
+        norm = math.sqrt(sum(v * v for v in vec)) or 1.0
     return [v / norm for v in vec]
 
 
@@ -183,7 +226,10 @@ def provenance() -> str:
     if _real_used:
         return f"Amazon Bedrock {MODEL_ID} ({EMBED_DIMS}d)"
     if _stub_used:
-        return f"deterministic local stub ({EMBED_DIMS}d, no semantic meaning)"
+        return (
+            f"deterministic local stub ({EMBED_DIMS}d, LEXICAL: token overlap only -- "
+            "matches wording, not meaning, so synonyms will not match)"
+        )
     return "no embeddings computed"
 
 

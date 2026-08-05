@@ -3,6 +3,20 @@
 > **Every shipping agent-memory system asks a model whether its own memory is true.**
 > MemoryStand asks CloudWatch — and refuses the promotion when CloudWatch disagrees.
 
+**Memory changes what the agent does, and it does so with zero model calls.** Live, on the
+deployed API — a query recalls two candidate remediations, and the *further* one wins:
+
+```
+top recalled:  22207f6e  distance 0.414  unconfirmed  restart_service
+               fb3b7ec0  distance 0.565  verified     scale_up      <- chosen
+
+action: scale_up   reasoning_source: fallback_memory   model_calls: 0
+rationale: Chosen from memory fb3b7ec0 (trust_tier=verified) ... the memory
+           outranked the keyword table because reality has backed it.
+```
+
+Proximity said one thing; trust said another; trust won. No model was consulted.
+
 A memory layer for on-call AI agents that will not call a belief `verified` until something
 outside the model corroborates it: a recovered metric, re-queried and checked; a resolved
 incident; a human's sign-off. The promotion path makes **zero model calls**, and that is
