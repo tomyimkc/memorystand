@@ -120,6 +120,14 @@ MEMORYSTAND_ANTHROPIC_BASE_URL=https://api.teamorouter.com bash infra/deploy.sh
 The router API key lives in the SSM SecureString `/memorystand/anthropic_api_key`, never in the
 repo, and **must be rotated after the contest.**
 
+**Bedrock is the intended provider, and reclaims the path automatically.** A quota-increase
+request is open with AWS. The router is only a standby: Bedrock is tried first on every request,
+and the circuit breaker re-probes it every 60s, so the moment quota lands Bedrock takes over the
+reasoning path **with no redeploy** and `reasoning_source` flips to `bedrock:amazon.nova-lite-v1:0`
+(Nova Lite, because Claude-on-Bedrock is geo-refused for this account — `docs/BEDROCK_QUOTA.md`).
+Run `infra/check_bedrock.sh` to test whether quota has landed; today it reports
+`ThrottlingException: Too many tokens per day`, i.e. still 0.
+
 ## Explored: the CockroachDB Cloud MCP server
 
 Handshake against `https://cockroachlabs.cloud/mcp` succeeds: `serverInfo` name
