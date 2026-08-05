@@ -230,7 +230,10 @@ def _providers() -> list[tuple[str, Any]]:
     """
     chain: list[tuple[str, Any]] = [(f"bedrock:{bedrock_client.MODEL_ID}", bedrock_client)]
     if anthropic_client.available():
-        chain.append((f"anthropic:{anthropic_client.MODEL_ID}", anthropic_client))
+        # Named after the endpoint that will actually answer, not after the API shape it
+        # speaks -- see anthropic_client.provider_label().
+        chain.append((f"{anthropic_client.provider_label()}:{anthropic_client.MODEL_ID}",
+                      anthropic_client))
     return chain
 
 
