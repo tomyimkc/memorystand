@@ -168,3 +168,36 @@ def test_the_sweep_makes_no_model_calls(tenant_id, agent_id, monkeypatch):
     monkeypatch.setattr(evidence, "_average", _averages(100.0, 60.0))
     assert reverify.sweep(tenant_id)["model_calls"] == 0
     trust.assert_no_model_calls()
+
+
+def test_standing_granted_before_the_evidence_columns_existed_is_left_alone(
+    tenant_id, agent_id, monkeypatch
+):
+    """A schema change must not cost a memory its standing.
+
+    Migration 002 added outcome_source / outcome_external_ref. Anything promoted before that
+    has neither, so it cannot be re-checked. A dry run against the live cluster showed the
+    first version of the sweep queueing every such memory for demotion -- punishing earned
+    standing for a column that did not exist yet. "We never wrote down what we checked" is not
+    evidence that the check would now fail.
+    """
+    from backend import db
+
+    mid = _verified_memory(tenant_id, agent_id, monkeypatch)
+    _make_stale(tenant_id, mid)
+
+    conn = db.get_conn()
+    conn.autocommit = True
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE agent_decisions SET outcome_source = NULL, outcome_external_ref = NULL "
+                "WHERE tenant_id = %s",
+                (tenant_id,),
+            )
+    finally:
+        db.put_conn(conn)
+
+    out = reverify.sweep(tenant_id)
+    assert out["checked"] == 0, "a memory with no recorded evidence must not be swept"
+    assert memory.get(tenant_id, mid)["trust_tier"] == trust.VERIFIED

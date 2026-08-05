@@ -70,7 +70,22 @@ def _stale_verified(conn, tenant_id: str | None) -> list[dict[str, Any]]:
     record, so a sweep could learn nothing about it; ``disputed`` is already at the bottom;
     ``unconfirmed`` has nothing to lose.
     """
-    where = ["m.trust_tier = 'verified'"]
+    # Only sweep memories whose decision actually recorded WHAT was checked.
+    #
+    # Standing granted before migration 002 has no outcome_source or outcome_external_ref,
+    # because the columns did not exist. Those memories cannot be re-checked -- and a dry run
+    # against the live cluster showed the consequence of missing this: every one of them was
+    # queued for demotion to `attested`, punishing legitimately-earned standing for a schema
+    # change rather than for anything reality said.
+    #
+    # "We never wrote down what we checked" is not evidence that the check would now fail. The
+    # honest handling is to leave them alone; they will be re-checkable the next time an
+    # outcome is recorded against them.
+    where = [
+        "m.trust_tier = 'verified'",
+        "d.outcome_source IS NOT NULL",
+        "d.outcome_source <> ''",
+    ]
     params: list[Any] = []
     if tenant_id:
         where.append("m.tenant_id = %s")
