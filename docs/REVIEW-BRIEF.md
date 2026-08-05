@@ -110,7 +110,7 @@ scheduled re-verification sweep, Bedrock (see weaknesses).
 - **Concurrency:** 10 concurrent writers, 0 lost updates under real contention.
 - **Failover:** reads keep succeeding through a node loss (3 nodes on one machine).
 
-~15,000 lines, 131 tests, 80 commits.
+~15,000 lines, 135 tests, 80 commits.
 
 ## KNOWN WEAKNESSES — do not spend time rediscovering these
 

@@ -1,8 +1,9 @@
 # Devpost submission — MemoryStand
 
 Ready-to-paste copy for `cockroachdb-ai.devpost.com`, rewritten 2026-08-04 for the current build:
-region `us-west-2`, reasoning model `amazon.nova-lite-v1:0` (not Claude — see
-[docs/BEDROCK_QUOTA.md](BEDROCK_QUOTA.md)), and the measured 10k-row benchmark in `README.md`.
+region `us-west-2`. Live reasoning runs through a disclosed third-party router standby because
+Bedrock quota on this account is 0 (Field 6 and [DISCLOSURES.md](../DISCLOSURES.md)); the intended
+Bedrock model is `amazon.nova-lite-v1:0`, not Claude ([docs/BEDROCK_QUOTA.md](BEDROCK_QUOTA.md)).
 Field IDs are Devpost's own internal ids, included so this doc lines up with the live form
 field-for-field.
 
@@ -52,8 +53,9 @@ model, and this one structurally cannot. Lead with the comparison, concede the i
 > whole claim collapses into the self-consistency bucket everyone else is already in.
 >
 > CockroachDB is not incidental to this — it is why the mechanism is cheap to build correctly.
-> `AS OF SYSTEM TIME` lets `cross-examine` re-run an agent's exact recall query pinned to the
-> instant it paged someone, with no separate version table. SERIALIZABLE isolation (the only
+> `AS OF SYSTEM TIME` lets `cross-examine` reconstruct the accepted-memory belief state and the
+> recorded consulted ids as of the instant it paged someone, with no separate version table
+> (`replay.recall_as_of()` re-runs the ranked query and exists, but is not yet wired to that route). SERIALIZABLE isolation (the only
 > isolation level CockroachDB offers) is what makes two agents racing to write contradictory
 > memories about the same incident resolve to exactly one winner, provably, under real `40001`
 > contention — not a mocked test. And a prefix-partitioned vector index on
@@ -111,7 +113,7 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > → cross-examine loop with no AWS account and no CockroachDB Cloud account. Embeddings fall back
 > to a deterministic local stub (`MEMORYSTAND_EMBED_STUB=1`, set automatically by the script and
 > announced on screen — a stub result is never presented as a real embedding). `pytest -q` runs
-> the 78-test suite. `python cli/memorystand.py recall --query "payments failover"` drives the CLI
+> the 135-test suite. `python cli/memorystand.py recall --query "payments failover"` drives the CLI
 > directly. A deployed demo also exists now — see Field 1's URL,
 > `https://main.d19xad9aeccy3e.amplifyapp.com`, no account or login needed — this local path
 > remains as a fallback for judges who prefer to run it themselves.

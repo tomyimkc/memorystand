@@ -37,7 +37,7 @@ Proximity said one thing; trust said another; trust won.
 
 ### Measured against an LLM judge, not just cited
 
-`benchmarks/poisoning.md` — 600 adversarial claims plus honest controls, three defences, the
+`benchmarks/poisoning.md` — 540 adversarial claims plus 60 honest controls (600 total), three defences, the
 judge arm running live against a real model:
 
 | | attacks reaching `verified` | honest claims admitted |
@@ -139,10 +139,13 @@ agent already believes: a deterministic attribute-conflict check plus a vector-n
 similarity search. Conflicting memories are held for review and never returned by recall; a
 corrected fact supersedes the old one rather than deleting it.
 
-**3. Cross-examination.** `SELECT … AS OF SYSTEM TIME '<t>'` re-runs the agent's *identical*
-recall query pinned to a past instant, so you can ask what it believed at the moment it paged
-you, and diff that against now. (CockroachDB rejects `AS OF SYSTEM TIME` inside a subquery, so
-the diff is two pinned reads rather than one self-join — see [SPIKE-RESULTS.md](SPIKE-RESULTS.md).)
+**3. Cross-examination.** `SELECT … AS OF SYSTEM TIME '<t>'` reconstructs the memories that
+existed and were *accepted* at the instant a past decision was made, alongside the exact
+`consulted_memory_ids` that decision recorded — so you can ask what the agent believed when it
+paged you, and diff that against now. (It reconstructs the belief state, not the original vector
+ranking; `replay.recall_as_of()` would re-run the ranked query but is not yet wired to this path.
+CockroachDB rejects `AS OF SYSTEM TIME` inside a subquery, so the diff is two pinned reads — see
+[SPIKE-RESULTS.md](SPIKE-RESULTS.md).)
 
 ```
 $ memorystand cross-examine --decision-id <id>
@@ -257,7 +260,7 @@ Everything marked ✅ was run against a real CockroachDB v26.2.5 cluster, not ju
 |---|---|
 | Schema, admission control, outcome gate, cross-examination | ✅ end to end |
 | Incident fixtures (101 records, 2 designed conflicts) | ✅ 99 admitted, 2 held |
-| Test suite (`pytest`) | ✅ **132 passing** |
+| Test suite (`pytest`) | ✅ **135 passing** |
 | Concurrency + TOCTOU proof (`scripts/race_demo.py`) | ✅ real `40001` captured |
 | Benchmark harness (`scripts/loadtest.py`) | ✅ 10k rows, numbers below |
 | Lambda handler, 7 routes, kill switch, degraded mode | ✅ exercised over HTTP |
@@ -409,7 +412,7 @@ git clone <this-repo> && cd memorystand
 Then:
 
 ```bash
-.venv/bin/python -m pytest -q                                   # 132 tests
+.venv/bin/python -m pytest -q                                   # 135 tests
 .venv/bin/python cli/memorystand.py recall --query "payments failover"
 .venv/bin/python scripts/loadtest.py --rows 10000 --tenants 50  # reproduce the numbers below
 ```
@@ -455,7 +458,7 @@ honest status, the exact judge-facing URL shape, and what stays free for a ~6-we
   `docs/BEDROCK_QUOTA.md`); Titan Text Embeddings V2 (512-dim) for embeddings. Deliberately
   *absent* from the promotion path.
 - **AWS Lambda** — the whole backend, behind a Function URL.
-- **Amazon EventBridge Scheduler** — the periodic checkpoint job and keep-warm ping.
+- **Amazon EventBridge Scheduler** — the keep-warm schedule that pings `/health` (`infra/keepwarm.sh`). Re-verification (`backend/reverify.py`) is not yet on a schedule; it runs on demand — see the roadmap.
 - **AWS Systems Manager Parameter Store** — the CockroachDB DSN as a SecureString.
 - **Amazon CloudWatch Logs** — structured, correlated logs with explicit retention.
 - **AWS Amplify Hosting** — the static demo dashboard.

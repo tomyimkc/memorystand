@@ -93,10 +93,10 @@ after the second failure; the third and fourth return in under a second because 
 short-circuits straight to the deterministic fallback instead of dialing Bedrock at all. The
 local equivalent for `agent.propose()` shows the same shape: 12.35 s -> 8.66 s -> 0.00 s -> 0.00 s.
 
-Test suite: 132 passing (was 47); new files `tests/test_latency_budget.py` and
+Test suite: 135 passing (was 47); new files `tests/test_latency_budget.py` and
 `tests/test_security_invariants.py`.
 
-## Honest state: the deployed agent is not reasoning with a model
+## Honest state: the deployed agent reasons through a disclosed router standby, not Bedrock
 
 `GET /health`'s Bedrock `circuit_breakers` field spends much of its time `"open"`, for a mundane
 reason: Bedrock quota on this account is effectively zero, so the Bedrock attempt always fails and

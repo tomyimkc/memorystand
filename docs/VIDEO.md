@@ -192,7 +192,8 @@ memory id, and the line `model calls used to decide this: 0` in bold.
 
 **Narration (48 words → 19.2s):**
 > Here's the part nobody else does. The incident resolves in PagerDuty. That real-world outcome —
-> not a model — is what promotes this memory to verified, in one serializable CockroachDB
+> not a model — raises this memory's standing to attested (a CloudWatch metric is what reaches
+> verified), in one serializable CockroachDB
 > transaction. Zero model calls on this path. This isn't the model deciding it worked. It's the
 > world confirming it did.
 

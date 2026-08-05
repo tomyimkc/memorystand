@@ -386,7 +386,7 @@ beat4_alert_decide() {
 beat5_grant_standing() {
   if [[ "$QUIET" -eq 0 ]]; then
     beat_banner 5 "PagerDuty resolves -- grant_standing (0 model calls)"
-    say_narration "Here's the part nobody else does. The incident resolves in PagerDuty. That real-world outcome -- not a model -- is what promotes this memory to verified, in one serializable CockroachDB transaction. Zero model calls on this path. This isn't the model deciding it worked. It's the world confirming it did."
+    say_narration "Here's the part nobody else does. The incident resolves in PagerDuty. That real-world outcome -- not a model -- raises this memory's standing, in one serializable CockroachDB transaction, with zero model calls. PagerDuty has no machine-checkable record, so it reaches attested; a CloudWatch metric is what carries a memory all the way to verified. Either way, it's the world confirming it, not the model deciding it."
     countdown
     show_cmd "$PYTHON cli/memorystand.py confirm --decision-id ${DECISION_ID:+$(short "$DECISION_ID")} --outcome success --source pagerduty --ref INC-7734"
   fi
