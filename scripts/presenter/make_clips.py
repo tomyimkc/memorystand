@@ -44,6 +44,15 @@ SCRIPT_JSON = REPO_ROOT / "docs" / "demo" / "presenter-script.json"
 BASE_DIR = REPO_ROOT / "artifacts" / "presenter" / "base"
 CLIP_DIR = REPO_ROOT / "artifacts" / "presenter" / "clips"
 
+# The receipt. compose.py refuses to place any shot that is not recorded here as passing, so a
+# clip cannot reach the final cut just by existing on disk -- it has to have been checked. That
+# is the same rule this project applies to memories, applied to its own video.
+#
+# It lives under docs/ rather than artifacts/ because artifacts/ is gitignored, and a claim that
+# the footage was verified is worth exactly as much as a reader's ability to check it. The video
+# itself stays out of git; the evidence that it says what it claims does not.
+RECEIPT = REPO_ROOT / "docs" / "demo" / "presenter-verification.json"
+
 # Below this, the clip is not saying what it was told and must not be used.
 MIN_SIMILARITY = 0.72
 
@@ -104,6 +113,9 @@ def main() -> int:
 
     CLIP_DIR.mkdir(parents=True, exist_ok=True)
     ok = bad = missing = 0
+    receipt: dict[str, dict] = {}
+    if RECEIPT.is_file():
+        receipt = json.loads(RECEIPT.read_text()).get("shots", {})
 
     for beat in beats:
         base = BASE_DIR / f"{beat['id']}.png"
@@ -129,6 +141,13 @@ def main() -> int:
 
             heard = transcribe(out)
             score = similarity(line, heard)
+            receipt[tag] = {
+                "clip": out.name,
+                "asked": line,
+                "heard": heard,
+                "similarity": round(score, 3),
+                "passed": score >= MIN_SIMILARITY,
+            }
             if score >= MIN_SIMILARITY:
                 print(f"    {tag}: OK  similarity {score:.2f}")
                 ok += 1
@@ -138,6 +157,11 @@ def main() -> int:
                 print(f"        asked: {line}")
                 print(f"        heard: {heard}")
                 print(f"        -> delete {out.name} and rerun; do NOT ship this shot")
+
+    RECEIPT.write_text(json.dumps(
+        {"minSimilarity": MIN_SIMILARITY, "shots": dict(sorted(receipt.items()))}, indent=2
+    ) + "\n")
+    print(f"\n  receipt -> {RECEIPT.relative_to(REPO_ROOT)}")
 
     total = ok + bad + missing
     print(f"\n  {ok}/{total} shot(s) verified saying what they were told")
