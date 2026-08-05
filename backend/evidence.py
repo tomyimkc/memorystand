@@ -48,6 +48,11 @@ from typing import Any
 # between the claimed delta and the observed one.
 WINDOW_MINUTES = int(os.environ.get("MEMORYSTAND_EVIDENCE_WINDOW_MINUTES", "15"))
 TOLERANCE = float(os.environ.get("MEMORYSTAND_EVIDENCE_TOLERANCE", "0.5"))
+# Deliberately AWS_REGION, NOT MEMORYSTAND_BEDROCK_REGION. CloudWatch metrics exist only in
+# the region that emitted them, so pointing the evidence checker at the model's region would
+# return "no datapoints" for every query and silently downgrade every outcome to `attested` --
+# a verification system that quietly stops verifying. The model region and the truth region
+# are different things and must stay different variables.
 REGION = os.environ.get("AWS_REGION", "us-west-2")
 
 # Verification outcomes. These are deliberately four values, not a boolean: "we checked and
