@@ -280,6 +280,14 @@ print(json.dumps({"Variables": {
     "MEMORYSTAND_KILL_SWITCH_SSM_PARAM": "/memorystand/kill_switch",
     "MEMORYSTAND_SHARED_SECRET_SSM_PARAM": "/memorystand/shared_secret",
     "MEMORYSTAND_EMBED_MODEL": "amazon.titan-embed-text-v2:0",
+    # The CHAT model id is the CROSS-REGION INFERENCE PROFILE, not the bare model id, and
+    # that is not a preference -- Amazon Nova Lite has NO on-demand quota entry in Bedrock at
+    # all. Enumerating every Nova Lite quota in us-west-2 returns only "Cross-region model
+    # inference requests/tokens per minute"; there is no on-demand equivalent to raise. So
+    # "amazon.nova-lite-v1:0" can never work here however much quota is granted, and returns
+    # ValidationException telling you to use a profile. us.amazon.nova-lite-v1:0 is ACTIVE in
+    # us-west-2 and is the id that will start working the moment quota lands.
+    #
     # Both overridable, so inference can be pointed at whichever region has quota without a
     # code change. Defaults stay co-located with everything else: measured 2026-08-05, this
     # account has 0 requests/min for Nova Lite in EVERY region checked (us-east-1, us-west-2,
@@ -292,7 +300,7 @@ print(json.dumps({"Variables": {
     #
     # NOTE: no apostrophes in this block. It lives inside python3 -c with single quotes, so
     # one apostrophe closes the shell string and errors far from the real cause.
-    "MEMORYSTAND_CHAT_MODEL": os.environ.get("MEMORYSTAND_CHAT_MODEL", "amazon.nova-lite-v1:0"),
+    "MEMORYSTAND_CHAT_MODEL": os.environ.get("MEMORYSTAND_CHAT_MODEL", "us.amazon.nova-lite-v1:0"),
     "MEMORYSTAND_BEDROCK_REGION": os.environ.get("MEMORYSTAND_BEDROCK_REGION", "us-west-2"),
 }}))
 ' > "$ENV_FILE" )
