@@ -3,6 +3,33 @@
 > **Every shipping agent-memory system asks a model whether its own memory is true.**
 > MemoryStand asks CloudWatch — and refuses the promotion when CloudWatch disagrees.
 
+**The agent reasons over its own memory, and the trust ladder is what it reasons over.** Live,
+on the deployed API:
+
+```
+reasoning_source: anthropic:claude-haiku-4-5    model_calls: 1
+action: restart_service
+
+rationale: During INC-4610, a payments-service p99 latency spike was resolved by
+restarting payments-service after pausing ledger-worker-cg first. The current
+alert matches that pattern.
+```
+
+Amazon Bedrock is tried first and stays the preferred provider — this account has 0 Bedrock
+inference quota in every region, and the moment that changes it takes over with no code change.
+`reasoning_source` always names the provider that actually answered.
+
+**And when no model is available at all, memory still decides — with zero model calls.** Live:
+
+```
+top recalled:  22207f6e  distance 0.414  unconfirmed  restart_service
+               fb3b7ec0  distance 0.565  verified     scale_up      <- chosen
+
+action: scale_up   reasoning_source: fallback_memory   model_calls: 0
+```
+
+Proximity said one thing; trust said another; trust won.
+
 **Memory changes what the agent does, and it does so with zero model calls.** Live, on the
 deployed API — a query recalls two candidate remediations, and the *further* one wins:
 

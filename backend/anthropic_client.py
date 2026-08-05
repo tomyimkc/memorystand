@@ -45,10 +45,21 @@ from typing import Any
 
 from . import bedrock_client
 
-API_URL = "https://api.anthropic.com/v1/messages"
+# Base URL is configurable because the Anthropic Messages format is spoken by more than
+# Anthropic: OpenAI-compatible routers and self-hosted gateways implement it too, and pinning
+# the hostname would force a code change to move between them. Verified against both
+# api.anthropic.com and a router endpoint, including tool_use, which is the part that matters
+# -- the agent's contract is one action from a closed allow-list, not free prose.
+API_URL = os.environ.get(
+    "MEMORYSTAND_ANTHROPIC_BASE_URL", "https://api.anthropic.com"
+).rstrip("/") + "/v1/messages"
 API_VERSION = "2023-06-01"
 
-MODEL_ID = os.environ.get("MEMORYSTAND_ANTHROPIC_MODEL", "claude-sonnet-4-5")
+# Haiku by default rather than a larger model, on purpose. This call sits on an on-call
+# decision path inside a 30s Lambda budget that it shares with an embedding call and the
+# database work, and the task is choosing one action from a five-item enum given a handful of
+# recalled memories. That is a small-model task, and latency is a feature here.
+MODEL_ID = os.environ.get("MEMORYSTAND_ANTHROPIC_MODEL", "claude-haiku-4-5")
 SSM_PARAM = os.environ.get("MEMORYSTAND_ANTHROPIC_SSM_PARAM", "/memorystand/anthropic_api_key")
 
 # Same latency discipline as the Bedrock client: this sits inside a 30s Lambda budget and
