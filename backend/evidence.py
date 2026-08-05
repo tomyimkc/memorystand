@@ -63,6 +63,12 @@ CONFIRMED = "confirmed"
 CONTRADICTED = "contradicted"
 UNAVAILABLE = "unavailable"
 NOT_VERIFIABLE = "not_verifiable"
+# The metric is real and moved as claimed, but it is not a metric ABOUT the thing the memory
+# is about. Found by benchmarks/poisoning_benchmark.py, which showed this was a clean bypass:
+# take a genuine, independently-confirmable improvement, file it under a different service, and
+# it reached `verified` every time and then outranked honest memories. Verifying that a number
+# moved is not the same as verifying it moved for the subject of the claim.
+ENTITY_MISMATCH = "entity_mismatch"
 
 _client: Any = None
 
@@ -119,11 +125,31 @@ def _parse_dims(raw: str | None) -> list[dict[str, str]]:
     return dims
 
 
+def _entity_matches(entity: str | None, external_ref: str) -> bool:
+    """Is this metric plausibly ABOUT the entity the memory concerns?
+
+    Deliberately a containment check over the reference string rather than a lookup: metric
+    dimensions carry the service identity in practice (FunctionName=payments-service,
+    ServiceName=checkout-api), and requiring a curated entity->metric map would make the check
+    unusable for anyone who has not built one. Comparison is case- and separator-insensitive
+    because "payments-service" and "payments_service" are the same service.
+
+    Returns True when no entity is supplied -- callers that do not know the subject cannot have
+    this checked for them, and silently failing them closed would break every legitimate
+    caller that predates this argument.
+    """
+    if not entity:
+        return True
+    norm = lambda t: t.lower().replace("-", "").replace("_", "").replace(" ", "")
+    return norm(entity) in norm(external_ref)
+
+
 def verify(
     source: str,
     external_ref: str,
     claimed_delta: float | None,
     decided_at: _dt.datetime | None,
+    entity: str | None = None,
 ) -> Verification:
     """Re-check an outcome claim. Never raises -- an unverifiable claim is a result, not an error.
 
@@ -149,6 +175,19 @@ def verify(
 
     if claimed_delta is None:
         return Verification(NOT_VERIFIABLE, "source='metric' with no metric_delta to check")
+
+    # Check the SUBJECT before checking the number. A real improvement attached to the wrong
+    # service is the most dangerous input this function sees: every downstream check passes,
+    # the memory reaches `verified`, and it then outranks honest memories about the service it
+    # was misfiled under. Confirming that a metric moved says nothing about whose metric it is.
+    if not _entity_matches(entity, external_ref):
+        return Verification(
+            ENTITY_MISMATCH,
+            f"the memory concerns {entity!r} but the evidence is {external_ref!r}, which does "
+            "not identify that entity. The metric may well have moved exactly as claimed -- it "
+            "is not evidence about this subject, so it cannot grant this memory standing.",
+            claimed=claimed_delta,
+        )
 
     anchor = decided_at or _dt.datetime.now(_dt.timezone.utc)
     if anchor.tzinfo is None:

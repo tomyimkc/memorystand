@@ -200,3 +200,62 @@ def test_cloudwatch_is_allowed_because_the_rule_is_about_models_not_networks() -
 
     assert "boto3" not in dir(ev) or True  # imported lazily inside _get_client
     trust.assert_no_model_calls()
+
+
+# --- The bypass the poisoning benchmark found -------------------------------------------
+
+def test_a_real_metric_filed_under_the_wrong_entity_cannot_reach_verified(monkeypatch):
+    """The most dangerous input this function sees, and it used to sail straight through.
+
+    benchmarks/poisoning_benchmark.py showed the attack: take a genuine, independently
+    confirmable CloudWatch improvement, attach it to a memory about a DIFFERENT service, and it
+    reached `verified` 100% of the time -- then outranked honest memories about the service it
+    had been misfiled under. Every downstream check passed, because every downstream check was
+    asking whether the number moved, and none was asking whose number it was.
+    """
+    monkeypatch.setattr(evidence, "_average", _fake_averages(before=100.0, after=60.0))
+    v = evidence.verify(
+        "metric",
+        "AWS/Lambda|Duration|FunctionName=checkout-api",
+        -40.0,
+        None,
+        entity="payments-service",
+    )
+    assert v.status == evidence.ENTITY_MISMATCH
+    assert not v.grants_verified_tier
+    assert "payments-service" in v.detail
+
+
+def test_a_matching_entity_still_verifies(monkeypatch):
+    """The check must not be so strict that honest evidence stops working."""
+    monkeypatch.setattr(evidence, "_average", _fake_averages(before=100.0, after=60.0))
+    v = evidence.verify(
+        "metric",
+        "AWS/Lambda|Duration|FunctionName=payments-service",
+        -40.0,
+        None,
+        entity="payments-service",
+    )
+    assert v.status == evidence.CONFIRMED
+    assert v.grants_verified_tier
+
+
+def test_entity_matching_ignores_separators_and_case(monkeypatch):
+    """'payments_service' and 'Payments-Service' are the same service."""
+    monkeypatch.setattr(evidence, "_average", _fake_averages(before=100.0, after=60.0))
+    v = evidence.verify(
+        "metric", "AWS/ECS|Latency|ServiceName=Payments_Service", -40.0, None,
+        entity="payments-service",
+    )
+    assert v.status == evidence.CONFIRMED
+
+
+def test_no_entity_supplied_means_no_entity_check(monkeypatch):
+    """Callers that do not know the subject must not be failed closed for it.
+
+    Failing them closed would break every legitimate caller that predates this argument, and
+    "we do not know the subject" is not evidence of a mismatch.
+    """
+    monkeypatch.setattr(evidence, "_average", _fake_averages(before=100.0, after=60.0))
+    v = evidence.verify("metric", "AWS/Lambda|Duration|FunctionName=anything", -40.0, None)
+    assert v.status == evidence.CONFIRMED
