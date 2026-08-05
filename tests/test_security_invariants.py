@@ -29,7 +29,19 @@ import uuid
 
 import pytest
 
-from backend import db, decisions, handler, memory, replay, trust
+from backend import db, decisions, evidence, handler, memory, replay, trust
+
+
+def _averages(before: float, after: float):
+    """A stub CloudWatch average: odd calls return `before`, even return `after`, so a delta of
+    `after - before` is observed. Mirrors the helper in test_reverification.py."""
+    calls = {"n": 0}
+
+    def _avg(client, namespace, metric, dims, start, end):
+        calls["n"] += 1
+        return before if calls["n"] % 2 == 1 else after
+
+    return _avg
 
 
 # --- 1. The injection sink ---------------------------------------------------------------
@@ -196,6 +208,48 @@ def test_attacker_cannot_promote_another_tenants_memory_via_their_own_decision(
             conn.commit()
         finally:
             db.put_conn(conn)
+
+
+def test_one_metric_only_verifies_memories_about_its_own_entity(tenant_id, agent_id, monkeypatch):
+    """A CloudWatch metric confirms ONE entity; a sibling memory about another entity in the same
+    decision must not inherit 'verified' standing it never earned.
+
+    An outside review found this: a decision that produces [memory about payments-service, memory
+    about ledger-worker], confirmed by a metric that is only about payments-service, promoted BOTH
+    to 'verified' -- the single verdict fanned out over the whole produced array. After the fix,
+    only the memory whose own entity matches the checked metric reaches 'verified'; the other had
+    a reported-good outcome but no metric of its own, so it lands at 'attested', not 'verified'.
+
+    `_decided_at` picks which entity to check with a `LIMIT 1` whose result is unordered, so the
+    checked entity is pinned here to make the assertion deterministic; the security property --
+    the unrelated entity never reaches 'verified' -- holds whichever entity is picked.
+    """
+    ref = "AWS/Lambda|Duration|FunctionName=payments-service"
+    monkeypatch.setattr(evidence, "_average", _averages(100.0, 60.0))
+    real_decided_at = trust._decided_at
+    monkeypatch.setattr(trust, "_decided_at",
+                        lambda t, d: (real_decided_at(t, d)[0], "payments-service"))
+
+    mem_x = memory.remember(tenant_id, agent_id, "scaling payments-service cleared the spike",
+                            entity="payments-service")
+    mem_y = memory.remember(tenant_id, agent_id, "ledger-worker was restarted around then",
+                            entity="ledger-worker")
+    decision = decisions.decide(
+        tenant_id, agent_id, action="scale_up", rationale="r", consulted_memory_ids=[],
+        produced_memory_ids=[mem_x["memory_id"], mem_y["memory_id"]],
+    )
+    trust.grant_standing(
+        tenant_id, decision["decision_id"],
+        {"outcome": "success", "source": "metric", "external_ref": ref, "metric_delta": -40.0},
+    )
+
+    tier_x = memory.get(tenant_id, mem_x["memory_id"])["trust_tier"]
+    tier_y = memory.get(tenant_id, mem_y["memory_id"])["trust_tier"]
+    assert tier_x == trust.VERIFIED, "the memory the metric actually confirmed must reach verified"
+    assert tier_y == trust.ATTESTED, (
+        f"ledger-worker reached {tier_y!r}: a metric about payments-service must not grant a "
+        "memory about a different service the standing reality never gave it"
+    )
 
 
 def test_grant_standing_requires_tenant_positionally() -> None:

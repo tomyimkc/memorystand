@@ -144,6 +144,16 @@ def _entity_matches(entity: str | None, external_ref: str) -> bool:
     return norm(entity) in norm(external_ref)
 
 
+def entity_matches(entity: str | None, external_ref: str) -> bool:
+    """Public alias for ``_entity_matches``.
+
+    ``trust._apply`` needs this on the promotion path to decide which produced memories a single
+    verified metric actually vouches for; reaching into a private helper on a trust-critical path
+    is worth one line to avoid.
+    """
+    return _entity_matches(entity, external_ref)
+
+
 def verify(
     source: str,
     external_ref: str,

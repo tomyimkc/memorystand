@@ -202,6 +202,12 @@ def sweep(tenant_id: str | None = None, *, dry_run: bool = False) -> dict[str, A
 
         return result
     finally:
+        # Hand the connection back in the mode the rest of the codebase expects. This sweep runs
+        # with autocommit=True (each demote/touch commits on its own, so one sweep does not hold
+        # a table-wide transaction against live traffic). Reset it at the leak site rather than
+        # rely on db.put_conn's backstop or on psycopg2's pool happening to reset it -- returning
+        # a connection in a non-default mode is a hazard even where the current pool masks it.
+        conn.autocommit = False
         db.put_conn(conn)
 
 

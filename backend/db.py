@@ -96,8 +96,25 @@ def get_conn():
 
 
 def put_conn(conn) -> None:
-    if _pool is not None:
-        _pool.putconn(conn)
+    if _pool is None:
+        return
+    # Return the connection to the pool in a known transaction mode. The pool is maxconn=1 (see
+    # the module docstring) and reverify.sweep() runs with autocommit=True, so in principle a
+    # leaked mode could reach the next retry_serializable() caller, whose commit()/rollback() and
+    # 40001 retry assume autocommit=False.
+    #
+    # HONEST NOTE: probing the live pool showed psycopg2 does NOT actually propagate the leak --
+    # the next getconn returns a reset connection, so no caller was observed in the wrong mode.
+    # This normalisation is therefore hardening of a fragile, undocumented assumption rather than
+    # the fix of an exploited bug; it costs nothing and makes the invariant explicit instead of
+    # dependent on pool internals. Guarded on the flag because setting autocommit while a
+    # transaction is open raises, and only the autocommit=True path has no open transaction.
+    try:
+        if conn.autocommit:
+            conn.autocommit = False
+    except Exception:  # noqa: BLE001 - a connection we cannot normalise still gets returned
+        pass
+    _pool.putconn(conn)
 
 
 def close_pool() -> None:
