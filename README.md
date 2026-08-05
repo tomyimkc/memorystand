@@ -30,6 +30,21 @@ action: scale_up   reasoning_source: fallback_memory   model_calls: 0
 
 Proximity said one thing; trust said another; trust won.
 
+### Measured against an LLM judge, not just cited
+
+`benchmarks/poisoning.md` — 600 adversarial claims plus honest controls, three defences, the
+judge arm running live against a real model:
+
+| | attacks reaching `verified` | honest claims admitted |
+|---|---:|---:|
+| trust the caller | **100%** | 100% |
+| LLM-as-judge *(what Mem0/Zep/AgentCore do)* | 0% | **0%** |
+| outcome-gated | **0%** | **100%** |
+
+The LLM judge does not block attacks by discriminating — it blocks *everything*, including
+every honest claim. A defence that refuses all evidence stops all poisoning and is useless.
+Only the outcome gate separates the two, and it does so with **zero model calls**.
+
 **Memory changes what the agent does, and it does so with zero model calls.** Live, on the
 deployed API — a query recalls two candidate remediations, and the *further* one wins:
 
