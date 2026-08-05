@@ -126,6 +126,13 @@ def _stub_embedding(text: str) -> list[float]:
 # with MEMORYSTAND_EMBED_DEADLINE_S.
 EMBED_DEADLINE_S = float(os.environ.get("MEMORYSTAND_EMBED_DEADLINE_S", "6"))
 
+# Same principle as bedrock_client's probe budget: an embedding provider that has never once
+# answered in this container does not get the full deadline to fail in. On a cold Lambda the
+# breaker starts closed, so the first request paid 6s here AND the chat deadline before
+# reaching anything that works. Discovering a dependency is down should be cheap; only a
+# dependency that has demonstrated it works has earned the full budget.
+EMBED_PROBE_DEADLINE_S = float(os.environ.get("MEMORYSTAND_EMBED_PROBE_DEADLINE_S", "2"))
+
 
 def embed(text: str, *, max_retries: int = 5) -> list[float]:
     """Return a ``EMBED_DIMS``-dimensional embedding for ``text``.
@@ -158,6 +165,7 @@ def embed(text: str, *, max_retries: int = 5) -> list[float]:
         return _stub_embedding(text)
 
     body = json.dumps({"inputText": text, "dimensions": EMBED_DIMS})
+    deadline = EMBED_DEADLINE_S if _real_used else min(EMBED_DEADLINE_S, EMBED_PROBE_DEADLINE_S)
     started = time.monotonic()
     for attempt in range(1, max_retries + 1):
         # Retrying a throttled model is only worth it while there is time left. Without
@@ -165,9 +173,9 @@ def embed(text: str, *, max_retries: int = 5) -> list[float]:
         # timeout, and the caller sees a 30s hang instead of a fast, honest degradation.
         # Observed exactly that in production: /recall and /decide returned
         # "Internal Server Error" via `Status: timeout` while Bedrock quota was zero.
-        if time.monotonic() - started > EMBED_DEADLINE_S:
+        if time.monotonic() - started > deadline:
             print(
-                f"[embeddings] giving up on Bedrock after {EMBED_DEADLINE_S}s "
+                f"[embeddings] giving up on Bedrock after {deadline}s "
                 f"({attempt - 1} attempts); using the deterministic stub. "
                 f"Latency stays valid; relevance does NOT.",
                 flush=True,

@@ -76,6 +76,21 @@ MAX_ATTEMPTS = 5
 # in a few hundred milliseconds. backend/embeddings.py learned this first; a throttled
 # dependency must never be able to consume the caller's whole budget.
 DEADLINE_S = float(os.environ.get("MEMORYSTAND_MODEL_DEADLINE_S", "8"))
+
+# A much tighter budget for the FIRST call in a container, before this provider has ever
+# proven it works.
+#
+# The circuit breaker only helps once it has something to learn from: on a cold Lambda it
+# starts closed, so the first request pays the full deadline rediscovering an outage that has
+# been permanent for days. Measured on the deployed function: cold 22.5s against warm 4.5-6s,
+# and 22.5s is close enough to the 30s ceiling to matter to whoever clicks first.
+#
+# The principle generalises past this deployment: discovering that a dependency is down should
+# be cheap, and only a dependency that has demonstrated it works has earned the full budget.
+# A provider that is genuinely healthy answers a probe well inside 2s and then gets the rest.
+FIRST_CALL_DEADLINE_S = float(os.environ.get("MEMORYSTAND_MODEL_PROBE_DEADLINE_S", "2"))
+
+_ever_succeeded = False
 BASE_BACKOFF_S = 0.5
 MAX_BACKOFF_S = 8.0
 
@@ -126,6 +141,12 @@ def _get_client():
             ),
         )
     return _client
+
+
+def _mark_succeeded() -> None:
+    """This provider has now proven it works, so it earns the full deadline from here."""
+    global _ever_succeeded
+    _ever_succeeded = True
 
 
 def call_count() -> int:
@@ -208,17 +229,21 @@ def _converse_attempts(client, kwargs: dict[str, Any]) -> dict:
         NoCredentialsError,
     )
 
+    # Unproven provider gets a probe-sized budget; a proven one gets the real deadline.
+    deadline = DEADLINE_S if _ever_succeeded else min(DEADLINE_S, FIRST_CALL_DEADLINE_S)
+
     last_exc: Exception | None = None
     started = time.monotonic()
     for attempt in range(1, MAX_ATTEMPTS + 1):
-        if time.monotonic() - started > DEADLINE_S:
+        if time.monotonic() - started > deadline:
             raise ModelUnavailable(
-                f"Bedrock did not answer within {DEADLINE_S}s ({attempt - 1} attempts); "
+                f"Bedrock did not answer within {deadline}s ({attempt - 1} attempts); "
                 "falling back rather than holding the request open"
             ) from last_exc
         try:
             response = client.converse(**kwargs)
             _call_count += 1
+            _mark_succeeded()
             breaker.chat.record_success()
             return response
         except NoCredentialsError as exc:
@@ -233,10 +258,10 @@ def _converse_attempts(client, kwargs: dict[str, Any]) -> dict:
                 # retries across concurrent callers are what turn one throttle
                 # response into a pile of them.
                 backoff = min(MAX_BACKOFF_S, BASE_BACKOFF_S * (2 ** (attempt - 1)))
-                remaining = DEADLINE_S - (time.monotonic() - started)
+                remaining = deadline - (time.monotonic() - started)
                 if remaining <= 0:
                     raise ModelUnavailable(
-                        f"Bedrock still throttling at the {DEADLINE_S}s deadline ({code})"
+                        f"Bedrock still throttling at the {deadline}s deadline ({code})"
                     ) from exc
                 time.sleep(min(random.uniform(0, backoff), remaining))
                 continue
