@@ -35,7 +35,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from . import bedrock_client, decisions, memory
+from . import anthropic_client, bedrock_client, decisions, memory
 
 ALLOWED_ACTIONS: tuple[str, ...] = (
     "page_oncall",
@@ -212,7 +212,29 @@ def _format_memories_for_prompt(recalled: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def _ask_model(alert_text: str, recalled: list[dict]) -> dict[str, Any]:
+def _providers() -> list[tuple[str, Any]]:
+    """Reasoning providers in preference order.
+
+    Bedrock stays FIRST and that ordering is deliberate rather than sentimental: it is the AWS
+    service this project is built around, and the moment its quota is granted it should take
+    over with no code change and no redeploy. Anthropic is the standby that makes the agent
+    work today, because every Bedrock inference quota on this account is 0.
+
+    Trying Bedrock first is cheap even while it is failing -- backend/breaker.py opens after
+    two consecutive failures and then refuses in microseconds, so the chain costs a warm
+    container almost nothing before reaching the provider that works. The circuit breaker was
+    built for latency and turns out to make provider fallback nearly free.
+
+    A provider that cannot possibly work is skipped rather than attempted, so a deployment with
+    no Anthropic key does not pay a network timeout to rediscover that on every request.
+    """
+    chain: list[tuple[str, Any]] = [(f"bedrock:{bedrock_client.MODEL_ID}", bedrock_client)]
+    if anthropic_client.available():
+        chain.append((f"anthropic:{anthropic_client.MODEL_ID}", anthropic_client))
+    return chain
+
+
+def _ask_model(alert_text: str, recalled: list[dict], client=bedrock_client) -> dict[str, Any]:
     """Ask the configured chat model to propose one action. Raises ``bedrock_client.ModelUnavailable``
     if Bedrock cannot be reached, or if the model's response does not include a
     well-formed ``propose_action`` call -- both are treated the same way by the
@@ -220,7 +242,7 @@ def _ask_model(alert_text: str, recalled: list[dict]) -> dict[str, Any]:
     """
     context = _format_memories_for_prompt(recalled)
     user_text = f"Alert:\n{alert_text}\n\nRecalled memories:\n{context}"
-    response = bedrock_client.converse(
+    response = client.converse(
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": [{"text": user_text}]}],
         tools=[_PROPOSE_ACTION_TOOL],
@@ -264,24 +286,39 @@ def propose(situation: str, recalled: list[dict[str, Any]]) -> dict[str, Any]:
     keyword table silently impersonating an agent is precisely the failure this project
     should not ship.
     """
-    calls_before = bedrock_client.call_count()
-    try:
-        proposal = _ask_model(situation, recalled)
+    calls_before = bedrock_client.call_count() + anthropic_client.call_count()
+
+    # Try each provider in preference order. reasoning_source names the one that actually
+    # answered -- never the one that was configured -- so a reader can always tell whether a
+    # model decided this, and which.
+    proposal = None
+    source = ""
+    last_error: Exception | None = None
+    for name, client in _providers():
+        try:
+            proposal = _ask_model(situation, recalled, client)
+            source = name
+            break
+        except bedrock_client.ModelUnavailable as exc:
+            last_error = exc
+
+    if proposal is not None:
         action = str(proposal["action"])
         rationale = str(proposal["rationale"])
-        source = f"bedrock:{bedrock_client.MODEL_ID}"
-    except bedrock_client.ModelUnavailable as exc:
+    else:
         action, why = _fallback_action(situation, recalled)
         rationale = (
-            f"Deterministic fallback: the reasoning model was unavailable ({exc}). {why}"
+            f"Deterministic fallback: no reasoning model was available ({last_error}). {why}"
         )
         source = "fallback_memory" if "Chosen from memory" in why else "fallback_heuristic"
+
     return {
         "action": action,
         "rationale": rationale,
         "requires_approval": action in HIGH_RISK_ACTIONS,
         "reasoning_source": source,
-        "model_calls": bedrock_client.call_count() - calls_before,
+        "model_calls": (bedrock_client.call_count() + anthropic_client.call_count())
+        - calls_before,
     }
 
 
