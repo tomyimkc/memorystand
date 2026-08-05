@@ -311,6 +311,8 @@ print(json.dumps({"Variables": {
         "MEMORYSTAND_ANTHROPIC_BASE_URL", "https://api.teamorouter.com"),
     "MEMORYSTAND_ANTHROPIC_MODEL": os.environ.get(
         "MEMORYSTAND_ANTHROPIC_MODEL", "claude-haiku-4-5"),
+    "MEMORYSTAND_ANTHROPIC_DEADLINE_S": os.environ.get(
+        "MEMORYSTAND_ANTHROPIC_DEADLINE_S", "8"),
 }}))
 ' > "$ENV_FILE" )
 unset DSN_VALUE

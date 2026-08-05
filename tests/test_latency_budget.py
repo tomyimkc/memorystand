@@ -100,6 +100,29 @@ def test_embedding_deadline_is_inside_the_lambda_budget() -> None:
     assert 0 < embeddings.EMBED_DEADLINE_S <= 30
 
 
+def test_every_provider_deadline_fits_in_one_request() -> None:
+    """A single /decide can pay the embedding deadline AND a model deadline, serially.
+
+    Each budget being individually under 30s is not sufficient, and the provider chain made
+    this sharper: a request can now try Bedrock, have it fail, and then try a second provider.
+    Measured on the deployed Lambda that reached 17.9s warm -- close enough to the 30s ceiling
+    to be worth pinning, because a timeout returns a 502 with nothing while giving up on the
+    model returns a memory-driven answer.
+    """
+    from backend import anthropic_client
+
+    worst = (
+        embeddings.EMBED_DEADLINE_S
+        + bedrock_client.DEADLINE_S
+        + anthropic_client.DEADLINE_S
+    )
+    assert worst < 25, (
+        f"embedding ({embeddings.EMBED_DEADLINE_S}s) + bedrock ({bedrock_client.DEADLINE_S}s) "
+        f"+ anthropic ({anthropic_client.DEADLINE_S}s) = {worst}s, leaving too little of the "
+        "30s Lambda timeout for the database work and the response"
+    )
+
+
 def test_both_deadlines_fit_in_one_request() -> None:
     """/decide embeds AND reasons; the two deadlines are serial, so they must sum to fit.
 
@@ -199,3 +222,36 @@ def test_open_circuit_is_visible_on_health() -> None:
     snap = breaker_mod.snapshot()
     assert set(snap) == {"bedrock-converse", "bedrock-embed"}
     assert all(v in {"closed", "open", "half_open"} for v in snap.values())
+
+
+def test_an_unproven_provider_only_gets_a_probe_sized_budget(throttled, monkeypatch) -> None:
+    """Discovering a dependency is down must be cheap; only a working one earns the full budget.
+
+    The circuit breaker can only help once it has something to learn from. On a cold Lambda it
+    starts closed, so the first request paid the whole deadline rediscovering an outage that had
+    been permanent for days -- measured at 22.5s cold against 4.5-6s warm, uncomfortably close
+    to the 30s ceiling and paid by whoever clicks first.
+    """
+    monkeypatch.setattr(bedrock_client, "DEADLINE_S", 8.0)
+    monkeypatch.setattr(bedrock_client, "FIRST_CALL_DEADLINE_S", 1.0)
+    monkeypatch.setattr(bedrock_client, "_ever_succeeded", False)
+    from backend import breaker as breaker_mod
+
+    breaker_mod.chat.reset()
+
+    started = time.monotonic()
+    with pytest.raises(bedrock_client.ModelUnavailable):
+        bedrock_client.converse("s", [{"role": "user", "content": [{"text": "hi"}]}])
+    elapsed = time.monotonic() - started
+    breaker_mod.chat.reset()
+
+    assert elapsed < 4.0, (
+        f"an unproven provider took {elapsed:.1f}s against a 1.0s probe budget -- a cold "
+        "container is paying the full deadline to rediscover a known outage"
+    )
+
+
+def test_a_proven_provider_gets_the_full_deadline() -> None:
+    """The probe must not permanently cap a provider that works."""
+    assert bedrock_client.FIRST_CALL_DEADLINE_S < bedrock_client.DEADLINE_S
+    assert bedrock_client.FIRST_CALL_DEADLINE_S > 0

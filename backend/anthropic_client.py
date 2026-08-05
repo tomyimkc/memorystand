@@ -64,7 +64,12 @@ SSM_PARAM = os.environ.get("MEMORYSTAND_ANTHROPIC_SSM_PARAM", "/memorystand/anth
 
 # Same latency discipline as the Bedrock client: this sits inside a 30s Lambda budget and
 # shares it with an embedding call and the database work.
-DEADLINE_S = float(os.environ.get("MEMORYSTAND_ANTHROPIC_DEADLINE_S", "10"))
+# 8s, not 10. Measured on the deployed Lambda, warm: 4.7s, 5.3s, 13.3s, 17.9s. The 17.9s
+# outlier is uncomfortably close to the 30s Lambda ceiling, and a request that times out
+# returns a 502 with nothing -- strictly worse than one that gives up on the model and answers
+# from memory, because the memory-driven fallback is now genuinely good. Failing to it costs a
+# rationale, not a decision.
+DEADLINE_S = float(os.environ.get("MEMORYSTAND_ANTHROPIC_DEADLINE_S", "8"))
 
 _api_key: str | None = None
 _key_loaded = False
