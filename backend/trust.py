@@ -153,10 +153,11 @@ def _apply(
         cur.execute(
             """
             UPDATE agent_decisions
-            SET outcome = %s, outcome_confirmed_at = now(), outcome_metric_delta = %s
+            SET outcome = %s, outcome_confirmed_at = now(), outcome_metric_delta = %s,
+                outcome_source = %s, outcome_external_ref = %s
             WHERE decision_id = %s
             """,
-            (outcome, delta, decision_id),
+            (outcome, delta, source, ref, decision_id),
         )
 
         promoted: list[str] = []
@@ -176,6 +177,7 @@ def _apply(
                 """
                 UPDATE agent_memories
                 SET trust_tier = %s,
+                    trust_checked_at = now(),
                     confidence = CASE %s
                                    WHEN 'verified' THEN least(1.0, confidence + 0.3)
                                    WHEN 'attested' THEN least(1.0, confidence + 0.1)
