@@ -79,6 +79,38 @@ def _neighbours(conn, tenant_id: str, vec_literal: str, k: int) -> list[dict]:
         return [dict(r) for r in cur.fetchall()]
 
 
+def _existing_identical(
+    conn, tenant_id: str, entity: str | None, attribute_key: str | None, attribute_value: str | None
+) -> dict | None:
+    """An already-admitted memory asserting the SAME value for the same entity+attribute.
+
+    ``_hard_conflicts`` deliberately excludes these (``attribute_value IS DISTINCT FROM``),
+    and until now nothing else looked at them -- so re-asserting an identical fact created a
+    brand new row every time. The live demo tenant had accumulated eleven copies of
+    "payments-service.reads_from_table = orders_v2", which surfaced as five identical rows at
+    identical distance in a recall result. Unbounded duplication of a fact the store already
+    holds is a real defect: it wastes the recall window, and it makes the top-k look broken
+    to anyone reading it.
+    """
+    if not (entity and attribute_key and attribute_value):
+        return None
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            """
+            SELECT memory_id::string AS memory_id, attribute_value, trust_tier, confidence,
+                   source, created_at
+            FROM agent_memories
+            WHERE tenant_id = %s AND entity = %s AND attribute_key = %s
+              AND verdict = 'accepted' AND attribute_value IS NOT DISTINCT FROM %s
+            ORDER BY created_at ASC
+            LIMIT 1
+            """,
+            (tenant_id, entity, attribute_key, attribute_value),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
 def _hard_conflicts(
     conn, tenant_id: str, entity: str | None, attribute_key: str | None, attribute_value: str | None
 ) -> list[dict]:
@@ -204,6 +236,29 @@ def _commit(
     """Decide and write, atomically. Runs under ``db.retry_serializable``."""
     # Fresh reads INSIDE the transaction -- this is what closes the TOCTOU hole. Both are
     # part of this transaction's read set, so a concurrent conflicting write forces 40001.
+    # Corroboration, not duplication. If the store already holds this exact claim, the honest
+    # response is to point at the memory that already says it rather than write a second row.
+    #
+    # DELIBERATELY WITHOUT RAISING ITS CONFIDENCE. Repetition is not evidence -- that is the
+    # whole premise of this project, and benchmarks/poisoning_benchmark.py has a `tier_climb`
+    # attack built precisely on resubmitting the same false claim to accumulate standing. It
+    # currently escalates nothing, and rewarding repeats here would open exactly that door.
+    # Only an external outcome moves a memory up the ladder.
+    identical = _existing_identical(conn, tenant_id, entity, attribute_key, attribute_value)
+    if identical:
+        return {
+            "memory_id": identical["memory_id"],
+            "verdict": ACCEPTED,
+            "verdict_reasons": [
+                "identical claim already on record: this is corroboration, not a new memory. "
+                "Confidence is unchanged -- repetition is not evidence, only an external "
+                "outcome moves a memory up the trust ladder."
+            ],
+            "checked_against": [identical["memory_id"]],
+            "superseded": None,
+            "corroborated": True,
+        }
+
     conflicts = _hard_conflicts(conn, tenant_id, entity, attribute_key, attribute_value)
     neighbours = _neighbours(conn, tenant_id, vec_literal, NEIGHBOUR_K)
     decision = _adjudicate(conflicts, neighbours, source)

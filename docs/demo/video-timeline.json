@@ -42,9 +42,9 @@
       "frame": "04-agent-decides.png",
       "evidenceClass": "LIVE AWS \u00b7 OUTCOME PATH \u00b7 STUB EMBEDDINGS",
       "cues": [
-        "An incident hits: payments-gateway latency is spiking. Recall surfaces the corrected 500-millisecond fact first, ranked by a real vector search.",
-        "One disclosure: this AWS account has near-zero Bedrock quota, so embeddings fall back to a deterministic stub \u2014 real ranking, not learned relevance.",
-        "The agent proposes raising the timeout and records the decision."
+        "An incident hits: payments-gateway latency is spiking. Recall surfaces the corrected five-hundred-millisecond fact, and the agent reasons over it.",
+        "This is a real model call. The rationale cites the memory it used, by id, and proposes one action from a closed allow-list -- it cannot invent an action that is not on the list.",
+        "One honest disclosure: this AWS account has zero Bedrock quota, so embeddings are still a lexical stub, not semantic. Recall matches wording, not meaning."
       ]
     },
     {
@@ -85,7 +85,7 @@
       "evidenceClass": "PRIOR ART \u00b7 CANDIDATE ONLY",
       "cues": [
         "None of this is a new idea. Doyle's truth maintenance systems retracted beliefs when their justification failed, in 1979. Bitemporal replay ships in Zep today.",
-        "What's unusual is a 2026 memory system that won't let a model grade its own memory -- and enforces it. Across five hundred labelled outcomes, trusting the caller let two hundred and four unconfirmed memories through. The gate let zero.",
+        "What is measured is the difference. Against six hundred poisoned claims plus honest controls: trusting the caller admits every attack. An LLM judge blocks every attack -- and every honest claim too, so it is useless. Only the outcome gate tells them apart.",
         "Hackathon build: candidate only, no general-intelligence claim, code's public."
       ]
     }
