@@ -93,7 +93,7 @@ after the second failure; the third and fourth return in under a second because 
 short-circuits straight to the deterministic fallback instead of dialing Bedrock at all. The
 local equivalent for `agent.propose()` shows the same shape: 12.35 s -> 8.66 s -> 0.00 s -> 0.00 s.
 
-Test suite: 78 passing (was 47); new files `tests/test_latency_budget.py` and
+Test suite: 132 passing (was 47); new files `tests/test_latency_budget.py` and
 `tests/test_security_invariants.py`.
 
 ## Honest state: the deployed agent is not reasoning with a model
@@ -160,7 +160,7 @@ tested that the system behaves well for a cooperative caller, not that it refuse
 | Hole | Now |
 |---|---|
 | SQL injection via `GET /diff?instant=` (AOST cannot be parameterised, so the value was interpolated raw, on an **unauthenticated** route) | allow-list of the three documented instant forms; live check returns **400**, table intact |
-| `trust._apply` matched on `decision_id` with **no tenant predicate** -- the only unscoped query in the codebase, and the one that promotes memories to `verified` | `tenant_id` is a required positional argument; another tenant's decision is reported identically to a nonexistent one |
+| `trust._apply` matched on `decision_id` with **no tenant predicate** on the path that promotes memories to `verified` | `tenant_id` is a required positional argument; another tenant's decision is reported identically to a nonexistent one. **Reopened and closed again:** the first fix scoped the decision lookup only, leaving the tier `UPDATE` unscoped, so a caller could promote another tenant's memories via their own decision. Both statements are now scoped |
 | `POST /confirm_outcome` was **not** behind the shared secret while `/ingest` and `/decide` were | gated; live check returns **401** without the secret |
 | The kill switch failed **open** -- any SSM read error defaulted to `"off"` | fails closed, and distinguishes "read failed" from "read the value off" |
 

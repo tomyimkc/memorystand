@@ -269,10 +269,12 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > security issues, each backed by a regression test. `GET /diff?instant=` — unauthenticated —
 > interpolated its `AS OF SYSTEM TIME` value raw, because that clause can't be parameterised; it's
 > now an allow-list (HLC decimal, negative interval, ISO-8601), and a hostile `instant` now returns
-> `400` with the table intact. `trust._apply` matched on `decision_id` with no tenant predicate —
-> the only unscoped query in the codebase, and the one that promotes a memory to `verified` — so
-> `trust.grant_standing()` now takes `tenant_id` as a required positional argument, closing a
-> cross-tenant trust-escalation path. `POST /confirm_outcome`, the route that grants trust, was
+> `400` with the table intact. `trust._apply` matched on `decision_id` with no tenant predicate
+> on the path that promotes a memory to `verified`, so `trust.grant_standing()` now takes
+> `tenant_id` as a required positional argument. That fix was incomplete and an outside review
+> caught it: it scoped the decision lookup while the tier `UPDATE` stayed unscoped, so a caller
+> could still promote another tenant's memories through a decision of their own. Both statements
+> are now tenant-scoped, with a regression test proven to fail against the old code. `POST /confirm_outcome`, the route that grants trust, was
 > not behind the shared secret while `/ingest` and `/decide` were — `frontend/app.js` literally
 > documented it as "no secret required (read-adjacent)"; it's now gated, and a live check without
 > the secret returns `401`. And the kill switch failed **open** on any SSM read error; it now

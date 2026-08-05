@@ -29,7 +29,7 @@ import uuid
 
 import pytest
 
-from backend import decisions, handler, memory, replay, trust
+from backend import db, decisions, handler, memory, replay, trust
 
 
 # --- 1. The injection sink ---------------------------------------------------------------
@@ -132,6 +132,70 @@ def test_one_tenant_cannot_grant_standing_to_another_tenants_decision(
     )
     assert result["model_calls"] == 0
     assert memory_id in [str(m) for m in result["promoted"]]
+
+
+def test_attacker_cannot_promote_another_tenants_memory_via_their_own_decision(
+    tenant_id: str, agent_id: str
+) -> None:
+    """The variant that survived the first fix, because the first fix guarded the wrong query.
+
+    The test above proves an attacker cannot confirm an outcome against SOMEONE ELSE'S
+    decision. It does not prove they cannot confirm an outcome against THEIR OWN decision
+    that names someone else's memories -- and ``produced_memory_ids`` is caller-supplied
+    verbatim (``handler.py``) and inserted without validation (``decisions.py``), so nothing
+    stopped them.
+
+    The decision-row lookup was tenant-scoped; the UPDATE that actually moves the tier was
+    not. Both statements sit in ``trust._apply`` fifty lines apart, and the docstring
+    asserting the fix described only the first one.
+
+    The victim's memory must come back untouched, and -- just as important -- the attacker's
+    own call must report an empty promotion set rather than a success it did not achieve.
+    """
+    victim = memory.remember(
+        tenant_id, agent_id, "checkout-api circuit breaker trips at 500ms, confirmed by on-call"
+    )
+    victim_id = victim["memory_id"]
+    # remember() does not return the tier, so read it back rather than assuming it. An
+    # earlier draft asserted on victim["trust_tier"] and failed with KeyError -- red for a
+    # reason that had nothing to do with the vulnerability, which proves nothing at all.
+    assert memory.get(tenant_id, victim_id)["trust_tier"] == "unconfirmed"
+
+    attacker_tenant = str(uuid.uuid4())
+    attacker_agent = str(uuid.uuid4())
+    try:
+        attack = decisions.decide(
+            attacker_tenant,
+            attacker_agent,
+            action="scale_up",
+            rationale="a decision the attacker is entitled to file",
+            consulted_memory_ids=[],
+            produced_memory_ids=[victim_id],          # <-- not the attacker's memory
+        )
+        result = trust.grant_standing(
+            attacker_tenant,
+            attack["decision_id"],
+            {"outcome": "success", "source": "pagerduty", "external_ref": "INC-ATTACK"},
+        )
+        assert [str(m) for m in result["promoted"]] == [], (
+            "the promotion path reported promoting a memory belonging to another tenant"
+        )
+
+        after = memory.get(tenant_id, victim_id)
+        assert after is not None
+        assert after["trust_tier"] == "unconfirmed", (
+            f"another tenant moved this memory to {after['trust_tier']!r} -- the promotion "
+            "UPDATE is not tenant-scoped"
+        )
+    finally:
+        conn = db.get_conn()
+        try:
+            with conn.cursor() as cur:
+                for table in ("tool_audit", "agent_decisions", "agent_memories"):
+                    cur.execute(f"DELETE FROM {table} WHERE tenant_id = %s", (attacker_tenant,))
+            conn.commit()
+        finally:
+            db.put_conn(conn)
 
 
 def test_grant_standing_requires_tenant_positionally() -> None:

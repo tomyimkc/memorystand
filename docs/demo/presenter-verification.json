@@ -10,8 +10,8 @@
     },
     "01-what-it-is-1": {
       "clip": "01-what-it-is-1.mp4",
-      "asked": "It's for anyone on call at two in the morning, when an agent tells you what worked last time.",
-      "heard": "It's for anyone on call at 2 in the morning.  When an agent tells you what worked last time.",
+      "asked": "It's for on-call engineers, when an AI assistant suggests a fix because it remembers that fix working before.",
+      "heard": "It's for on-call engineers, when an AI assistant suggests a fix because it remembers that fix working before.",
       "similarity": 1.0,
       "passed": true
     },
@@ -38,9 +38,9 @@
     },
     "03-the-failure-1": {
       "clip": "03-the-failure-1.mp4",
-      "asked": "They honestly report that the restart fixed it. But the real numbers never moved. Nobody lied, and it's still wrong.",
-      "heard": "They honestly report that the restart fixed it, but the real numbers never moved.  Nobody lied and it's still wrong.",
-      "similarity": 1.0,
+      "asked": "They report the restart fixed it. But the latency CloudWatch recorded never actually dropped. Nobody lied. It's still wrong.",
+      "heard": "They report the restart fixed it, but the latency cloud watch recorded never actually dropped.  Nobody lied. It's still wrong.",
+      "similarity": 0.927,
       "passed": true
     },
     "04-where-it-lives-0": {
@@ -50,13 +50,6 @@
       "similarity": 0.923,
       "passed": true
     },
-    "04-where-it-lives-1": {
-      "clip": "04-where-it-lives-1.mp4",
-      "asked": "So a single query finds the closest memories and skips the ones it never admitted. No separate search database.",
-      "heard": "So a single query finds the closest memories and skips the ones it never admitted.  No separate search database.",
-      "similarity": 1.0,
-      "passed": true
-    },
     "05-admission-0": {
       "clip": "05-admission-0.mp4",
       "asked": "A claim is one fact about one service \u2014 a timeout setting, an owner, or what fixed the last incident.",
@@ -64,39 +57,18 @@
       "similarity": 0.895,
       "passed": true
     },
-    "05-admission-1": {
-      "clip": "05-admission-1.mp4",
-      "asked": "A runbook said eight hundred. Slack said three hundred. Both clashed with a person's five hundred, so both waited.",
-      "heard": "A runbook said 800. Slacks said 300. Both clashed with a person's 500, so both waited.",
-      "similarity": 0.941,
-      "passed": true
-    },
     "06-measured-0": {
       "clip": "06-measured-0.mp4",
-      "asked": "So we tested it. Five hundred forty fake claims built to poison the memory, plus sixty honest ones as a control.",
-      "heard": "So we tested it. 540 fake claims built to poison the memory, plus 60 honest ones as a control.",
-      "similarity": 1.0,
-      "passed": true
-    },
-    "06-measured-1": {
-      "clip": "06-measured-1.mp4",
-      "asked": "Simply trusting whoever asks lets every fake claim through. Asking an AI to judge blocked every honest one it saw.",
-      "heard": "Simply trusting whoever asks, let's every fake claim through.  Asking an AI to judge blocked every honest one it saw.",
-      "similarity": 0.927,
-      "passed": true
-    },
-    "07-the-oracle-0": {
-      "clip": "07-the-oracle-0.mp4",
-      "asked": "Only checking the real outcome tells them apart. MemoryStand goes back to Amazon CloudWatch and reads the actual numbers.",
-      "heard": "As only checking the real outcome, tells them apart.  Memory stand goes back to Amazon CloudWatch and reads the actual numbers.",
-      "similarity": 0.9,
+      "asked": "We ran six hundred claims through three different defences: five hundred forty deliberate fakes, plus sixty honest ones as a control.",
+      "heard": "We ran 600 claims through 3 different defenses, 540 deliberate fakes, plus 60 honest ones as a control.",
+      "similarity": 0.944,
       "passed": true
     },
     "07-the-oracle-1": {
       "clip": "07-the-oracle-1.mp4",
-      "asked": "One claim matched the metric almost exactly, and was accepted. Another was wildly off, and got turned down.",
-      "heard": "One claim matched the metric almost exactly and was accepted.  Another was wildly off and got turned down.",
-      "similarity": 1.0,
+      "asked": "A claimed drop of fourteen thousand milliseconds matched CloudWatch within five. A claimed drop of ten did not, and was refused.",
+      "heard": "A claimed drop of 14,000 milliseconds matched cloud watch within five.  A claimed drop of 10 did not, and was refused.",
+      "similarity": 0.927,
       "passed": true
     },
     "08-close-0": {

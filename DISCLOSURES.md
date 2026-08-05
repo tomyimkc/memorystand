@@ -96,6 +96,28 @@ search would undermine the entire submission, which is itself about not trusting
 Standard open-source libraries only, used under their own licenses and declared in
 `requirements.txt`. No vendored third-party source.
 
+## A model endpoint that was routed, and was not disclosed
+
+Between 2026-08-04 and 2026-08-06 the deployed Lambda's default
+`MEMORYSTAND_ANTHROPIC_BASE_URL` was `https://api.teamorouter.com` — a third-party
+Anthropic-compatible router — while `/decide` reported
+`reasoning_source: anthropic:claude-haiku-4-5`. That label reads as a direct Anthropic
+connection, and it was not one.
+
+The endpoint appeared in exactly one line of the repository (`infra/deploy.sh`) and in no README,
+disclosure, or submission field. It was configured for a practical reason — every Bedrock
+inference quota on this AWS account is 0 (`docs/BEDROCK_QUOTA.md`) and the router was the
+credential to hand — but the reason is not the point. This project's whole argument is that a
+claim must name the thing that actually produced it, and for two days the claim did not.
+
+It was found by an outside adversarial review of this repository, not by us. The default is now
+`https://api.anthropic.com`, so the label and the endpoint agree. Overriding via the environment
+is still supported; anyone who does should say so, because `reasoning_source` will not.
+
+The `/decide` capture quoted in `README.md` and under `docs/demo/` was recorded while the router
+was in use, so its `model_calls: 1` and its latency are router figures rather than
+Anthropic-direct ones.
+
 ## AI tools used
 
 Claude Code (Anthropic) was used throughout the build for architecture discussion, SQL and Python

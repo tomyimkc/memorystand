@@ -115,12 +115,28 @@ def _apply(
     that no recorded outcome justifies -- which is precisely the failure this project is
     about.
 
-    ``tenant_id`` is required and is part of the lookup predicate. This query used to match
-    on ``decision_id`` alone, which made it the one query in the codebase without tenant
-    scoping -- and it happened to be the query that GRANTS TRUST. A caller holding any
-    decision id could promote another tenant's memories to ``verified``, which is precisely
-    the outcome the whole project claims to prevent. A decision belonging to another tenant
-    is now indistinguishable from one that does not exist.
+    ``tenant_id`` scopes BOTH statements below, and it took two goes to get that right.
+
+    The SELECT used to match on ``decision_id`` alone. That was fixed, and this docstring was
+    written to say so -- while the UPDATE fifty lines below still promoted memories with
+    ``WHERE memory_id = ANY(...) AND trust_tier = ...`` and no tenant predicate at all. The
+    fix and the claim of the fix were both real; they just covered different queries, and
+    three documents went on to describe this as "the only unscoped query in the codebase".
+
+    The hole that left was not theoretical. ``produced_memory_ids`` is caller-supplied
+    verbatim (``handler.py``) and inserted without validation (``decisions.py``), so any
+    holder of the shared secret could file a decision under their OWN tenant naming another
+    tenant's memory ids, confirm a successful outcome, and promote a stranger's
+    ``unconfirmed`` memory to ``verified``. Injecting trusted memory into somebody else's
+    store is the exact attack this project exists to prevent, reachable through the exact
+    path it advertises as trustworthy.
+
+    ``reverify.py`` had carried ``AND tenant_id = %s`` on the equivalent UPDATE the whole
+    time, which is what makes this an inconsistency rather than a considered trade-off.
+
+    The lesson worth keeping: a fix verified at the point it was applied is not a fix
+    verified across the operation. Scope the audit to the operation -- every statement that
+    can move a tier -- not to the line that was reported.
     """
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
@@ -183,10 +199,12 @@ def _apply(
                                    WHEN 'attested' THEN least(1.0, confidence + 0.1)
                                    ELSE greatest(0.0, confidence - 0.3) END,
                     verdict_set_at = now()
-                WHERE memory_id = ANY(%s::UUID[]) AND trust_tier = %s
+                WHERE memory_id = ANY(%s::UUID[])
+                  AND tenant_id = %s
+                  AND trust_tier = %s
                 RETURNING memory_id::string
                 """,
-                (new_tier, new_tier, produced, UNCONFIRMED),
+                (new_tier, new_tier, produced, tenant_id, UNCONFIRMED),
             )
             touched = [r["memory_id"] for r in cur.fetchall()]
             if outcome == "success":

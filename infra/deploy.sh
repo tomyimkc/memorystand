@@ -307,8 +307,17 @@ print(json.dumps({"Variables": {
     # NOT here: it lives in the SSM SecureString /memorystand/anthropic_api_key, read at
     # request time by backend/anthropic_client.py, exactly like the shared secret and the DSN.
     # Only the endpoint and model id are configuration.
+    #
+    # THE DEFAULT ENDPOINT MUST BE THE ONE THE LABEL NAMES. This defaulted to a third-party
+    # OpenAI/Anthropic-compatible router (api.teamorouter.com) while /decide reported
+    # reasoning_source "anthropic:claude-haiku-4-5", which every reader takes to mean a direct
+    # Anthropic connection. The router appeared in exactly one line of the repository and in no
+    # README, DISCLOSURES or submission field. For a project whose whole argument is that a label
+    # must match the reality it names, that is the failure mode it exists to condemn -- caught by
+    # an outside adversarial review, not by us. Overriding via the environment is still supported;
+    # if you do, say so, because reasoning_source will not.
     "MEMORYSTAND_ANTHROPIC_BASE_URL": os.environ.get(
-        "MEMORYSTAND_ANTHROPIC_BASE_URL", "https://api.teamorouter.com"),
+        "MEMORYSTAND_ANTHROPIC_BASE_URL", "https://api.anthropic.com"),
     "MEMORYSTAND_ANTHROPIC_MODEL": os.environ.get(
         "MEMORYSTAND_ANTHROPIC_MODEL", "claude-haiku-4-5"),
     "MEMORYSTAND_ANTHROPIC_DEADLINE_S": os.environ.get(

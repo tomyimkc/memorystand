@@ -64,7 +64,7 @@ outside the model corroborates it: a recovered metric, re-queried and checked; a
 incident; a human's sign-off. The promotion path makes **zero model calls**, and that is
 enforced by a runtime guard, not by a convention.
 
-Measured, not asserted — [benchmarks/verification.md](benchmarks/verification.md), 300 labelled
+Measured, not asserted — [benchmarks/verification.md](benchmarks/verification.md), 500 labelled
 outcome reports:
 
 | | trust the caller | outcome-gated |
@@ -252,7 +252,7 @@ Everything marked ✅ was run against a real CockroachDB v26.2.5 cluster, not ju
 |---|---|
 | Schema, admission control, outcome gate, cross-examination | ✅ end to end |
 | Incident fixtures (101 records, 2 designed conflicts) | ✅ 99 admitted, 2 held |
-| Test suite (`pytest`) | ✅ **78 passing** |
+| Test suite (`pytest`) | ✅ **132 passing** |
 | Concurrency + TOCTOU proof (`scripts/race_demo.py`) | ✅ real `40001` captured |
 | Benchmark harness (`scripts/loadtest.py`) | ✅ 10k rows, numbers below |
 | Lambda handler, 7 routes, kill switch, degraded mode | ✅ exercised over HTTP |
@@ -356,9 +356,18 @@ All five found and fixed against the real Lambda, not in theory:
   value was being interpolated raw on an *unauthenticated* route. Now validated against an
   allow-list (HLC decimal, negative interval, ISO-8601). Live check: a hostile `instant` now
   returns HTTP 400 and the table is untouched.
-- **`trust._apply` had no tenant predicate** — the only unscoped query in the codebase, and the
-  one that promotes a memory to `verified`. `tenant_id` is now a required positional argument of
+- **`trust._apply` had no tenant predicate**, on the path that promotes a memory to `verified`.
+  `tenant_id` is now a required positional argument of
   `trust.grant_standing(tenant_id, decision_id, evidence)`.
+  **This took two goes, and the first attempt is worth reading.** The fix scoped the decision
+  *lookup* and this document called the bug closed — while the `UPDATE` fifty lines below still
+  moved trust tiers with `WHERE memory_id = ANY(...) AND trust_tier = ...` and no tenant at all.
+  Because `produced_memory_ids` is caller-supplied and unvalidated, any secret-holder could file a
+  decision under their **own** tenant naming a stranger's memory ids and promote them to
+  `verified`. Found by an outside adversarial review, closed in `backend/trust.py`, and pinned by
+  `tests/test_security_invariants.py::test_attacker_cannot_promote_another_tenants_memory_via_their_own_decision`,
+  which was checked to fail against the old code before being trusted. A fix verified where it was
+  applied is not a fix verified across the operation.
 - **`POST /confirm_outcome` wasn't behind the shared secret** while `/ingest` and `/decide` were —
   `frontend/app.js` even documented it as "no secret required (read-adjacent)". It's the route
   that grants trust. Now gated; a live check without the secret returns 401.
@@ -395,7 +404,7 @@ git clone <this-repo> && cd memorystand
 Then:
 
 ```bash
-.venv/bin/python -m pytest -q                                   # 78 tests
+.venv/bin/python -m pytest -q                                   # 132 tests
 .venv/bin/python cli/memorystand.py recall --query "payments failover"
 .venv/bin/python scripts/loadtest.py --rows 10000 --tenants 50  # reproduce the numbers below
 ```

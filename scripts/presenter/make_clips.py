@@ -279,12 +279,28 @@ def main() -> int:
                 print(f"        heard: {heard}")
                 print(f"        -> delete {out.name} and rerun; do NOT ship this shot")
 
-    # A full pass owns the whole receipt. Without this, shots from a previous cut of the script
-    # linger as passing entries for clips no longer in the film -- a receipt that vouches for
-    # footage nobody is shipping is worse than no receipt.
-    if not args.beat:
-        current = {f"{b['id']}-{i}" for b in beats for i in range(len(b["shots"]))}
-        receipt = {k: v for k, v in receipt.items() if k in current}
+    # THE RECEIPT IS PRUNED ON EVERY RUN, NOT ONLY FULL ONES.
+    #
+    # This used to be gated on `if not args.beat`, which sounded careful -- a single-beat run
+    # should not throw away other beats' results -- and was exactly wrong. Six consecutive
+    # per-beat regenerations left the receipt asserting PASS for four clips that no longer
+    # existed on disk and for seven whose scripted line had since changed. An outside reviewer
+    # then read that receipt, concluded the video was finished, and built a plan around the
+    # reclaimed time. A receipt that vouches for footage nobody is shipping is worse than no
+    # receipt, because it is believed.
+    #
+    # An entry survives only if its clip is still on disk AND still says what the current script
+    # says. That is safe for partial runs: an untouched beat's entries satisfy both tests and
+    # stay, while anything the script moved out from under is dropped rather than left to rot.
+    current = {f"{b['id']}-{i}": line
+               for b in json.loads(SCRIPT_JSON.read_text())["beats"]
+               for i, line in enumerate(b["shots"])}
+    receipt = {
+        tag: v for tag, v in receipt.items()
+        if tag in current
+        and (CLIP_DIR / f"{tag}.mp4").is_file()
+        and v.get("asked", "").strip() == current[tag].strip()
+    }
 
     RECEIPT.write_text(json.dumps(
         {"minSimilarity": MIN_SIMILARITY, "shots": dict(sorted(receipt.items()))}, indent=2
