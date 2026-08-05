@@ -28,6 +28,26 @@ from typing import Sequence
 EMBED_DIMS = 512
 MODEL_ID = os.environ.get("MEMORYSTAND_EMBED_MODEL", "amazon.titan-embed-text-v2:0")
 REGION = os.environ.get("AWS_REGION", "us-west-2")
+
+# The MODEL region is deliberately separate from AWS_REGION.
+#
+# Bedrock on-demand quota is granted per region, and it is not uniform: on this account
+# Nova Lite is 400 requests/min in eu-west-1, ap-southeast-1 and ap-northeast-1, and
+# exactly 0 in us-east-1 and us-west-2 -- which is where everything else lives. Reading
+# the quota in one region and concluding "the account is held" was wrong; it is a
+# per-region grant.
+#
+# So the model clients get their own knob. AWS_REGION stays us-west-2 for CloudWatch,
+# SSM and the database, because CloudWatch metrics only exist in the region that emitted
+# them -- pointing the evidence checker elsewhere would silently return "no datapoints"
+# and downgrade every outcome to `attested`. Only inference moves.
+#
+# AWS_REGION cannot be overridden in Lambda's own environment (it is reserved), which is
+# a second reason this needs a distinct variable rather than a clever default.
+BEDROCK_REGION = os.environ.get(
+    "MEMORYSTAND_BEDROCK_REGION", os.environ.get("AWS_REGION", "us-west-2")
+)
+
 STUB_ENV = "MEMORYSTAND_EMBED_STUB"
 
 _client = None
@@ -44,7 +64,7 @@ def _get_client():
     if _client is None:
         import boto3  # imported lazily so the stub path needs no boto3
 
-        _client = boto3.client("bedrock-runtime", region_name=REGION)
+        _client = boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
     return _client
 
 

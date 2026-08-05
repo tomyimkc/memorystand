@@ -14,10 +14,11 @@
         "bedrock:Converse"
       ],
       "Resource": [
-        "arn:aws:bedrock:REGION:ACCOUNT_ID:inference-profile/amazon.nova-lite-v1:0",
+        "arn:aws:bedrock:*:ACCOUNT_ID:inference-profile/*amazon.nova-lite-v1:0",
         "arn:aws:bedrock:*::foundation-model/amazon.nova-lite-v1:0",
-        "arn:aws:bedrock:REGION::foundation-model/amazon.titan-embed-text-v2:0"
-      ]
+        "arn:aws:bedrock:*::foundation-model/amazon.titan-embed-text-v2:0"
+      ],
+      "_comment": "Region is wildcarded because Bedrock on-demand quota is granted PER REGION and is 0 for these models in us-west-2 on this account while being 400 rpm in eu-west-1. The model ids stay pinned, so this widens where inference may run, not what may be invoked. deploy.sh strips this _comment; IAM rejects unknown members in a Statement."
     },
     {
       "Sid": "ReadMemoryStandParametersOnly",

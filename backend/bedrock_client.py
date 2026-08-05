@@ -43,6 +43,26 @@ DEFAULT_MODEL_ID = "amazon.nova-lite-v1:0"
 MODEL_ID = os.environ.get("MEMORYSTAND_CHAT_MODEL", DEFAULT_MODEL_ID)
 REGION = os.environ.get("AWS_REGION", "us-west-2")
 
+# The MODEL region is deliberately separate from AWS_REGION.
+#
+# Bedrock on-demand quota is granted per region, and it is not uniform: on this account
+# Nova Lite is 400 requests/min in eu-west-1, ap-southeast-1 and ap-northeast-1, and
+# exactly 0 in us-east-1 and us-west-2 -- which is where everything else lives. Reading
+# the quota in one region and concluding "the account is held" was wrong; it is a
+# per-region grant.
+#
+# So the model clients get their own knob. AWS_REGION stays us-west-2 for CloudWatch,
+# SSM and the database, because CloudWatch metrics only exist in the region that emitted
+# them -- pointing the evidence checker elsewhere would silently return "no datapoints"
+# and downgrade every outcome to `attested`. Only inference moves.
+#
+# AWS_REGION cannot be overridden in Lambda's own environment (it is reserved), which is
+# a second reason this needs a distinct variable rather than a clever default.
+BEDROCK_REGION = os.environ.get(
+    "MEMORYSTAND_BEDROCK_REGION", os.environ.get("AWS_REGION", "us-west-2")
+)
+
+
 # Retry policy for throttling only. Small and bounded for the same reason
 # backend/db.py's retry budget is small: a caller waiting on this is an on-call
 # agent loop, not a batch job, and it has its own fallback to fall back to.
@@ -93,7 +113,7 @@ def _get_client():
             raise ModelUnavailable(f"boto3 is not installed: {exc}") from exc
         _client = boto3.client(
             "bedrock-runtime",
-            region_name=REGION,
+            region_name=BEDROCK_REGION,
             # Bound EACH attempt, not just the loop around them. botocore retries
             # internally by default, so a single converse() can spend many seconds
             # before raising -- which is how a supposedly 8s deadline took 18s. This
