@@ -302,6 +302,15 @@ print(json.dumps({"Variables": {
     # one apostrophe closes the shell string and errors far from the real cause.
     "MEMORYSTAND_CHAT_MODEL": os.environ.get("MEMORYSTAND_CHAT_MODEL", "us.amazon.nova-lite-v1:0"),
     "MEMORYSTAND_BEDROCK_REGION": os.environ.get("MEMORYSTAND_BEDROCK_REGION", "us-west-2"),
+    # Second reasoning provider, used only when Bedrock is unavailable -- which on this
+    # account is always, because every Bedrock inference quota is 0. The API key itself is
+    # NOT here: it lives in the SSM SecureString /memorystand/anthropic_api_key, read at
+    # request time by backend/anthropic_client.py, exactly like the shared secret and the DSN.
+    # Only the endpoint and model id are configuration.
+    "MEMORYSTAND_ANTHROPIC_BASE_URL": os.environ.get(
+        "MEMORYSTAND_ANTHROPIC_BASE_URL", "https://api.teamorouter.com"),
+    "MEMORYSTAND_ANTHROPIC_MODEL": os.environ.get(
+        "MEMORYSTAND_ANTHROPIC_MODEL", "claude-haiku-4-5"),
 }}))
 ' > "$ENV_FILE" )
 unset DSN_VALUE
