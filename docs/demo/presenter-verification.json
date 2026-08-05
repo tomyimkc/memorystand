@@ -45,8 +45,8 @@
     },
     "04-where-it-lives-0": {
       "clip": "04-where-it-lives-0.mp4",
-      "asked": "All of this lives in one CockroachDB table. Each memory's search vector sits right beside its ordinary fields.",
-      "heard": "All of this lives in one cockroach DB table.  Each memory's search vector sits right beside its ordinary fields.",
+      "asked": "Every memory lives in one CockroachDB table: the text, its source, how trusted it is, and a search vector.",
+      "heard": "Every memory lives in one cockroach DB table.  The text, its source, how trusted it is, and a search vector.",
       "similarity": 0.923,
       "passed": true
     },
@@ -59,9 +59,9 @@
     },
     "05-admission-0": {
       "clip": "05-admission-0.mp4",
-      "asked": "Not everything gets written down. Every new claim is either accepted or put on hold, and the reason is saved.",
-      "heard": "not everything gets written down.  Every new claim is either accepted or put on hold,  and the reason is saved.",
-      "similarity": 1.0,
+      "asked": "A claim is one fact about one service \u2014 a timeout setting, an owner, or what fixed the last incident.",
+      "heard": "The claim is one fact about one service, a timeout setting, an owner, or what fix the last incident.",
+      "similarity": 0.895,
       "passed": true
     },
     "05-admission-1": {

@@ -57,6 +57,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts" / "presenter"))
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "video"))
 
 import build_frames as bf  # noqa: E402  (fonts and palette, shared with the panels)
+import lipsync  # noqa: E402
 from make_panels import PANEL_MARGIN, PRESENTER_W, W, H  # noqa: E402,F401
 
 SCRIPT_JSON = REPO_ROOT / "docs" / "demo" / "presenter-script.json"
@@ -419,11 +420,32 @@ def check_sync(timeline: list[tuple[str, float]]) -> bool:
         flag = "  <-- DRIFT" if abs(lag_ms) > MAX_LAG_MS else ""
         print(f"    {tag:30s} expected {expected:6.2f}s   lag {lag_ms:+7.1f} ms{flag}")
 
-    if abs(worst) > MAX_LAG_MS:
-        print(f"\n  OUT OF SYNC: worst {worst:+.1f} ms at {worst_tag} (limit {MAX_LAG_MS:.0f} ms)")
-        return True
-    print(f"  in sync: worst {worst:+.1f} ms at {worst_tag or 'n/a'}")
-    return False
+    failed = abs(worst) > MAX_LAG_MS
+    if failed:
+        print(f"\n  PLACEMENT OUT OF SYNC: worst {worst:+.1f} ms at {worst_tag} (limit {MAX_LAG_MS:.0f} ms)")
+    else:
+        print(f"  placement in sync: worst {worst:+.1f} ms at {worst_tag or 'n/a'}")
+
+    # Placement is only half of it. This second pass measures the finished film's own lips
+    # against its own audio, which is the fault a viewer actually notices and which the
+    # placement check above is structurally blind to.
+    print(f"\n  lip check on the rendered film (tolerance {MAX_LAG_MS:.0f} ms)")
+    lip_worst, lip_tag = 0.0, ""
+    for tag, expected in timeline:
+        window = Path(tempfile.gettempdir()) / f"lipcheck_{tag}.mp4"
+        run(["ffmpeg", "-y", "-v", "error", "-ss", f"{expected:.3f}", "-t", "6",
+             "-i", str(OUT), "-c", "copy", str(window)])
+        lag, corr = lipsync.measure(window)
+        if abs(lag) > abs(lip_worst):
+            lip_worst, lip_tag = lag, tag
+        flag = "  <-- perceptible" if abs(lag) > MAX_LAG_MS else ""
+        print(f"    {tag:30s} sound {lag:+7.0f} ms vs lips   r={corr:.2f}{flag}")
+    if abs(lip_worst) > MAX_LAG_MS:
+        print(f"\n  LIPS OUT OF SYNC: worst {lip_worst:+.0f} ms at {lip_tag}")
+        failed = True
+    else:
+        print(f"  lips in sync: worst {lip_worst:+.0f} ms at {lip_tag or 'n/a'}")
+    return failed
 
 
 def main() -> int:
@@ -444,6 +466,12 @@ def main() -> int:
     work = REPO_ROOT / "artifacts" / "presenter" / "segments"
     work.mkdir(parents=True, exist_ok=True)
     OUT.parent.mkdir(parents=True, exist_ok=True)
+
+    # Measured picture delay per clip, correcting the generator's own lip sync. See lipsync.py:
+    # grok's picture and sound are generated together but not perfectly aligned, and --check
+    # cannot see it because --check only asks whether a clip's audio lands where the cut expects.
+    lip_delay = lipsync.offsets([CLIP_DIR / f"{b['id']}-{i}.mp4"
+                                 for b in spec["beats"] for i in range(len(b["shots"]))])
 
     masks = {s: work / f"mask-{s.lower()}.png" for s in ("LEFT", "RIGHT")}
     for side, path in masks.items():
@@ -485,6 +513,12 @@ def main() -> int:
         segment_start = total
         timeline.append((tag, segment_start))
         total += duration
+
+        # Hold the first frame for the measured offset so the lips arrive when the sound does.
+        # Delaying the picture rather than advancing the audio matters: speech starts at t=0 in
+        # every one of these clips, so advancing the audio would clip the first word.
+        delay = lip_delay.get(tag, 0.0)
+        lip = f"tpad=start_duration={delay:.4f}:start_mode=clone," if delay > 0 else ""
 
         # The clip is portrait; scaled to 1080 tall it is wider than the 660px presenter column,
         # so something has to be cropped. Rather than assume which side, find the speaker and put
@@ -534,7 +568,7 @@ def main() -> int:
             "-loop", "1", "-t", f"{duration:.6f}", "-i", str(masks[side]),
             *cue_inputs,
             "-filter_complex",
-            f"[1:v]scale={scaled_w}:{H},crop={PRESENTER_W}:{H}:{crop_x}:0,setsar=1,format=yuva420p[p];"
+            f"[1:v]{lip}scale={scaled_w}:{H},crop={PRESENTER_W}:{H}:{crop_x}:0,setsar=1,format=yuva420p[p];"
             f"[2:v]format=gray[m];"
             f"[p][m]alphamerge[pa];"
             f"[0:v]setsar=1[bg];"

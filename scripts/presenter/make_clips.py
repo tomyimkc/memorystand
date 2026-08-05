@@ -183,10 +183,25 @@ def generate(line: str, source: Path, out: Path) -> bool:
         f"Save the result to exactly: {out}\n"
         f"Do not create any other assets."
     )
-    subprocess.run(["grok", "-p", prompt], capture_output=True, text=True, timeout=1500)
+    proc = subprocess.run(["grok", "-p", prompt], capture_output=True, text=True, timeout=1500)
     # Never report success on the strength of the CLI's exit code alone -- an earlier render step
     # in this pipeline printed "wrote" three times over an empty directory.
-    return out.is_file() and out.stat().st_size > 50_000
+    if out.is_file() and out.stat().st_size > 50_000:
+        return True
+
+    # SURFACE THE REASON. This used to discard grok's output entirely, so a hard, permanent
+    # failure was indistinguishable from a flaky one. Five clips failed with
+    # "API error (status 402 Payment Required): Grok Build usage balance exhausted" and the
+    # pipeline reported only "was not written", which reads as transient -- so it was retried
+    # three times, sequentially and in parallel, against an account that could not possibly
+    # succeed. A generator that cannot say WHY it failed will be retried until someone gives up.
+    detail = ((proc.stderr or "") + (proc.stdout or "")).strip()
+    for marker in ("Payment Required", "usage balance", "rate limit", "quota", "error"):
+        line = next((ln for ln in detail.splitlines() if marker.lower() in ln.lower()), None)
+        if line:
+            print(f"    grok said: {line.strip()[:180]}")
+            break
+    return False
 
 
 def main() -> int:

@@ -270,6 +270,14 @@ def main() -> int:
         box = panel_box(side, top, top + height)
 
         bf.rounded_panel(image, box, fill=bf.PANEL_2, outline=bf.BORDER_LIGHT, width=2)
+
+        # A panel of figures with no caption assumes the viewer knows what the figures ARE.
+        # "800 / 300 / 500" means nothing without "milliseconds of one service's timeout", and
+        # the narration cannot carry that alone at 2.3 words a second. Drawn just above the box
+        # so no draw function has to change its own layout to make room.
+        if data.get("title"):
+            bf.text(draw, (box[0], box[1] - 48), data["title"], size=24, color=bf.MUTED,
+                    max_width=box[2] - box[0])
         render(draw, box, data)
         if footnote:
             bf.text(draw, (box[0] + 34, box[3] - FOOTNOTE_LIFT), footnote,
