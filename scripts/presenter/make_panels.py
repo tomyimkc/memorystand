@@ -43,7 +43,9 @@ PANEL_MARGIN = 60
 
 
 # The vertical band the panel is allowed to occupy, between the title and the disclosure.
-BAND_TOP, BAND_BOTTOM = 210, H - 190
+# The bottom of the frame belongs to the burned-in captions now, so the panel band stops
+# higher than it used to. CAPTION_TOP in compose.py is the other half of this contract.
+BAND_TOP, BAND_BOTTOM = 200, H - 250
 
 # Distance from the panel's bottom edge up to the footnote's baseline. Each draw function
 # reports where its body ends, and the panel is then sized so this much room is left underneath
@@ -139,6 +141,22 @@ def draw_close(draw, box, data):
                    max_width=x1 - x0 - 68)
 
 
+def draw_hero(draw, box, data):
+    """The opening panel: what this is, before any argument about why it matters.
+
+    The previous cut opened on a critique of Mem0 and Zep, which lands only if you already know
+    what those are. A viewer who does not should still be able to say what was built by the end
+    of the first ten seconds.
+    """
+    x0, y0, x1, y1 = box
+    y = bf.text(draw, (x0 + 34, y0 + 38), data["headline"], size=46, color=bf.INK, bold=True,
+                max_width=x1 - x0 - 68) + 40
+    for bullet in data["bullets"]:
+        y = bf.text(draw, (x0 + 34, y), bullet, size=27, color=bf.MUTED,
+                    max_width=x1 - x0 - 68, spacing=6) + 26
+    return y - 26
+
+
 def draw_schema(draw, box, data):
     """The CockroachDB memory layer, as the actual DDL and the actual recall query.
 
@@ -202,6 +220,7 @@ DRAW = {
     "quote": draw_quote, "story": draw_story, "table": draw_table,
     "callout": draw_callout, "recall": draw_recall, "close": draw_close,
     "schema": draw_schema, "admission": draw_admission, "oracle": draw_oracle,
+    "hero": draw_hero,
 }
 
 
@@ -216,16 +235,12 @@ def draw_outro(spec):
     image = bf.background()
     draw = ImageDraw.Draw(image)
 
-    y = bf.text(draw, (PANEL_MARGIN + 60, 340), "MemoryStand", size=96, color=bf.INK, bold=True)
+    y = bf.text(draw, (PANEL_MARGIN + 60, 350), "MemoryStand", size=96, color=bf.INK, bold=True)
     y = bf.text(draw, (PANEL_MARGIN + 60, y + 34),
-                "An agent memory store that will not promote a claim its own metrics contradict.",
+                "A memory for AI agents that will not trust a claim nobody ever checked.",
                 size=38, color=bf.MUTED, max_width=W - 2 * PANEL_MARGIN - 120, spacing=10)
     bf.text(draw, (PANEL_MARGIN + 60, y + 56), "github.com/tomyimkc/memorystand",
             size=34, color=bf.GREEN, mono=True)
-
-    bf.text(draw, (PANEL_MARGIN, H - 116), spec["presenterDisclosure"],
-            size=21, color=bf.FAINT, max_width=W - 2 * PANEL_MARGIN)
-    bf.text(draw, (W - 470, H - 116), "candidateOnly · no AGI claim", size=19, color=bf.FAINT)
     return image
 
 
@@ -266,13 +281,6 @@ def main() -> int:
         # panel keeps every word in the half of the screen nobody is standing in.
         px0, px1 = box[0], box[2]
         bf.text(draw, (px0, 96), spec["title"], size=30, color=bf.MUTED, bold=True)
-
-        # The disclosure rides on every single frame, not just a title card. A viewer who joins
-        # halfway still sees it, and it cannot be lost to an edit.
-        bf.text(draw, (px0, H - 116), spec["presenterDisclosure"],
-                size=21, color=bf.FAINT, max_width=px1 - px0 - 330)
-        bf.text(draw, (px1 - 300, H - 116), "candidateOnly · no AGI claim",
-                size=19, color=bf.FAINT)
 
         out = OUT_DIR / f"{beat['id']}.png"
         image.save(out)

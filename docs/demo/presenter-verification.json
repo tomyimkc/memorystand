@@ -1,109 +1,116 @@
 {
   "minSimilarity": 0.72,
   "shots": {
-    "01-claim-0": {
-      "clip": "01-claim-0.mp4",
-      "asked": "Every shipping agent-memory system asks a language model whether its own memory is true. Mem0, Zep, AWS AgentCore.",
-      "heard": "Every shipping agent memory system asks a language model,  whether it's own memory is true.  Mem zero, zep, AWS agent core.",
-      "similarity": 0.78,
+    "01-what-it-is-0": {
+      "clip": "01-what-it-is-0.mp4",
+      "asked": "I built MemoryStand \u2014 a memory for AI agents that refuses to trust a claim nobody ever checked.",
+      "heard": "I built memory stand, a memory for AI agents that refuses to trust a claim nobody ever checked.",
+      "similarity": 0.914,
       "passed": true
     },
-    "02-the-failure-0": {
-      "clip": "02-the-failure-0.mp4",
-      "asked": "The failure isn't fraud. It's an engineer at two in the morning who restarts a service and watches the page clear.",
-      "heard": "The failure isn't fraud.  It's an engineer at 2 in the morning who restarts a service and watches the page clear.",
+    "01-what-it-is-1": {
+      "clip": "01-what-it-is-1.mp4",
+      "asked": "It's for anyone on call at two in the morning, when an agent tells you what worked last time.",
+      "heard": "It's for anyone on call at 2 in the morning.  When an agent tells you what worked last time.",
       "similarity": 1.0,
       "passed": true
     },
-    "02-the-failure-1": {
-      "clip": "02-the-failure-1.mp4",
-      "asked": "They report in good faith that the restart fixed it, when the metric never moved. Nobody lied. The memory is false.",
-      "heard": "They report in good faith that the restart fixed it when the metric never moved.  Nobody lied.  The memory is false.",
+    "02-the-problem-0": {
+      "clip": "02-the-problem-0.mp4",
+      "asked": "Every other agent memory today just asks an AI whether its own memory is right. That's marking your own homework.",
+      "heard": "Every other agent memory today, just asks an AI  whether it's own memory is right.  That's marking your own homework.",
+      "similarity": 0.93,
+      "passed": true
+    },
+    "02-the-problem-1": {
+      "clip": "02-the-problem-1.mp4",
+      "asked": "Mem0 does it. Zep does it. So does Amazon's own AgentCore. None of them check against anything real.",
+      "heard": "Mem zero does it.  Zepp does it.  So does Amazon's own agent core.  None of them check against anything real.",
+      "similarity": 0.8,
+      "passed": true
+    },
+    "03-the-failure-0": {
+      "clip": "03-the-failure-0.mp4",
+      "asked": "Here is how a memory goes wrong. An engineer restarts a service at two in the morning and the alert stops.",
+      "heard": "Here is how a memory goes wrong.  An engineer restarts a service at 2 in the morning and the alert stops.",
       "similarity": 1.0,
       "passed": true
     },
-    "03-memory-layer-0": {
-      "clip": "03-memory-layer-0.mp4",
-      "asked": "That memory lives in CockroachDB. Every row keeps its embedding in a native vector column, beside the ordinary relational fields.",
-      "heard": "That memory lives in cockroach DB.  Every row keeps its embedding in a native vector column,  beside the ordinary relational fields.",
-      "similarity": 0.927,
+    "03-the-failure-1": {
+      "clip": "03-the-failure-1.mp4",
+      "asked": "They honestly report that the restart fixed it. But the real numbers never moved. Nobody lied, and it's still wrong.",
+      "heard": "They honestly report that the restart fixed it, but the real numbers never moved.  Nobody lied and it's still wrong.",
+      "similarity": 1.0,
       "passed": true
     },
-    "03-memory-layer-1": {
-      "clip": "03-memory-layer-1.mp4",
-      "asked": "The vector index is prefixed by tenant and admission verdict, so one statement filters and ranks by cosine distance.",
-      "heard": "The vector index is prefixed by tenant and admission verdict,  so one statement filters and ranks by co-sight distance.",
+    "04-where-it-lives-0": {
+      "clip": "04-where-it-lives-0.mp4",
+      "asked": "All of this lives in one CockroachDB table. Each memory's search vector sits right beside its ordinary fields.",
+      "heard": "All of this lives in one cockroach DB table.  Each memory's search vector sits right beside its ordinary fields.",
       "similarity": 0.923,
       "passed": true
     },
-    "04-admission-0": {
-      "clip": "04-admission-0.mp4",
-      "asked": "Writing a memory is not automatic. Every claim is admitted or held, and the reason is stored beside it.",
-      "heard": "Writing a memory is not automatic.  Every claim is admitted or held, and the reason is stored beside it.",
+    "04-where-it-lives-1": {
+      "clip": "04-where-it-lives-1.mp4",
+      "asked": "So a single query finds the closest memories and skips the ones it never admitted. No separate search database.",
+      "heard": "So a single query finds the closest memories and skips the ones it never admitted.  No separate search database.",
       "similarity": 1.0,
       "passed": true
     },
-    "04-admission-1": {
-      "clip": "04-admission-1.mp4",
-      "asked": "Slack says three hundred. The runbook says eight hundred. Both contradict a human-confirmed five hundred, so both are held.",
-      "heard": "Slack says 300. The runbook says 800. Both contradict a human-conform 500, so both are held.",
+    "05-admission-0": {
+      "clip": "05-admission-0.mp4",
+      "asked": "Not everything gets written down. Every new claim is either accepted or put on hold, and the reason is saved.",
+      "heard": "not everything gets written down.  Every new claim is either accepted or put on hold,  and the reason is saved.",
+      "similarity": 1.0,
+      "passed": true
+    },
+    "05-admission-1": {
+      "clip": "05-admission-1.mp4",
+      "asked": "A runbook said eight hundred. Slack said three hundred. Both clashed with a person's five hundred, so both waited.",
+      "heard": "A runbook said 800. Slacks said 300. Both clashed with a person's 500, so both waited.",
       "similarity": 0.941,
       "passed": true
     },
-    "05-measured-0": {
-      "clip": "05-measured-0.mp4",
-      "asked": "We measured it. Five hundred forty poisoned attempts across five attack types, plus sixty honest controls to catch false refusals.",
-      "heard": "We measured it, 540 poisoned attempts across five attack types, plus 60 honest controls to catch false refusals.",
+    "06-measured-0": {
+      "clip": "06-measured-0.mp4",
+      "asked": "So we tested it. Five hundred forty fake claims built to poison the memory, plus sixty honest ones as a control.",
+      "heard": "So we tested it. 540 fake claims built to poison the memory, plus 60 honest ones as a control.",
       "similarity": 1.0,
       "passed": true
     },
-    "05-measured-1": {
-      "clip": "05-measured-1.mp4",
-      "asked": "Trust the caller and every attack reaches verified. Use an LLM judge, and it refuses all six honest claims it actually tested.",
-      "heard": "Trust the caller, and every attack reaches verified.  Use an LLM judge, and it refuses all six honest claims it actually tested.",
+    "06-measured-1": {
+      "clip": "06-measured-1.mp4",
+      "asked": "Simply trusting whoever asks lets every fake claim through. Asking an AI to judge blocked every honest one it saw.",
+      "heard": "Simply trusting whoever asks, let's every fake claim through.  Asking an AI to judge blocked every honest one it saw.",
+      "similarity": 0.927,
+      "passed": true
+    },
+    "07-the-oracle-0": {
+      "clip": "07-the-oracle-0.mp4",
+      "asked": "Only checking the real outcome tells them apart. MemoryStand goes back to Amazon CloudWatch and reads the actual numbers.",
+      "heard": "As only checking the real outcome, tells them apart.  Memory stand goes back to Amazon CloudWatch and reads the actual numbers.",
+      "similarity": 0.9,
+      "passed": true
+    },
+    "07-the-oracle-1": {
+      "clip": "07-the-oracle-1.mp4",
+      "asked": "One claim matched the metric almost exactly, and was accepted. Another was wildly off, and got turned down.",
+      "heard": "One claim matched the metric almost exactly and was accepted.  Another was wildly off and got turned down.",
       "similarity": 1.0,
-      "passed": true
-    },
-    "06-oracle-0": {
-      "clip": "06-oracle-0.mp4",
-      "asked": "Only the outcome gate tells them apart, because it does not ask a model. It re-queries CloudWatch itself.",
-      "heard": "Only the outcome gate tells them a part, because it does not ask a model.  It re-quaries CloudWatch itself.",
-      "similarity": 0.872,
-      "passed": true
-    },
-    "06-oracle-1": {
-      "clip": "06-oracle-1.mp4",
-      "asked": "Claimed minus fourteen thousand two hundred. CloudWatch said minus fourteen thousand two hundred and five. Confirmed. Claim minus ten, refused.",
-      "heard": "claimed minus 14,200.  CloudWatch said minus 14,205.  Confirmed.  Claim minus 10 refused.",
-      "similarity": 1.0,
-      "passed": true
-    },
-    "07-deciding-0": {
-      "clip": "07-deciding-0.mp4",
-      "asked": "Here's a recorded decide run: two candidate memories, the nearer one unconfirmed, the further one checked against CloudWatch.",
-      "heard": "Here's a recorded decide run.  Two candidate memories, the nearer one unconfirmed,  the further one checked against CloudWatch.",
-      "similarity": 1.0,
-      "passed": true
-    },
-    "07-deciding-1": {
-      "clip": "07-deciding-1.mp4",
-      "asked": "Proximity said one thing. Trust said another. Trust won \u2014 and the promotion path itself made zero model calls.",
-      "heard": "Proximity said one thing, trust said another, trust one, and the promotion path itself made zero model calls.",
-      "similarity": 0.914,
       "passed": true
     },
     "08-close-0": {
       "clip": "08-close-0.mp4",
-      "asked": "This is for whoever is on call at two in the morning, with an agent suggesting what worked last time.",
-      "heard": "This is for whoever is on call at 2 in the morning with an agent suggesting what worked last time.",
+      "asked": "In a recorded run, the closer memory was unchecked and the further one was confirmed. It chose the confirmed one.",
+      "heard": "In a recorded run, the closer memory was unchecked, and the further one was confirmed, it chose the confirmed one.",
       "similarity": 1.0,
       "passed": true
     },
     "08-close-1": {
       "clip": "08-close-1.mp4",
-      "asked": "None of it is a new idea. Doyle retracted beliefs in 1979. What's unusual is enforcing it in 2026.",
-      "heard": "None of it is a new idea.  Doyle retracted beliefs in 1979.  What's unusual is enforcing it in 2026.",
-      "similarity": 1.0,
+      "asked": "Being closer didn't win. Being checked did. The idea is old; actually enforcing it is the new part.",
+      "heard": "Being closer didn't win, being checkeded.  The idea is old, actually enforcing it is the new part.",
+      "similarity": 0.919,
       "passed": true
     }
   }

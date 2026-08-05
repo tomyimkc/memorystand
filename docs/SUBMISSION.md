@@ -331,12 +331,23 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 
 ### Field 15 — Which AI tools leveraged
 
-> Claude Code (Anthropic) was used throughout for architecture discussion, SQL and Python
-> authoring, and documentation — disclosed in full in `DISCLOSURES.md`. Amazon Bedrock (Nova Lite
-> for reasoning, Titan Text Embeddings V2 for embeddings) is a **runtime component of the
-> submitted agent itself**, not an authoring tool, and is covered separately under AWS services —
-> see Field 6 for the honest caveat that live on-demand quota is currently ~0, so today's live
-> decisions run the deterministic fallback in `backend/agent.py`, not a Nova Lite call.
+> **Authoring.** Claude Code (Anthropic) was used throughout for architecture discussion, SQL and
+> Python authoring, and documentation — disclosed in full in `DISCLOSURES.md`.
+>
+> **The demo video.** The presenter is a synthetic likeness of me, generated from my own
+> photograph with xAI's Grok (`image_edit` for the frames, `image_to_video` for the lip-synced
+> takes). The words are mine: every line was written by hand, and each generated clip is
+> transcribed with faster-whisper and compared against the line it was given, because the model
+> invents dialogue when a prompt contains no words. The pass/fail record for all sixteen shots is
+> committed at `docs/demo/presenter-verification.json`, and the pipeline is in
+> `scripts/presenter/`. The on-screen data panels are rendered from live API captures, not mocked.
+>
+> **Runtime, not authoring.** Amazon Bedrock is a component of the submitted agent itself and is
+> covered under AWS services — see Field 6. Honest caveat: on-demand Bedrock quota on this account
+> is 0, so embeddings fall back to a deterministic lexical stub, and `/decide` reasons through an
+> Anthropic-shaped standby provider (`anthropic:claude-haiku-4-5`, `model_calls: 1` in the live
+> capture of 2026-08-05). The **promotion** path is model-free by construction and stays that way:
+> `backend/trust.py` imports no model client, and a runtime guard fails if one becomes reachable.
 
 ---
 

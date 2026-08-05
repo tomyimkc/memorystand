@@ -43,7 +43,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import difflib
 import math
+import re
 import shutil
 import subprocess
 import sys
@@ -52,7 +54,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "presenter"))
+sys.path.insert(0, str(REPO_ROOT / "scripts" / "video"))
 
+import build_frames as bf  # noqa: E402  (fonts and palette, shared with the panels)
 from make_panels import PANEL_MARGIN, PRESENTER_W, W, H  # noqa: E402,F401
 
 SCRIPT_JSON = REPO_ROOT / "docs" / "demo" / "presenter-script.json"
@@ -61,6 +65,8 @@ CLIP_DIR = REPO_ROOT / "artifacts" / "presenter" / "clips"
 RECEIPT = REPO_ROOT / "docs" / "demo" / "presenter-verification.json"
 SPANS = REPO_ROOT / "artifacts" / "presenter" / "speech-spans.json"
 OUT = REPO_ROOT / "artifacts" / "video" / "memorystand-presenter.mp4"
+SRT = REPO_ROOT / "artifacts" / "video" / "memorystand-presenter.srt"
+WORDS = REPO_ROOT / "artifacts" / "presenter" / "word-timings.json"
 
 # How long a shot holds after the last word. Long enough that the cut does not feel clipped,
 # short enough that it does not read as a pause.
@@ -138,6 +144,186 @@ def speech_end(clip: Path, cache: dict) -> float:
         raise SystemExit(f"{clip.name}: no speech found -- refusing to guess its length")
     cache[clip.stem] = [round(words[0].start, 2), round(words[-1].end, 2)]
     return float(cache[clip.stem][1])
+
+
+# Captions live in the band the panel no longer occupies (see BAND_BOTTOM in make_panels).
+CAPTION_TOP = H - 232
+
+# Two short lines read faster than one long one at this size, and a caption that runs the full
+# 1920 makes the eye travel further than the shot lasts.
+CAPTION_MAX_CHARS = 52
+
+CAPTION_FONT = "Helvetica"
+CAPTION_FONT_SIZE = 46
+
+# Distance from the bottom of the frame to the bottom of the caption block. Sized so a two-line
+# cue sits inside the band make_panels vacated, and never over the panel.
+CAPTION_MARGIN_V = 110
+
+# Captions stay centred in the frame rather than following the panel from side to side. Moving
+# them each beat would make the eye hunt for them twice a beat; centred and fixed is what every
+# viewer already knows how to read. They do cross the presenter's shoulder, which is what the
+# outline is for.
+CAPTION_MARGIN_X = 300
+CAPTION_MAX_WORDS = 12
+
+
+def _srt_time(seconds: float) -> str:
+    ms = int(round(seconds * 1000))
+    h, ms = divmod(ms, 3_600_000)
+    m, ms = divmod(ms, 60_000)
+    sec, ms = divmod(ms, 1000)
+    return f"{h:02d}:{m:02d}:{sec:02d},{ms:03d}"
+
+
+def caption_cues(words: list[tuple[str, float, float]]) -> list[tuple[float, float, str]]:
+    """Group timed words into readable cues.
+
+    Timed from the SAME whisper word timestamps that decide where each shot is trimmed, so a
+    caption cannot drift from the audio it belongs to -- there is one source of truth for when a
+    word is spoken, and both the cut and the caption read it.
+
+    Cues break on sentence-final punctuation first, then at a clause boundary, then on length.
+    The em dash is deliberately NOT a breakpoint -- it is a stylistic pause mid-sentence, and
+    treating it as one produced a three-word cue that flashed by in 1.5 seconds.
+    """
+    cues: list[tuple[float, float, str]] = []
+    chunk: list[tuple[str, float, float]] = []
+
+    def emit(upto: int):
+        """Cut the chunk after `upto` words, keeping the remainder for the next cue."""
+        head, tail = chunk[:upto], chunk[upto:]
+        if head:
+            cues.append((head[0][1], head[-1][2], " ".join(w for w, _, _ in head).strip()))
+        chunk[:] = tail
+
+    for word, start, end in words:
+        chunk.append((word, start, end))
+        text = " ".join(w for w, _, _ in chunk)
+
+        if word.strip().endswith((".", "!", "?")):
+            emit(len(chunk))
+            continue
+        if len(text) < CAPTION_MAX_CHARS and len(chunk) < CAPTION_MAX_WORDS:
+            continue
+
+        # Over the limit. Prefer the last clause boundary inside the chunk to a hard cut: a cue
+        # reading "It's for anyone on call at two in the" and then "morning, when an agent..."
+        # splits a phrase across a screen change, which is harder to read than a short line.
+        breakpoints = [i for i, (w, _, _) in enumerate(chunk[:-1])
+                       if w.strip().endswith((",", ";", ":"))]
+        emit(breakpoints[-1] + 1 if breakpoints else len(chunk))
+    emit(len(chunk))
+    return cues
+
+
+def align_to_script(scripted: str, heard: list[tuple[str, float, float]]) -> list[tuple[str, float, float]]:
+    """Give the SCRIPT's words the transcriber's timings.
+
+    The captions must read what was written, not what whisper thought it heard. Using the
+    transcript directly put "I built memory stand, a memory for AI agents" on screen -- the
+    product name lower-cased and split in two, in the opening caption of the film. Punctuation,
+    capitalisation and spelled-out numbers all come back mangled in harmless-for-verification
+    ways that are not harmless to read.
+
+    So the transcript is used for TIMING only. Words are matched up with difflib; runs that do
+    not match one-to-one (heard "300" against scripted "three hundred") have that span's time
+    divided evenly across the scripted words in it. Timing accuracy costs at most a fraction of
+    a word, and the text on screen is exactly the text that was approved.
+    """
+    def key(word: str) -> str:
+        return re.sub(r"[^a-z0-9]", "", word.lower())
+
+    script_words = scripted.split()
+    if not heard:
+        return []
+
+    matcher = difflib.SequenceMatcher(None, [key(w) for w, _, _ in heard], [key(w) for w in script_words])
+    out: list[tuple[str, float, float]] = []
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            for offset in range(j2 - j1):
+                _, start, end = heard[i1 + offset]
+                out.append((script_words[j1 + offset], start, end))
+            continue
+        if j1 == j2:
+            continue  # the transcriber heard something the script never said; drop it
+        span_start = heard[i1][1] if i1 < len(heard) else heard[-1][2]
+        span_end = heard[i2 - 1][2] if i2 - 1 < len(heard) and i2 > i1 else span_start
+        if span_end <= span_start:
+            span_end = span_start + 0.05 * (j2 - j1)
+        step = (span_end - span_start) / (j2 - j1)
+        for offset in range(j2 - j1):
+            out.append((script_words[j1 + offset], span_start + offset * step,
+                        span_start + (offset + 1) * step))
+    return out
+
+
+def clip_words(clip: Path, cache: dict) -> list[tuple[str, float, float]]:
+    """Per-word timings for a clip, cached. Whisper is slow and these never move."""
+    if clip.stem in cache:
+        return [tuple(w) for w in cache[clip.stem]]
+
+    wav = Path(tempfile.gettempdir()) / f"words_{clip.stem}.wav"
+    run(["ffmpeg", "-v", "error", "-i", str(clip), "-ac", "1", "-ar", "16000", "-y", str(wav)])
+    from faster_whisper import WhisperModel
+
+    segs, _ = WhisperModel("tiny", device="cpu", compute_type="int8").transcribe(
+        str(wav), word_timestamps=True
+    )
+    cache[clip.stem] = [
+        [w.word.strip(), round(w.start, 3), round(w.end, 3)]
+        for seg in segs for w in (seg.words or [])
+    ]
+    return [tuple(w) for w in cache[clip.stem]]
+
+
+def render_caption(text: str, path: Path) -> None:
+    """Draw one caption as a transparent PNG, to be overlaid for its cue's duration.
+
+    THIS FFMPEG HAS NO TEXT FILTERS. `ffmpeg -filters` lists neither `subtitles`, `ass` nor
+    `drawtext` -- the build carries no libass and no freetype, so every filtergraph naming one is
+    rejected with "No option name near ...", which reads like a quoting bug and is not one.
+
+    Rendering the captions with Pillow instead is the better answer anyway: they get the same
+    typeface, weight and palette as the data panels, so they look like part of the design rather
+    than a subtitle track laid over it. The heavy stroke is what lets them cross the presenter's
+    shoulder and stay readable.
+    """
+    from PIL import Image, ImageDraw
+
+    image = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+    font = bf.font(CAPTION_FONT_SIZE, bold=True)
+    usable = W - 2 * CAPTION_MARGIN_X
+
+    words, lines, current = text.split(), [], ""
+    for word in words:
+        trial = f"{current} {word}".strip()
+        if draw.textlength(trial, font=font) <= usable or not current:
+            current = trial
+        else:
+            lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+
+    line_h = CAPTION_FONT_SIZE + 16
+    bottom = H - CAPTION_MARGIN_V
+    y = bottom - line_h * len(lines)
+    for line in lines:
+        x = (W - draw.textlength(line, font=font)) / 2
+        draw.text((x, y), line, font=font, fill=(255, 255, 255, 255),
+                  stroke_width=5, stroke_fill=(6, 10, 18, 235))
+        y += line_h
+    image.save(path)
+
+
+def write_srt(path: Path, cues: list[tuple[float, float, str]]) -> None:
+    blocks = []
+    for i, (start, end, text) in enumerate(cues, 1):
+        blocks.append(f"{i}\n{_srt_time(start)} --> {_srt_time(end)}\n{text}\n")
+    path.write_text("\n".join(blocks), encoding="utf-8")
 
 
 # Where the speaker should sit inside his own column, as a fraction of its width. Slightly
@@ -268,7 +454,14 @@ def main() -> int:
         for beat in spec["beats"]
         for i in range(len(beat["shots"]))
     ]
+    spec_lines = {
+        f"{beat['id']}-{i}": line
+        for beat in spec["beats"]
+        for i, line in enumerate(beat["shots"])
+    }
 
+    words_cache = json.loads(WORDS.read_text()) if WORDS.is_file() else {}
+    film_cues: list[tuple[float, float, str]] = []
     segments: list[Path] = []
     audio: list[Path] = []
     timeline: list[tuple[str, float]] = []
@@ -289,7 +482,8 @@ def main() -> int:
 
         clip_len = float(_probe(clip, "format=duration"))
         duration = snap(min(clip_len, speech_end(clip, spans) + HOLD_S))
-        timeline.append((tag, total))
+        segment_start = total
+        timeline.append((tag, segment_start))
         total += duration
 
         # The clip is portrait; scaled to 1080 tall it is wider than the 660px presenter column,
@@ -305,18 +499,48 @@ def main() -> int:
         # between is a straight cut, which is what a person talking should look like.
         vfade = ",fade=t=in:st=0:d=0.6" if n == 0 else ""
 
+        # Captions are burned in rather than left as a sidecar track. A judge opening an mp4 or a
+        # Devpost embed will not go looking for a CC button, and a caption nobody switches on is
+        # the same as no caption. The .srt is still written alongside, for the YouTube upload.
+        scripted = spec_lines[tag]
+        timed = align_to_script(scripted, clip_words(clip, words_cache))
+        cues = [c for c in caption_cues(timed) if c[0] < duration]
+        # segment_start, NOT total -- total has already been advanced past this segment, and
+        # using it put every cue in the sidecar one whole shot late.
+        film_cues += [(segment_start + a, min(segment_start + b, segment_start + duration), t)
+                      for a, b, t in cues]
+        write_srt(work / f"{n:02d}-{tag}.srt", [(a, min(b, duration), t) for a, b, t in cues])
+        # Commas inside force_style MUST be escaped: filter_complex splits filters on commas
+        # before libavfilter ever sees the quotes, so an unescaped style string is parsed as a
+        # series of nonexistent filters ("No option name near ...").
+        cue_inputs: list[str] = []
+        cue_filters = ""
+        stage = "[base]"
+        for c, (start, end, text) in enumerate(cues):
+            png = work / f"{n:02d}-{tag}-cue{c}.png"
+            render_caption(text, png)
+            cue_inputs += ["-loop", "1", "-t", f"{duration:.6f}", "-i", str(png)]
+            nxt = f"[cap{c}]"
+            cue_filters += (f"{stage}[{3 + c}:v]overlay=0:0:format=auto:"
+                            f"enable='between(t\\,{start:.3f}\\,{min(end, duration):.3f})'{nxt};")
+            stage = nxt
+        subs = ""
+
         seg = work / f"{n:02d}-{tag}.mp4"
         run([
             "ffmpeg", "-y", "-v", "error",
             "-loop", "1", "-t", f"{duration:.6f}", "-i", str(panel),
             "-t", f"{duration:.6f}", "-i", str(clip),
             "-loop", "1", "-t", f"{duration:.6f}", "-i", str(masks[side]),
+            *cue_inputs,
             "-filter_complex",
             f"[1:v]scale={scaled_w}:{H},crop={PRESENTER_W}:{H}:{crop_x}:0,setsar=1,format=yuva420p[p];"
             f"[2:v]format=gray[m];"
             f"[p][m]alphamerge[pa];"
             f"[0:v]setsar=1[bg];"
-            f"[bg][pa]overlay={overlay_x}:0:format=auto,format=yuv420p{vfade}[v]",
+            f"[bg][pa]overlay={overlay_x}:0:format=auto[base];"
+            + cue_filters
+            + f"{stage}format=yuv420p{vfade}[v]",
             "-map", "[v]", "-an",
             "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-r", str(FPS),
             "-t", f"{duration:.6f}",
@@ -339,6 +563,7 @@ def main() -> int:
         print(f"  {tag:30s} {side:5s}  {duration:5.2f}s  crop x={crop_x}")
 
     SPANS.write_text(json.dumps(spans, indent=2) + "\n")
+    WORDS.write_text(json.dumps(words_cache, indent=1) + "\n")
 
     outro_panel = PANEL_DIR / "99-outro.png"
     if not outro_panel.is_file():
@@ -399,6 +624,9 @@ def main() -> int:
     ])
 
     measured = _probe(OUT, "format=duration")
+
+    write_srt(SRT, film_cues)
+    print(f"  {len(film_cues)} caption cue(s) -> {SRT.relative_to(REPO_ROOT)}")
 
     size_mb = OUT.stat().st_size / 1e6
     print(f"\n  {len(segments)} shot(s), {float(measured):.1f}s, {size_mb:.1f} MB")
