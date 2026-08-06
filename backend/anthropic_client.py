@@ -40,6 +40,7 @@ import json
 import os
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any
 
@@ -61,6 +62,24 @@ API_VERSION = "2023-06-01"
 # recalled memories. That is a small-model task, and latency is a feature here.
 MODEL_ID = os.environ.get("MEMORYSTAND_ANTHROPIC_MODEL", "claude-haiku-4-5")
 SSM_PARAM = os.environ.get("MEMORYSTAND_ANTHROPIC_SSM_PARAM", "/memorystand/anthropic_api_key")
+
+
+def provider_label() -> str:
+    """The name of whoever will actually answer, derived from the endpoint in use.
+
+    ``agent.py`` used to hardcode the string ``anthropic:`` for this provider. Because the base
+    URL is configurable, the deployed Lambda spent two days pointed at a third-party
+    Anthropic-compatible router while every ``/decide`` response reported
+    ``reasoning_source: anthropic:claude-haiku-4-5``. The code was not lying about the model; it
+    was lying about who served it, and it did so because the label was written by hand next to a
+    value that could change underneath it.
+
+    This project's whole argument is that a claim must name the thing that produced it. Deriving
+    the label from ``API_URL`` means a future redeploy against a different gateway relabels
+    itself, and nobody has to remember to.
+    """
+    host = urllib.parse.urlparse(API_URL).hostname or "unknown"
+    return "anthropic" if host in {"api.anthropic.com", "anthropic.com"} else host
 
 # Same latency discipline as the Bedrock client: this sits inside a 30s Lambda budget and
 # shares it with an embedding call and the database work.

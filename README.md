@@ -1,23 +1,29 @@
 # MemoryStand — memory that has to stand up
 
-> **Every shipping agent-memory system asks a model whether its own memory is true.**
+> **The major shipping agent-memory systems we checked — Mem0, Zep, AWS AgentCore — ask a model
+> whether their own memory is true.**
 > MemoryStand asks CloudWatch — and refuses the promotion when CloudWatch disagrees.
 
-**The agent reasons over its own memory, and the trust ladder is what it reasons over.** Live,
-on the deployed API:
+**The agent reasons over its own memory, and the trust ladder is what it reasons over.** A real
+`/decide` against the deployed API, quoted verbatim:
 
 ```
-reasoning_source: anthropic:claude-haiku-4-5    model_calls: 1
-action: restart_service
+reasoning_source: api.teamorouter.com:claude-haiku-4-5    model_calls: 1
+action: open_incident
 
-rationale: During INC-4610, a payments-service p99 latency spike was resolved by
-restarting payments-service after pausing ledger-worker-cg first. The current
-alert matches that pattern.
+rationale: The recalled memories show a consistent pattern: every prior incident
+involving checkout-api circuit breaker timeouts during payments gateway latency
+spikes has been resolved by temporarily raising the timeout to 1200ms. However,
+this is a repeated issue across multiple incidents (at least 5 documented cases)
+... opening an incident allows escalation to address the root cause.
 ```
 
 Amazon Bedrock is tried first and stays the preferred provider — this account has 0 Bedrock
 inference quota in every region, and the moment that changes it takes over with no code change.
-`reasoning_source` always names the provider that actually answered.
+Until then the standby is a third-party Anthropic-compatible router, and `reasoning_source` names
+it rather than pretending otherwise: the label is derived from the endpoint, not hand-written, so
+it always names the provider that actually answered. Full context in
+[`DISCLOSURES.md`](DISCLOSURES.md).
 
 **And when no model is available at all, memory still decides — with zero model calls.** Live:
 
@@ -32,7 +38,7 @@ Proximity said one thing; trust said another; trust won.
 
 ### Measured against an LLM judge, not just cited
 
-`benchmarks/poisoning.md` — 600 adversarial claims plus honest controls, three defences, the
+`benchmarks/poisoning.md` — 540 adversarial claims plus 60 honest controls (600 total), three defences, the
 judge arm running live against a real model:
 
 | | attacks reaching `verified` | honest claims admitted |
@@ -64,7 +70,7 @@ outside the model corroborates it: a recovered metric, re-queried and checked; a
 incident; a human's sign-off. The promotion path makes **zero model calls**, and that is
 enforced by a runtime guard, not by a convention.
 
-Measured, not asserted — [benchmarks/verification.md](benchmarks/verification.md), 300 labelled
+Measured, not asserted — [benchmarks/verification.md](benchmarks/verification.md), 500 labelled
 outcome reports:
 
 | | trust the caller | outcome-gated |
@@ -111,7 +117,7 @@ against what else is known, and then against what actually happened. Most of wha
 MemoryStand makes a memory stand up twice before an agent is allowed to rely on it: once when it
 is written, against everything already believed, and once afterwards, against reality.
 
-Every agent-memory system on the market decides what to trust using one of three signals:
+The agent-memory systems we surveyed decide what to trust using one of three signals:
 **recency** (newest fact wins), **source authority** (trust the runbook over Slack), or
 **self-consistency** (ask the model whether it believes itself). All three are the agent grading
 its own homework.
@@ -134,10 +140,13 @@ agent already believes: a deterministic attribute-conflict check plus a vector-n
 similarity search. Conflicting memories are held for review and never returned by recall; a
 corrected fact supersedes the old one rather than deleting it.
 
-**3. Cross-examination.** `SELECT … AS OF SYSTEM TIME '<t>'` re-runs the agent's *identical*
-recall query pinned to a past instant, so you can ask what it believed at the moment it paged
-you, and diff that against now. (CockroachDB rejects `AS OF SYSTEM TIME` inside a subquery, so
-the diff is two pinned reads rather than one self-join — see [SPIKE-RESULTS.md](SPIKE-RESULTS.md).)
+**3. Cross-examination.** `SELECT … AS OF SYSTEM TIME '<t>'` reconstructs the memories that
+existed and were *accepted* at the instant a past decision was made, alongside the exact
+`consulted_memory_ids` that decision recorded — so you can ask what the agent believed when it
+paged you, and diff that against now. (It reconstructs the belief state, not the original vector
+ranking; `replay.recall_as_of()` would re-run the ranked query but is not yet wired to this path.
+CockroachDB rejects `AS OF SYSTEM TIME` inside a subquery, so the diff is two pinned reads — see
+[SPIKE-RESULTS.md](SPIKE-RESULTS.md).)
 
 ```
 $ memorystand cross-examine --decision-id <id>
@@ -200,7 +209,8 @@ Stated as a list, because these are the specific concessions:
 
 ### So what is actually different: who is allowed to decide a memory is true
 
-Every shipping agent-memory system answers "is this memory still true?" by asking a model.
+The shipping agent-memory systems we checked (Mem0, Zep, AWS AgentCore) answer "is this memory
+still true?" by asking a model.
 
 | System | Who decides truth | Evidence |
 |---|---|---|
@@ -252,7 +262,7 @@ Everything marked ✅ was run against a real CockroachDB v26.2.5 cluster, not ju
 |---|---|
 | Schema, admission control, outcome gate, cross-examination | ✅ end to end |
 | Incident fixtures (101 records, 2 designed conflicts) | ✅ 99 admitted, 2 held |
-| Test suite (`pytest`) | ✅ **78 passing** |
+| Test suite (`pytest`) | ✅ **135 passing** |
 | Concurrency + TOCTOU proof (`scripts/race_demo.py`) | ✅ real `40001` captured |
 | Benchmark harness (`scripts/loadtest.py`) | ✅ 10k rows, numbers below |
 | Lambda handler, 7 routes, kill switch, degraded mode | ✅ exercised over HTTP |
@@ -264,7 +274,7 @@ Everything marked ✅ was run against a real CockroachDB v26.2.5 cluster, not ju
 | One-command demo (`scripts/demo.sh`) | ✅ 8 beats, exit 0 |
 | ccloud provisioning (`infra/provision.sh`) | ✅ flags verified against `ccloud 0.8.23`, and run for real — see cloud cluster row below |
 | AWS deploy scripts (`infra/provision.sh`, `infra/ssm_setup.sh`, `infra/deploy.sh`, `infra/deploy_frontend.sh`, IAM, SSM, keep-warm) | ✅ **all run against a real AWS account.** Lambda is Active, dashboard is live on Amplify. See [docs/DEPLOY.md](docs/DEPLOY.md) for the URL shape. |
-| Bedrock with real credentials | ⚠️ deployed and reachable, but this account's Bedrock quota is ~0 — every live `/decide` call falls back to the deterministic heuristic in `backend/agent.py` (`reasoning_source: fallback_heuristic`, `model_calls: 0`). No live call has actually been reasoned over by a model. |
+| Reasoning provider | ⚠️ Bedrock is tried first but this account's Bedrock quota is ~0, so it never answers. Live `/decide` reasons through a third-party Anthropic-compatible router (`reasoning_source: api.teamorouter.com:claude-haiku-4-5`, `model_calls: 1`) — a deliberate, disclosed standby, see [`DISCLOSURES.md`](DISCLOSURES.md). The promotion path stays model-free regardless. |
 | Cloud cluster | ✅ CockroachDB Cloud BASIC, AWS us-west-2, CCL v26.2.1. `agent_memories` holds 50,131 rows: 40 synthetic tenants at 1,250 rows each, plus the curated demo tenant (131 rows, 117 accepted). |
 | MCP server wiring | ✅ working end to end (see [CockroachDB tools used](#cockroachdb-tools-used) for the honest access-level finding) |
 | Video | ⬜ |
@@ -356,9 +366,18 @@ All five found and fixed against the real Lambda, not in theory:
   value was being interpolated raw on an *unauthenticated* route. Now validated against an
   allow-list (HLC decimal, negative interval, ISO-8601). Live check: a hostile `instant` now
   returns HTTP 400 and the table is untouched.
-- **`trust._apply` had no tenant predicate** — the only unscoped query in the codebase, and the
-  one that promotes a memory to `verified`. `tenant_id` is now a required positional argument of
+- **`trust._apply` had no tenant predicate**, on the path that promotes a memory to `verified`.
+  `tenant_id` is now a required positional argument of
   `trust.grant_standing(tenant_id, decision_id, evidence)`.
+  **This took two goes, and the first attempt is worth reading.** The fix scoped the decision
+  *lookup* and this document called the bug closed — while the `UPDATE` fifty lines below still
+  moved trust tiers with `WHERE memory_id = ANY(...) AND trust_tier = ...` and no tenant at all.
+  Because `produced_memory_ids` is caller-supplied and unvalidated, any secret-holder could file a
+  decision under their **own** tenant naming a stranger's memory ids and promote them to
+  `verified`. Found by an outside adversarial review, closed in `backend/trust.py`, and pinned by
+  `tests/test_security_invariants.py::test_attacker_cannot_promote_another_tenants_memory_via_their_own_decision`,
+  which was checked to fail against the old code before being trusted. A fix verified where it was
+  applied is not a fix verified across the operation.
 - **`POST /confirm_outcome` wasn't behind the shared secret** while `/ingest` and `/decide` were —
   `frontend/app.js` even documented it as "no secret required (read-adjacent)". It's the route
   that grants trust. Now gated; a live check without the secret returns 401.
@@ -395,7 +414,7 @@ git clone <this-repo> && cd memorystand
 Then:
 
 ```bash
-.venv/bin/python -m pytest -q                                   # 78 tests
+.venv/bin/python -m pytest -q                                   # 135 tests
 .venv/bin/python cli/memorystand.py recall --query "payments failover"
 .venv/bin/python scripts/loadtest.py --rows 10000 --tenants 50  # reproduce the numbers below
 ```
@@ -441,7 +460,7 @@ honest status, the exact judge-facing URL shape, and what stays free for a ~6-we
   `docs/BEDROCK_QUOTA.md`); Titan Text Embeddings V2 (512-dim) for embeddings. Deliberately
   *absent* from the promotion path.
 - **AWS Lambda** — the whole backend, behind a Function URL.
-- **Amazon EventBridge Scheduler** — the periodic checkpoint job and keep-warm ping.
+- **Amazon EventBridge Scheduler** — the keep-warm schedule that pings `/health` (`infra/keepwarm.sh`). Re-verification (`backend/reverify.py`) is not yet on a schedule; it runs on demand — see the roadmap.
 - **AWS Systems Manager Parameter Store** — the CockroachDB DSN as a SecureString.
 - **Amazon CloudWatch Logs** — structured, correlated logs with explicit retention.
 - **AWS Amplify Hosting** — the static demo dashboard.

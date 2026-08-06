@@ -1,0 +1,89 @@
+{
+  "minSimilarity": 0.72,
+  "shots": {
+    "01-what-it-is-0": {
+      "clip": "01-what-it-is-0.mp4",
+      "asked": "I built MemoryStand \u2014 a memory for AI agents that refuses to trust a claim nobody ever checked.",
+      "heard": "I built memory stand, a memory for AI agents that refuses to trust a claim nobody ever checked.",
+      "similarity": 0.914,
+      "passed": true
+    },
+    "01-what-it-is-1": {
+      "clip": "01-what-it-is-1.mp4",
+      "asked": "It's for on-call engineers, when an AI assistant suggests a fix because it remembers that fix working before.",
+      "heard": "It's for on-call engineers, when an AI assistant suggests a fix because it remembers that fix working before.",
+      "similarity": 1.0,
+      "passed": true
+    },
+    "02-the-problem-0": {
+      "clip": "02-the-problem-0.mp4",
+      "asked": "Every other agent memory today just asks an AI whether its own memory is right. That's marking your own homework.",
+      "heard": "Every other agent memory today, just asks an AI  whether it's own memory is right.  That's marking your own homework.",
+      "similarity": 0.93,
+      "passed": true
+    },
+    "02-the-problem-1": {
+      "clip": "02-the-problem-1.mp4",
+      "asked": "Mem0 does it. Zep does it. So does Amazon's own AgentCore. None of them check against anything real.",
+      "heard": "Mem zero does it.  Zepp does it.  So does Amazon's own agent core.  None of them check against anything real.",
+      "similarity": 0.8,
+      "passed": true
+    },
+    "03-the-failure-0": {
+      "clip": "03-the-failure-0.mp4",
+      "asked": "Here is how a memory goes wrong. An engineer restarts a service at two in the morning and the alert stops.",
+      "heard": "Here is how a memory goes wrong.  An engineer restarts a service at 2 in the morning and the alert stops.",
+      "similarity": 1.0,
+      "passed": true
+    },
+    "03-the-failure-1": {
+      "clip": "03-the-failure-1.mp4",
+      "asked": "They report the restart fixed it. But the latency CloudWatch recorded never actually dropped. Nobody lied. It's still wrong.",
+      "heard": "They report the restart fixed it, but the latency cloud watch recorded never actually dropped.  Nobody lied. It's still wrong.",
+      "similarity": 0.927,
+      "passed": true
+    },
+    "04-where-it-lives-0": {
+      "clip": "04-where-it-lives-0.mp4",
+      "asked": "Every memory lives in one CockroachDB table: the text, its source, how trusted it is, and a search vector.",
+      "heard": "Every memory lives in one cockroach DB table.  The text, its source, how trusted it is, and a search vector.",
+      "similarity": 0.923,
+      "passed": true
+    },
+    "05-admission-0": {
+      "clip": "05-admission-0.mp4",
+      "asked": "A claim is one fact about one service \u2014 a timeout setting, an owner, or what fixed the last incident.",
+      "heard": "The claim is one fact about one service, a timeout setting, an owner, or what fix the last incident.",
+      "similarity": 0.895,
+      "passed": true
+    },
+    "06-measured-0": {
+      "clip": "06-measured-0.mp4",
+      "asked": "We ran six hundred claims through three different defences: five hundred forty deliberate fakes, plus sixty honest ones as a control.",
+      "heard": "We ran 600 claims through 3 different defenses, 540 deliberate fakes, plus 60 honest ones as a control.",
+      "similarity": 0.944,
+      "passed": true
+    },
+    "07-the-oracle-1": {
+      "clip": "07-the-oracle-1.mp4",
+      "asked": "A claimed drop of fourteen thousand milliseconds matched CloudWatch within five. A claimed drop of ten did not, and was refused.",
+      "heard": "A claimed drop of 14,000 milliseconds matched cloud watch within five.  A claimed drop of 10 did not, and was refused.",
+      "similarity": 0.927,
+      "passed": true
+    },
+    "08-close-0": {
+      "clip": "08-close-0.mp4",
+      "asked": "In a recorded run, the closer memory was unchecked and the further one was confirmed. It chose the confirmed one.",
+      "heard": "In a recorded run, the closer memory was unchecked, and the further one was confirmed, it chose the confirmed one.",
+      "similarity": 1.0,
+      "passed": true
+    },
+    "08-close-1": {
+      "clip": "08-close-1.mp4",
+      "asked": "Being closer didn't win. Being checked did. The idea is old; actually enforcing it is the new part.",
+      "heard": "Being closer didn't win, being checkeded.  The idea is old, actually enforcing it is the new part.",
+      "similarity": 0.919,
+      "passed": true
+    }
+  }
+}

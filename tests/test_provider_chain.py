@@ -49,14 +49,15 @@ def test_bedrock_is_tried_first(monkeypatch):
     monkeypatch.setattr(anthropic_client, "available", lambda: True)
     names = [name for name, _ in agent._providers()]
     assert names[0].startswith("bedrock:")
-    assert any(n.startswith("anthropic:") for n in names)
+    assert any(n.startswith(f"{anthropic_client.provider_label()}:") for n in names)
 
 
 def test_a_provider_with_no_key_is_skipped_not_attempted(monkeypatch):
     """Skipping beats timing out. A deployment with no key must not pay a network round trip
     on every request to rediscover that."""
     monkeypatch.setattr(anthropic_client, "available", lambda: False)
-    assert [n for n, _ in agent._providers() if n.startswith("anthropic:")] == []
+    label = anthropic_client.provider_label()
+    assert [n for n, _ in agent._providers() if n.startswith(f"{label}:")] == []
 
 
 def test_the_source_names_the_provider_that_actually_answered(monkeypatch):
@@ -73,7 +74,7 @@ def test_the_source_names_the_provider_that_actually_answered(monkeypatch):
     )
 
     out = agent.propose("payments-service latency climbing", [])
-    assert out["reasoning_source"].startswith("anthropic:")
+    assert out["reasoning_source"].startswith(f"{anthropic_client.provider_label()}:")
     assert out["action"] == "scale_up"
     assert out["model_calls"] >= 0
 
@@ -112,3 +113,28 @@ def test_adding_a_second_provider_did_not_reach_the_promotion_path():
     trust.assert_no_model_calls()
     import backend.trust as t
     assert not hasattr(t, "anthropic_client")
+
+
+def test_the_label_names_the_endpoint_not_the_api_shape(monkeypatch):
+    """A configurable endpoint with a hardcoded label is a claim that can go stale silently.
+
+    It did. The deployed Lambda ran for two days against a third-party Anthropic-compatible
+    router while every /decide response reported ``anthropic:claude-haiku-4-5``, because
+    ``agent._providers`` wrote that prefix by hand next to a base URL read from the
+    environment. The model name was right; the party serving it was not.
+
+    So the label is derived, and this test pins the derivation rather than the string: point the
+    client somewhere else and the name it reports must follow.
+    """
+    import importlib
+
+    monkeypatch.setenv("MEMORYSTAND_ANTHROPIC_BASE_URL", "https://gateway.example.invalid")
+    reloaded = importlib.reload(anthropic_client)
+    try:
+        assert reloaded.provider_label() == "gateway.example.invalid"
+
+        monkeypatch.setenv("MEMORYSTAND_ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+        assert importlib.reload(anthropic_client).provider_label() == "anthropic"
+    finally:
+        monkeypatch.delenv("MEMORYSTAND_ANTHROPIC_BASE_URL", raising=False)
+        importlib.reload(anthropic_client)

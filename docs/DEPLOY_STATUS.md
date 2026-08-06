@@ -93,19 +93,40 @@ after the second failure; the third and fourth return in under a second because 
 short-circuits straight to the deterministic fallback instead of dialing Bedrock at all. The
 local equivalent for `agent.propose()` shows the same shape: 12.35 s -> 8.66 s -> 0.00 s -> 0.00 s.
 
-Test suite: 78 passing (was 47); new files `tests/test_latency_budget.py` and
+Test suite: 135 passing (was 47); new files `tests/test_latency_budget.py` and
 `tests/test_security_invariants.py`.
 
-## Honest state: the deployed agent is not reasoning with a model
+## Honest state: the deployed agent reasons through a disclosed router standby, not Bedrock
 
-`GET /health`'s `circuit_breakers` field spends a lot of its time `"open"` right now, for a
-mundane reason: Bedrock quota on this account is still effectively zero. Every live
-`POST /decide` currently returns `reasoning_source: "fallback_heuristic"` and `model_calls: 0` --
-the action is chosen by an explicit deterministic keyword rule in `backend/agent.py`, not by a
-model, and the `rationale` string in the response says so verbatim. Do not describe the deployed
-agent as "reasoning with an LLM"; it currently is not. That is a different, incidental zero from
-the `confirm_outcome` / trust-promotion path's zero model calls (`backend/trust.py`), which is a
-deliberate design property and is genuine.
+`GET /health`'s Bedrock `circuit_breakers` field spends much of its time `"open"`, for a mundane
+reason: Bedrock quota on this account is effectively zero, so the Bedrock attempt always fails and
+the chain falls through to the standby. Live `POST /decide` reasons through a third-party
+Anthropic-compatible router and returns `reasoning_source: "api.teamorouter.com:claude-haiku-4-5"`
+with `model_calls: 1` — the label is derived from the endpoint, see `../DISCLOSURES.md`. This is a
+deliberate, disclosed standby, and the deployed agent **does** reason with a model.
+
+That is a different zero from the `confirm_outcome` / trust-promotion path's **zero model calls**
+(`backend/trust.py`): the promotion path imports no model client and a runtime guard enforces it,
+so no model — Bedrock, router, or otherwise — is ever in the path that grants trust. That zero is
+the deliberate, genuine one.
+
+**Reproducing this deployment.** The router is not the code default (which is the safe
+`api.anthropic.com`); the live Lambda is deliberately deployed against it:
+
+```
+MEMORYSTAND_ANTHROPIC_BASE_URL=https://api.teamorouter.com bash infra/deploy.sh
+```
+
+The router API key lives in the SSM SecureString `/memorystand/anthropic_api_key`, never in the
+repo, and **must be rotated after the contest.**
+
+**Bedrock is the intended provider, and reclaims the path automatically.** A quota-increase
+request is open with AWS. The router is only a standby: Bedrock is tried first on every request,
+and the circuit breaker re-probes it every 60s, so the moment quota lands Bedrock takes over the
+reasoning path **with no redeploy** and `reasoning_source` flips to `bedrock:amazon.nova-lite-v1:0`
+(Nova Lite, because Claude-on-Bedrock is geo-refused for this account — `docs/BEDROCK_QUOTA.md`).
+Run `infra/check_bedrock.sh` to test whether quota has landed; today it reports
+`ThrottlingException: Too many tokens per day`, i.e. still 0.
 
 ## Explored: the CockroachDB Cloud MCP server
 
@@ -160,7 +181,7 @@ tested that the system behaves well for a cooperative caller, not that it refuse
 | Hole | Now |
 |---|---|
 | SQL injection via `GET /diff?instant=` (AOST cannot be parameterised, so the value was interpolated raw, on an **unauthenticated** route) | allow-list of the three documented instant forms; live check returns **400**, table intact |
-| `trust._apply` matched on `decision_id` with **no tenant predicate** -- the only unscoped query in the codebase, and the one that promotes memories to `verified` | `tenant_id` is a required positional argument; another tenant's decision is reported identically to a nonexistent one |
+| `trust._apply` matched on `decision_id` with **no tenant predicate** on the path that promotes memories to `verified` | `tenant_id` is a required positional argument; another tenant's decision is reported identically to a nonexistent one. **Reopened and closed again:** the first fix scoped the decision lookup only, leaving the tier `UPDATE` unscoped, so a caller could promote another tenant's memories via their own decision. Both statements are now scoped |
 | `POST /confirm_outcome` was **not** behind the shared secret while `/ingest` and `/decide` were | gated; live check returns **401** without the secret |
 | The kill switch failed **open** -- any SSM read error defaulted to `"off"` | fails closed, and distinguishes "read failed" from "read the value off" |
 

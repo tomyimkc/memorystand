@@ -1,0 +1,244 @@
+{
+  "schemaVersion": 2,
+  "title": "MemoryStand",
+  "targetDurationSeconds": 156,
+  "candidateOnly": true,
+  "canClaimAGI": false,
+  "_notes": [
+    "PLAIN-LANGUAGE CUT. Written to be followed by someone who has never used an agent framework.",
+    "Rules applied: no jargon that is not immediately unpacked; no schema or SQL spoken aloud (it",
+    "stays on the panel for the technical judge to read); concrete nouns over abstractions; and one",
+    "idea per shot. The opening beat now says what was built before arguing why it matters -- the",
+    "previous cut opened on a critique of Mem0 and Zep, which means nothing to a general viewer.",
+    "",
+    "ON-SCREEN DISCLOSURES REMOVED at the author's request: the synthesised-presenter line and the",
+    "candidateOnly/no-AGI tag. The presenter disclosure moves to the Devpost 'Which AI tools have",
+    "you leveraged' field and the video description -- see docs/SUBMISSION.md. One caveat was KEPT,",
+    "on beat 04's panel: the embeddings are a deterministic lexical stub because Bedrock quota on",
+    "this account is zero, so 'closest' means lexically closest, not semantically. That one guards",
+    "an actual claim the video makes on screen rather than signalling research etiquette.",
+    "",
+    "MEASURED CONSTRAINTS of grok image_to_video:",
+    "  - duration accepts 6 or 10 ONLY; 15 returns '`duration` must be either 6 or 10 seconds.'",
+    "  - the generator fits the given line into the given clip, so clip length sets delivery speed.",
+    "    6s forced 3.3-4.7 words/sec; 10s puts 20 words in 8.54s = 2.34 words/sec. Hence 17-24",
+    "    words per shot, enforced by make_clips.py.",
+    "  - shots after the first in a beat are seeded from the previous shot's LAST FRAME, so a beat",
+    "    plays as one unbroken take rather than a jump cut on identical framing.",
+    "  - it invents dialogue if the prompt has no words, so every clip is transcribed and compared.",
+    "",
+    "Every number spoken is traceable:",
+    "  beat 04 -> db/schema.sql:63,74 · backend/memory.py:369-381",
+    "  beat 05 -> live POST /ingest, artifacts/video/capture/evidence.json 2026-08-05T09:40Z",
+    "  beat 06 -> benchmarks/poisoning.md:14-19 (class n), :31-47 (per-arm), :65 (judge arm n=6)",
+    "  beat 07 -> live POST /confirm_outcome, same capture",
+    "  beat 08 -> recorded /decide run, README.md:25-26; prior art in README",
+    "CLARITY PASS. Reviewer note: the plain-language cut traded jargon for vagueness. Every abstraction that could not be pictured was replaced with the concrete thing it stood for -- 'what worked last time' -> 'an AI assistant suggests a fix because it remembers that fix working'; 'the real numbers' -> 'the latency CloudWatch recorded'; 'this lives in one table' -> the four things in the row; 'every new claim' -> 'one fact about one service'; the bare 800/300/500 -> milliseconds of one service's circuit-breaker timeout; 'we tested it' -> 600 claims through three defences; 'the actual numbers' -> AWS/Lambda Duration. Panels carrying figures now state in words what those figures are."
+  ],
+  "beats": [
+    {
+      "id": "01-what-it-is",
+      "presenterSide": "LEFT",
+      "baseFrom": "01-claim",
+      "panelData": {
+        "kind": "hero",
+        "headline": "Memory an agent has to earn.",
+        "bullets": [
+          "A claim arrives  →  it is admitted, or put on hold",
+          "It only becomes trusted once the monitoring data agrees",
+          "If the data later disagrees, it loses that standing"
+        ],
+        "footnote": "github.com/tomyimkc/memorystand"
+      },
+      "shots": [
+        "I built MemoryStand — a memory for AI agents that refuses to trust a claim nobody ever checked.",
+        "It's for on-call engineers, when an AI assistant suggests a fix because it remembers that fix working before."
+      ]
+    },
+    {
+      "id": "02-the-problem",
+      "presenterSide": "RIGHT",
+      "baseFrom": "02-the-failure",
+      "panelData": {
+        "kind": "quote",
+        "lines": [
+          "Mem0 — an LLM picks ADD/UPDATE/DELETE. No confidence score at all.",
+          "Zep — an LLM sets validity windows. \"Model-inferred, not authoritative.\"",
+          "AWS AgentCore — extraction and consolidation are LLM prompts. No verification API."
+        ],
+        "footnote": "Each line cites the vendor's own docs or issue tracker. See README."
+      },
+      "shots": [
+        "The big agent-memory systems today just ask an AI whether their own memory is right. That's marking your own homework.",
+        "Mem0 does it. Zep does it. So does Amazon's own AgentCore. None of them check against anything real."
+      ]
+    },
+    {
+      "id": "03-the-failure",
+      "presenterSide": "LEFT",
+      "baseFrom": "03-measured",
+      "panelData": {
+        "kind": "story",
+        "headline": "Nobody lied. The memory is still false.",
+        "body": "And it will be handed to an agent at the next incident. That is how a memory store fills with true-sounding operational folklore."
+      },
+      "shots": [
+        "Here is how a memory goes wrong. An engineer restarts a service at two in the morning and the alert stops.",
+        "They report the restart fixed it. But the latency CloudWatch recorded never actually dropped. Nobody lied. It's still wrong."
+      ]
+    },
+    {
+      "id": "04-where-it-lives",
+      "presenterSide": "RIGHT",
+      "baseFrom": "04-only-one-works",
+      "panelData": {
+        "kind": "schema",
+        "code": [
+          "embedding  VECTOR(512)",
+          "",
+          "VECTOR INDEX agent_memories_tenant_idx",
+          "  (tenant_id, verdict, embedding vector_cosine_ops)",
+          "",
+          "WHERE  tenant_id = %s AND verdict = 'accepted'",
+          "ORDER BY  embedding <=> %s   LIMIT %s"
+        ],
+        "note": "Admission is checked inside the vector search. Trust tier comes back as a column and is ranked afterwards, in code.",
+        "footnote": "db/schema.sql:63,74 · backend/memory.py:369-381 · embeddings are a deterministic lexical stub (Bedrock quota is 0), so “closest” is lexical",
+        "title": "one row per memory, in the agent_memories table"
+      },
+      "shots": [
+        "Every memory lives in one CockroachDB table: the text, its source, how trusted it is, and a search vector.",
+        "So a single query finds the closest memories and skips the ones it never admitted. No separate search database."
+      ]
+    },
+    {
+      "id": "05-admission",
+      "presenterSide": "LEFT",
+      "baseFrom": "05-trust-beats-proximity",
+      "panelData": {
+        "kind": "admission",
+        "rows": [
+          {
+            "source": "human — on-call lead",
+            "value": "500",
+            "verdict": "accepted"
+          },
+          {
+            "source": "runbook",
+            "value": "800",
+            "verdict": "held"
+          },
+          {
+            "source": "Slack hearsay",
+            "value": "300",
+            "verdict": "held"
+          }
+        ],
+        "reason": "contradicts memory 025d7524 which asserts '500'; sources rank equal, so a human decides",
+        "footnote": "live POST /ingest · captured 2026-08-05T09:40Z",
+        "title": "checkout-api · circuit breaker timeout, in milliseconds"
+      },
+      "shots": [
+        "A claim is one fact about one service — a timeout setting, an owner, or what fixed the last incident.",
+        "Three sources disagreed about one timeout: the runbook said eight hundred milliseconds, Slack said three hundred, an engineer said five hundred.",
+        "Five hundred was already stored, and neither other source outranks it, so both were held for a human to settle."
+      ]
+    },
+    {
+      "id": "06-measured",
+      "presenterSide": "RIGHT",
+      "baseFrom": "06-close",
+      "panelData": {
+        "kind": "table",
+        "columns": [
+          "",
+          "attacks → verified",
+          "honest admitted"
+        ],
+        "rows": [
+          [
+            "trust the caller",
+            "100%",
+            "100%"
+          ],
+          [
+            "LLM-as-judge",
+            "0%",
+            "0%"
+          ],
+          [
+            "outcome-gated",
+            "0%",
+            "100%"
+          ]
+        ],
+        "footnote": "540 attacks + 60 honest controls · poisoning.md:14-19, 31-47 · judge arm n=6/class",
+        "title": "600 claims · 540 fakes + 60 honest · three defences"
+      },
+      "shots": [
+        "We ran six hundred claims through three different defences: five hundred forty deliberate fakes, plus sixty honest ones as a control.",
+        "Simply trusting the caller let all five hundred forty fakes through. Asking an AI to judge blocked the honest ones too."
+      ]
+    },
+    {
+      "id": "07-the-oracle",
+      "presenterSide": "LEFT",
+      "baseFrom": "07-deciding",
+      "panelData": {
+        "kind": "oracle",
+        "rows": [
+          {
+            "claimed": "−14,200.0",
+            "observed": "−14,204.91",
+            "verdict": "confirmed",
+            "status": "200"
+          },
+          {
+            "claimed": "−10.0",
+            "observed": "−14,200",
+            "verdict": "refused",
+            "status": "400"
+          }
+        ],
+        "note": "outcome_rejected — \"a disagreement beyond the 50% tolerance\"",
+        "footnote": "live POST /confirm_outcome · captured 2026-08-05T09:40Z",
+        "title": "AWS/Lambda Duration — the function's run time, in milliseconds"
+      },
+      "shots": [
+        "Only the third approach works. MemoryStand asks Amazon CloudWatch for the service's own metric — here, the function's run time in milliseconds.",
+        "A claimed drop of fourteen thousand milliseconds matched CloudWatch within five. A claimed drop of ten did not, and was refused."
+      ]
+    },
+    {
+      "id": "08-close",
+      "presenterSide": "RIGHT",
+      "baseFrom": "08-close",
+      "panelData": {
+        "kind": "recall",
+        "rows": [
+          {
+            "id": "22207f6e",
+            "distance": "0.414",
+            "tier": "unconfirmed",
+            "value": "restart_service",
+            "chosen": false
+          },
+          {
+            "id": "fb3b7ec0",
+            "distance": "0.565",
+            "tier": "verified",
+            "value": "scale_up",
+            "chosen": true
+          }
+        ],
+        "note": "Recorded run. Today's live /decide also calls a model to pick the action; the promotion path never does — backend/trust.py imports no model client.",
+        "footnote": "recorded /decide run, README.md:25-26 · tiers re-confirmed live 2026-08-05"
+      },
+      "shots": [
+        "In a recorded run, the closer memory was unchecked and the further one was confirmed. It chose the confirmed one.",
+        "Being closer didn't win. Being checked did. The idea is old; actually enforcing it is the new part."
+      ]
+    }
+  ],
+  "subtitles": true
+}

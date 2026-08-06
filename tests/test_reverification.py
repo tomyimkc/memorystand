@@ -201,3 +201,4 @@ def test_standing_granted_before_the_evidence_columns_existed_is_left_alone(
     out = reverify.sweep(tenant_id)
     assert out["checked"] == 0, "a memory with no recorded evidence must not be swept"
     assert memory.get(tenant_id, mid)["trust_tier"] == trust.VERIFIED
+

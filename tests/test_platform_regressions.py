@@ -325,3 +325,22 @@ def test_vector_index_mechanism_itself_is_selected_when_it_is_the_only_viable_in
             conn.commit()
         finally:
             db.put_conn(conn)
+
+
+# 5. A connection handed back to the pool must be in transaction mode, not autocommit.
+def test_put_conn_returns_the_connection_in_transaction_mode():
+    """reverify.sweep() runs with autocommit=True; the pool is maxconn=1 (one physical
+    connection reused across requests in a warm Lambda). Depending on psycopg2's pool to reset a
+    leaked mode is relying on undocumented internals -- so db.put_conn normalises it explicitly.
+
+    HONEST SCOPE. An outside review flagged this as a P0 that "breaks every later caller." Probing
+    the live pool showed it does NOT: psycopg2 returns a reset/fresh connection on the next
+    getconn, so no caller was observed running in autocommit mode. This is therefore hardening of
+    a fragile assumption, not the repair of an exploited bug -- and the test asserts the thing that
+    is actually guaranteed: put_conn leaves the connection it was given in transaction mode.
+    Revert db.put_conn's reset and this goes red.
+    """
+    conn = db.get_conn()
+    conn.autocommit = True
+    db.put_conn(conn)
+    assert conn.autocommit is False

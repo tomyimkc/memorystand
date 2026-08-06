@@ -1,8 +1,9 @@
 # Devpost submission — MemoryStand
 
 Ready-to-paste copy for `cockroachdb-ai.devpost.com`, rewritten 2026-08-04 for the current build:
-region `us-west-2`, reasoning model `amazon.nova-lite-v1:0` (not Claude — see
-[docs/BEDROCK_QUOTA.md](BEDROCK_QUOTA.md)), and the measured 10k-row benchmark in `README.md`.
+region `us-west-2`. Live reasoning runs through a disclosed third-party router standby because
+Bedrock quota on this account is 0 (Field 6 and [DISCLOSURES.md](../DISCLOSURES.md)); the intended
+Bedrock model is `amazon.nova-lite-v1:0`, not Claude ([docs/BEDROCK_QUOTA.md](BEDROCK_QUOTA.md)).
 Field IDs are Devpost's own internal ids, included so this doc lines up with the live form
 field-for-field.
 
@@ -26,13 +27,13 @@ then **Technical Implementation**. Prizes: 1st $5,000, 2nd $2,500, 3rd $1,250.
 
 Longer form, for the description field where the character budget allows it:
 
-> Every agent-memory system asks a model whether its own memory is true.
+> The major shipping agent-memory systems we checked (Mem0, Zep, AWS AgentCore) ask a model whether their own memory is true.
 > MemoryStand asks CloudWatch — and refuses the promotion when CloudWatch disagrees.
 
 **Why this framing and not "we invented outcome-gated trust".** The idea is decades old
 (Doyle's JTMS, 1979; CHEF, 1986; NELL's promoted beliefs, 2010; EigenTrust, 2003), and a judge
 who knows the field would puncture a novelty claim in one search. What is defensible and
-checkable is the *enforcement*: every shipping system delegates "is this memory true?" to a
+checkable is the *enforcement*: the shipping systems we checked delegate "is this memory true?" to a
 model, and this one structurally cannot. Lead with the comparison, concede the idea.
 
 ### Opening three paragraphs (long description)
@@ -52,8 +53,9 @@ model, and this one structurally cannot. Lead with the comparison, concede the i
 > whole claim collapses into the self-consistency bucket everyone else is already in.
 >
 > CockroachDB is not incidental to this — it is why the mechanism is cheap to build correctly.
-> `AS OF SYSTEM TIME` lets `cross-examine` re-run an agent's exact recall query pinned to the
-> instant it paged someone, with no separate version table. SERIALIZABLE isolation (the only
+> `AS OF SYSTEM TIME` lets `cross-examine` reconstruct the accepted-memory belief state and the
+> recorded consulted ids as of the instant it paged someone, with no separate version table
+> (`replay.recall_as_of()` re-runs the ranked query and exists, but is not yet wired to that route). SERIALIZABLE isolation (the only
 > isolation level CockroachDB offers) is what makes two agents racing to write contradictory
 > memories about the same incident resolve to exactly one winner, provably, under real `40001`
 > contention — not a mocked test. And a prefix-partitioned vector index on
@@ -111,7 +113,7 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > → cross-examine loop with no AWS account and no CockroachDB Cloud account. Embeddings fall back
 > to a deterministic local stub (`MEMORYSTAND_EMBED_STUB=1`, set automatically by the script and
 > announced on screen — a stub result is never presented as a real embedding). `pytest -q` runs
-> the 78-test suite. `python cli/memorystand.py recall --query "payments failover"` drives the CLI
+> the 135-test suite. `python cli/memorystand.py recall --query "payments failover"` drives the CLI
 > directly. A deployed demo also exists now — see Field 1's URL,
 > `https://main.d19xad9aeccy3e.amplifyapp.com`, no account or login needed — this local path
 > remains as a fallback for judges who prefer to run it themselves.
@@ -197,16 +199,18 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > browser hitting `/` gets a 404 by design — so it should not be pasted as the "live demo" link;
 > the Amplify dashboard is the one a judge should click first.)
 >
-> Note on the reasoning model: this project originally targeted Claude on Bedrock. Anthropic
-> models are refused from this operator's AWS account with `ValidationException: Access to
-> Anthropic models is not allowed from unsupported countries...` — a geo-restriction independent
-> of IAM and region. The reasoning model is now `amazon.nova-lite-v1:0`, which is AWS-native,
-> `ON_DEMAND`, and carries no such restriction. In practice, on-demand quota for this brand-new
-> account is currently ~0, so every live `/decide` call today returns
-> `reasoning_source: fallback_heuristic` and `model_calls: 0` — the action comes from an explicit
-> deterministic keyword rule in `backend/agent.py`, not a live model call. That fallback is itself
-> a deliberate design choice, not a hidden gap (see Field 7): the trust-critical path never blocks
-> on Bedrock capacity. Full detail is in `docs/BEDROCK_QUOTA.md`.
+> Note on the reasoning model — stated plainly because this project's whole argument is that a
+> claim must name what produced it. Bedrock is tried first and stays the preferred provider, but
+> it never answers on this account: Claude on Bedrock is geo-refused (`ValidationException: Access
+> to Anthropic models is not allowed from unsupported countries...`) and the AWS-native fallback
+> `amazon.nova-lite-v1:0` has ~0 on-demand quota on this brand-new account. So live `/decide`
+> reasons through a **third-party Anthropic-compatible router, `api.teamorouter.com`, serving
+> `claude-haiku-4-5`** — a deliberate, disclosed standby. `reasoning_source` names it
+> (`api.teamorouter.com:claude-haiku-4-5`, `model_calls: 1`), derived from the endpoint rather
+> than hand-written, and the moment Bedrock quota lands it takes over with no code change. Prompts
+> and the API key traverse that third party; the **promotion path does not** — `backend/trust.py`
+> imports no model client and a runtime guard enforces it. Full detail in
+> [`../DISCLOSURES.md`](../DISCLOSURES.md) and `docs/BEDROCK_QUOTA.md`.
 
 ### Field 7 — How meaningfully integrated
 
@@ -269,10 +273,12 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > security issues, each backed by a regression test. `GET /diff?instant=` — unauthenticated —
 > interpolated its `AS OF SYSTEM TIME` value raw, because that clause can't be parameterised; it's
 > now an allow-list (HLC decimal, negative interval, ISO-8601), and a hostile `instant` now returns
-> `400` with the table intact. `trust._apply` matched on `decision_id` with no tenant predicate —
-> the only unscoped query in the codebase, and the one that promotes a memory to `verified` — so
-> `trust.grant_standing()` now takes `tenant_id` as a required positional argument, closing a
-> cross-tenant trust-escalation path. `POST /confirm_outcome`, the route that grants trust, was
+> `400` with the table intact. `trust._apply` matched on `decision_id` with no tenant predicate
+> on the path that promotes a memory to `verified`, so `trust.grant_standing()` now takes
+> `tenant_id` as a required positional argument. That fix was incomplete and an outside review
+> caught it: it scoped the decision lookup while the tier `UPDATE` stayed unscoped, so a caller
+> could still promote another tenant's memories through a decision of their own. Both statements
+> are now tenant-scoped, with a regression test proven to fail against the old code. `POST /confirm_outcome`, the route that grants trust, was
 > not behind the shared secret while `/ingest` and `/decide` were — `frontend/app.js` literally
 > documented it as "no secret required (read-adjacent)"; it's now gated, and a live check without
 > the secret returns `401`. And the kill switch failed **open** on any SSM read error; it now
@@ -331,12 +337,24 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 
 ### Field 15 — Which AI tools leveraged
 
-> Claude Code (Anthropic) was used throughout for architecture discussion, SQL and Python
-> authoring, and documentation — disclosed in full in `DISCLOSURES.md`. Amazon Bedrock (Nova Lite
-> for reasoning, Titan Text Embeddings V2 for embeddings) is a **runtime component of the
-> submitted agent itself**, not an authoring tool, and is covered separately under AWS services —
-> see Field 6 for the honest caveat that live on-demand quota is currently ~0, so today's live
-> decisions run the deterministic fallback in `backend/agent.py`, not a Nova Lite call.
+> **Authoring.** Claude Code (Anthropic) was used throughout for architecture discussion, SQL and
+> Python authoring, and documentation — disclosed in full in `DISCLOSURES.md`.
+>
+> **The demo video.** The presenter is a synthetic likeness of me, generated from my own
+> photograph with xAI's Grok (`image_edit` for the frames, `image_to_video` for the lip-synced
+> takes). The words are mine: every line was written by hand, and each generated clip is
+> transcribed with faster-whisper and compared against the line it was given, because the model
+> invents dialogue when a prompt contains no words. The pass/fail record for all sixteen shots is
+> committed at `docs/demo/presenter-verification.json`, and the pipeline is in
+> `scripts/presenter/`. The on-screen data panels are rendered from live API captures, not mocked.
+>
+> **Runtime, not authoring.** Amazon Bedrock is a component of the submitted agent itself and is
+> covered under AWS services — see Field 6. Honest caveat: on-demand Bedrock quota on this account
+> is 0, so embeddings fall back to a deterministic lexical stub, and `/decide` reasons through a
+> third-party Anthropic-compatible router (`api.teamorouter.com:claude-haiku-4-5`, `model_calls: 1`
+> live) whose label is derived from the endpoint so it cannot misname the route. The **promotion**
+> path is model-free by construction and stays that way: `backend/trust.py` imports no model
+> client, and a runtime guard fails if one becomes reachable.
 
 ---
 
