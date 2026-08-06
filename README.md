@@ -97,6 +97,8 @@ on AWS Amplify Hosting. The API it talks to is
 route (`GET /` returns 404 by design — it is not a page to open in a browser). ·
 [deployment status](docs/DEPLOY_STATUS.md)
 
+![MemoryStand architecture — the promotion path asks CloudWatch, not a model](docs/architecture.png)
+
 **Submission for the [CockroachDB × AWS Hackathon — Build with Agentic Memory](https://cockroachdb-ai.devpost.com).**
 
 > **Built 2026-08-03 onward.** Deployed and verified against real AWS and CockroachDB Cloud —
