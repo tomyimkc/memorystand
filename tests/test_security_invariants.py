@@ -25,6 +25,7 @@ opened.
 
 from __future__ import annotations
 
+import json
 import uuid
 
 import pytest
@@ -300,3 +301,62 @@ def test_kill_switch_off_still_means_off(monkeypatch) -> None:
     monkeypatch.delenv(handler.KILL_SWITCH_ENV, raising=False)
     monkeypatch.setattr(handler, "_get_ssm_param", lambda *a, **k: "off")
     assert handler.kill_switch_engaged() is False
+
+
+# --- 4. The scheduled sweep is reachable by IAM, never by HTTP ------------------------------
+
+def test_a_request_body_cannot_trigger_the_scheduled_sweep(monkeypatch):
+    """The public surface must not be able to reach an internal, mutating maintenance task.
+
+    reverify.sweep() DEMOTES trust tiers. It is invoked by EventBridge Scheduler calling the
+    Lambda directly, which is gated by IAM rather than by the shared secret -- so it is not an
+    HTTP route at all. This test pins the boundary from the attacker's side: a Function URL
+    request whose JSON body says {"memorystand_task": "reverify"} must be treated as an ordinary
+    HTTP request (and 404, since no such route exists), never as a scheduled task.
+
+    The property that makes this hold: AWS puts a caller's JSON in event["body"] as a STRING and
+    builds every top-level key itself, so a client cannot set one.
+    """
+    called = {"n": 0}
+    from backend import reverify as _rv
+
+    monkeypatch.setattr(_rv, "sweep", lambda *a, **k: called.__setitem__("n", called["n"] + 1))
+
+    hostile = {
+        "requestContext": {"http": {"method": "POST", "path": "/reverify"}, "requestId": "r"},
+        "rawPath": "/reverify",
+        "headers": {"content-type": "application/json"},
+        "body": json.dumps({"memorystand_task": "reverify", "tenant_id": None}),
+    }
+    resp = handler.lambda_handler(hostile, None)
+    assert called["n"] == 0, "an HTTP request body reached the scheduled sweep"
+    assert resp["statusCode"] == 404
+
+    # And the marker at the TOP level of an HTTP-shaped event is still refused, because the
+    # HTTP markers are present.
+    hostile_top = dict(hostile)
+    hostile_top["memorystand_task"] = "reverify"
+    handler.lambda_handler(hostile_top, None)
+    assert called["n"] == 0, "an HTTP-shaped event with a top-level marker reached the sweep"
+
+
+def test_a_direct_invoke_does_run_the_sweep(monkeypatch):
+    """The other half: the scheduler's own event shape must actually work, or the job is dead."""
+    seen = {}
+    from backend import reverify as _rv
+
+    monkeypatch.setattr(_rv, "sweep", lambda tenant_id=None, dry_run=False: seen.update(
+        {"tenant_id": tenant_id, "dry_run": dry_run}) or {
+        "checked": 3, "still_verified": 2, "demoted_to_attested": 1,
+        "demoted_to_disputed": 0, "model_calls": 0, "dry_run": dry_run, "changes": []})
+
+    out = handler.lambda_handler({"memorystand_task": "reverify"}, None)
+    assert out["ok"] is True
+    assert out["receipt"]["checked"] == 3
+    assert out["receipt"]["model_calls"] == 0, "the sweep must stay model-free"
+    assert seen == {"tenant_id": None, "dry_run": False}
+
+
+def test_an_unknown_scheduled_task_is_refused_not_guessed():
+    out = handler.lambda_handler({"memorystand_task": "drop_everything"}, None)
+    assert out["ok"] is False and "unknown task" in out["error"]

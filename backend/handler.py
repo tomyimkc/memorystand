@@ -491,7 +491,73 @@ def _response(status: int, body: Any, *, cors: bool = True, extra_headers: dict[
 # ---------------------------------------------------------------------------
 # The entry point.
 # ---------------------------------------------------------------------------
+SCHEDULED_TASK_KEY = "memorystand_task"
+
+
+def _is_scheduled_invocation(event: dict[str, Any]) -> bool:
+    """Is this a direct, IAM-authenticated invoke rather than a Function URL request?
+
+    WHY THIS IS SAFE, stated explicitly because it is the whole security argument.
+
+    The re-verification sweep DEMOTES trust tiers. Exposing it as an HTTP route would put a
+    mutating endpoint on a public Function URL (auth type NONE) and would require handing the
+    shared secret to EventBridge -- a second copy of the credential, in a second service, for a
+    job that never needed to leave AWS. Invoking the Lambda directly avoids both: the only
+    principals who can trigger it are those IAM grants ``lambda:InvokeFunction``, and the
+    scheduler's role grants exactly that one action on exactly this function.
+
+    The detection cannot be spoofed from the internet. An HTTP caller controls only the request
+    body, which AWS delivers as a STRING under ``event["body"]``; every top-level key of the
+    event object -- ``requestContext``, ``rawPath`` and the rest -- is constructed by the Function
+    URL integration, not by the client. A top-level marker is therefore unreachable from the
+    public surface. Both conditions are required anyway (marker present AND HTTP markers absent),
+    so even a future integration that starts passing custom top-level keys cannot reach this path.
+    ``test_a_request_body_cannot_trigger_the_scheduled_sweep`` pins exactly that.
+    """
+    if not isinstance(event, dict) or SCHEDULED_TASK_KEY not in event:
+        return False
+    return not any(k in event for k in ("requestContext", "rawPath", "httpMethod", "headers"))
+
+
+def _run_scheduled_task(event: dict[str, Any]) -> dict[str, Any]:
+    """Run an internal maintenance task and return a receipt of what it did."""
+    from . import reverify
+
+    task = str(event.get(SCHEDULED_TASK_KEY))
+    request_id = str(uuid.uuid4())
+    if task != "reverify":
+        _log("scheduled_task_unknown", request_id, level="warn", task=task)
+        return {"ok": False, "task": task, "error": "unknown task"}
+
+    started = time.time()
+    try:
+        summary = reverify.sweep(
+            tenant_id=event.get("tenant_id"), dry_run=bool(event.get("dry_run"))
+        )
+    except Exception as exc:  # noqa: BLE001
+        # The CloudWatch alarm keys on this exact token -- see infra/schedule_reverify.sh.
+        _log("reverify_sweep_failed", request_id, level="error",
+             error=f"{type(exc).__name__}: {exc}")
+        raise
+
+    # THE EXECUTION RECEIPT. A scheduled job nobody can prove ran is indistinguishable from one
+    # that silently stopped running months ago, which is the failure mode this whole project is
+    # about. The counts go to CloudWatch Logs as one structured line.
+    _log("reverify_sweep_completed", request_id,
+         checked=summary["checked"], still_verified=summary["still_verified"],
+         demoted_to_attested=summary["demoted_to_attested"],
+         demoted_to_disputed=summary["demoted_to_disputed"],
+         model_calls=summary["model_calls"], dry_run=summary["dry_run"],
+         elapsed_s=round(time.time() - started, 3))
+    return {"ok": True, "task": task, "receipt": summary}
+
+
 def lambda_handler(event: dict[str, Any], context: Any = None) -> dict[str, Any]:
+    # Internal, IAM-authenticated maintenance tasks are handled before any HTTP parsing and never
+    # touch the route table, so no public path can reach them.
+    if _is_scheduled_invocation(event):
+        return _run_scheduled_task(event)
+
     request_id = _extract_request_id(event)
     method, path = _extract_method_path(event)
     headers = event.get("headers") or {}
