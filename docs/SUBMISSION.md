@@ -101,7 +101,17 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 
 ### Field 2 — Testing credentials / instructions (optional)
 
-> No account and no credentials are needed to evaluate this project locally.
+> **You do not need a credential from us to try the write paths.** The live dashboard fills in a
+> public demo credential automatically, so you can ingest a memory, run `/decide`, and confirm an
+> outcome and watch a trust tier move — for real, against the deployed system.
+>
+> That credential is published at `GET /health` on purpose, and it is safe to publish because the
+> server scopes it to a single tenant: used against any other `tenant_id` it returns `401`
+> (`backend/handler.py::_scope_tenant`, with a regression test proven to fail without the
+> enforcement). The operator secret is separate, is never served by `/health`, and is covered by
+> its own test asserting it cannot appear there.
+>
+> No account and no credentials are needed to evaluate this project locally either.
 >
 > ```
 > git clone https://github.com/tomyimkc/memorystand

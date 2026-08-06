@@ -91,6 +91,11 @@ never moved. That is how a memory store fills up with true-sounding operational 
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
+**Try the write paths yourself — no credential needed from us.** The dashboard fills in a public
+demo credential served by `GET /health`. It is safe to publish because the server scopes it to one
+tenant: used against any other it returns `401`. Ingest a memory, run `/decide`, confirm an outcome,
+and watch a tier move.
+
 **Live demo (click this): <https://main.d19xad9aeccy3e.amplifyapp.com>** — the dashboard, deployed
 on AWS Amplify Hosting. The API it talks to is
 <https://ojao6oaxlk26mqfjwpuy7g4dy40tglyi.lambda-url.us-west-2.on.aws>, a JSON API with no root
