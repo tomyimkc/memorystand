@@ -15,6 +15,7 @@ Each test here maps 1:1 onto a fact in the top-level CLAUDE.md / project brief:
 from __future__ import annotations
 
 import ast
+import json
 import re
 import uuid
 from pathlib import Path
@@ -344,3 +345,41 @@ def test_put_conn_returns_the_connection_in_transaction_mode():
     conn.autocommit = True
     db.put_conn(conn)
     assert conn.autocommit is False
+
+
+# 6. The deployment receipt must be present, honest, and free of secrets.
+def test_health_reports_a_deployment_receipt(monkeypatch):
+    """`/health` must say which source and schema are actually answering.
+
+    "The repository is fixed" and "the service you are talking to is fixed" are different claims.
+    This project shipped a live security fix that existed in git for hours before it existed in
+    production, so a reviewer needs to be able to tell the two apart without asking.
+
+    The receipt must also stay non-sensitive: a commit SHA of a public repo, an AWS-assigned
+    version, and migration filenames -- never config, credentials, ARNs or a DSN.
+    """
+    from backend import handler
+
+    monkeypatch.setenv("MEMORYSTAND_SOURCE_SHA", "abc1234567")
+    monkeypatch.setenv("MEMORYSTAND_DEPLOYED_AT", "2026-08-06T00:00:00Z")
+
+    status, body = handler._route_health({}, {}, "req-1")
+    assert status == 200
+    receipt = body["deployment"]
+    assert receipt["source_sha"] == "abc1234567"
+    assert receipt["deployed_at"] == "2026-08-06T00:00:00Z"
+    assert receipt["lambda_version"] == "local"          # not running in Lambda
+    assert isinstance(receipt["schema_migrations"], (list, type(None)))
+
+    blob = json.dumps(body).lower()
+    for secret_ish in ("password", "sslrootcert", "postgresql://", "secret", "aws_access"):
+        assert secret_ish not in blob, f"/health leaked {secret_ish!r}"
+
+
+def test_source_sha_is_unknown_rather_than_fabricated(monkeypatch):
+    """An unset SHA must read 'unknown', never something that looks like a real commit."""
+    from backend import handler
+
+    monkeypatch.delenv("MEMORYSTAND_SOURCE_SHA", raising=False)
+    _, body = handler._route_health({}, {}, "req-2")
+    assert body["deployment"]["source_sha"] == "unknown"

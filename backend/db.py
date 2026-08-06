@@ -193,12 +193,37 @@ def server_version(conn=None) -> str:
             put_conn(conn)
 
 
+def applied_migrations(conn=None) -> list[str]:
+    """Migration filenames this database has actually applied, oldest first.
+
+    Read-only on purpose. ``db/migrate.py`` creates ``schema_migrations`` with
+    ``CREATE TABLE IF NOT EXISTS`` before reading it; a health probe must not, because a probe
+    that can write DDL is a probe that can change the thing it is reporting on. A database that
+    has never been migrated simply has no ledger, and the honest answer there is an empty list.
+    """
+    own = conn is None
+    conn = conn or get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT filename FROM schema_migrations ORDER BY applied_at, filename"
+            )
+            return [r[0] for r in cur.fetchall()]
+    except Exception:  # noqa: BLE001 - no ledger yet is a state, not a failure
+        conn.rollback()
+        return []
+    finally:
+        if own:
+            put_conn(conn)
+
+
 def is_serialization_failure(exc: BaseException) -> bool:
     return getattr(exc, "pgcode", None) == SERIALIZATION_FAILURE
 
 
 __all__ = [
     "RetryBudgetExhausted",
+    "applied_migrations",
     "close_pool",
     "dsn",
     "get_conn",
