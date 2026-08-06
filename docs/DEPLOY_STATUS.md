@@ -119,6 +119,27 @@ maps near-identical text to the same vector). That was measured, and so was the 
 Deleting live rows to tidy a cosmetic artifact was not worth the risk, and the dashboard now
 refuses to narrate proximity when distances tie rather than papering over it.
 
+**The demo credential is live, and its scoping is verified against production, not asserted.**
+`GET /health` publishes a write credential scoped to the seeded demo tenant
+`9c8f6e5a-9d1a-4a1c-8f2e-3b6d1c7a4e10`. Both halves were exercised on the deployed system:
+
+- **Refused elsewhere.** The published credential against tenant `00000000-…` returns **401** on
+  all three write routes (`/ingest`, `/decide`, `/confirm_outcome`) with
+  "this credential is scoped to the public demo tenant".
+- **Works on its own tenant.** A full journey ran end to end: `/ingest` → `201 accepted`;
+  `/decide` → `201`, `action=scale_up`, `reasoning_source=api.teamorouter.com:claude-haiku-4-5`,
+  5 memories consulted; `/confirm_outcome` → `200`, `trust_tier=attested`, `model_calls=0`.
+
+That `attested` is the point rather than a shortfall: the outcome was reported via PagerDuty,
+which has no machine-checkable system of record, so it cannot reach `verified`. Only a CloudWatch
+metric can. The running system and the documentation agree on this.
+
+**Migration 003 is applied in production** and the retrieval receipt is working: `/timemachine`
+for that decision returned **5 ranked rows with real distances** — `4c414a15` (unconfirmed,
+d=0.5807) nearest, `fb3b7ec0` (verified, d=0.7818) further but trusted — which is both the
+re-ranked recall and trust-vs-proximity visible in one response. `GET /health` reports
+`source_sha` matching `HEAD` and all three migrations applied.
+
 **Trust decay runs on a schedule.** `infra/schedule_reverify.sh` provisions an EventBridge
 Scheduler rule (`memorystand-reverify`, `rate(1 day)`, ENABLED, 2 retries) that invokes the Lambda
 directly with `{"memorystand_task":"reverify"}`. It is deliberately **not** an HTTP route: the
