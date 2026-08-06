@@ -212,6 +212,21 @@
     return "unconfirmed";
   }
 
+  // Ranking weight for the ladder, for DISPLAY ONLY -- the backend ranking is the authority.
+  //
+  // backend/agent.py::_TIER_RANK is {verified:3, attested:2, unconfirmed:1} and `disputed` is
+  // absent, which is not an oversight: _fallback_action filters candidates on membership in that
+  // dict, so a disputed memory is excluded from deciding anything at all. This function cannot
+  // exclude rows (they are still worth showing), so it gives disputed 0 instead. The effect is
+  // the same where it matters -- the "most trusted" comparison below requires a STRICTLY greater
+  // weight, so a disputed memory can never be presented as outranking another.
+  function tierWeight(tier) {
+    if (tier === "verified") return 3;
+    if (tier === "attested") return 2;
+    if (tier === "unconfirmed") return 1;
+    return 0; // disputed, or unknown
+  }
+
   // The attested-vs-verified distinction is the whole point of this project -- this is the
   // one sentence of explanation that travels with the badge every place it is shown.
   function trustTierExplain(tier) {
@@ -672,6 +687,63 @@
         decideResult.appendChild(
           el("p", { class: "kv-line", text: "The memory that decided the action was also the nearest match here -- proximity and trust agreed." })
         );
+      } else if (nearest) {
+        // WHEN A MODEL ANSWERED, we cannot name the deciding memory: only
+        // agent.py::_fallback_action writes "Chosen from memory <id>" into its rationale, and a
+        // model returns free prose. Claiming an overrule here would be a guess, and this file
+        // already refuses to guess one rung up.
+        //
+        // Staying silent was worse, and it was a regression: wiring the standby provider meant
+        // reasoning_source stopped being "fallback_memory" on live calls, so the dashboard's best
+        // moment -- trust outranking proximity -- quietly stopped rendering for every judge who
+        // clicked. What IS provable from the response alone is what the ranking says: which
+        // candidate is nearest, and which carries the most standing. Show exactly that, labelled
+        // as a property of the candidates rather than a claim about what decided.
+        var strongest = ranked.slice().sort(function (a, b) {
+          return tierWeight(b.trust_tier) - tierWeight(a.trust_tier);
+        })[0];
+        // A REAL DISTANCE GAP IS REQUIRED, not just a different row. On the seeded demo tenant
+        // several near-duplicate memories come back at byte-identical distance, and calling one
+        // of them "the closest vector match" when nothing is closer than anything would be a
+        // claim the numbers do not support -- proximity is not losing to trust there, proximity
+        // simply has nothing to say. Ties get the honest line below instead.
+        var gap = (typeof strongest?.distance === "number" && typeof nearest.distance === "number")
+          ? strongest.distance - nearest.distance
+          : 0;
+        if (strongest && strongest.memory_id !== nearest.memory_id &&
+            tierWeight(strongest.trust_tier) > tierWeight(nearest.trust_tier) &&
+            gap > 1e-9) {
+          decideResult.appendChild(
+            el("div", { class: "overrule-banner" }, [
+              el("div", { class: "overrule-title" }, [
+                el("span", { class: "badge green", text: "trust vs proximity" }),
+                el("span", { text: "the nearest memory is not the most trusted one" }),
+              ]),
+              el("p", { class: "overrule-explain" }, [
+                document.createTextNode(
+                  "Memory " + shortId(nearest.memory_id) + " (distance " + fmtNum(nearest.distance) + ", " +
+                  trustTierLabel(nearest.trust_tier) + ") is the closest vector match, but memory " +
+                  shortId(strongest.memory_id) + " (distance " + fmtNum(strongest.distance) + ", " +
+                  trustTierLabel(strongest.trust_tier) + ") carries standing earned from a real outcome. " +
+                  "Every tier here was set by the outcome gate with zero model calls. A model chose " +
+                  "this action, so this panel does not claim which memory decided it -- with no model " +
+                  "reachable, the memory path names it outright."
+                ),
+              ]),
+            ])
+          );
+        } else if (strongest && tierWeight(strongest.trust_tier) > tierWeight(nearest.trust_tier)) {
+          // Same tier disagreement, but no usable distance gap to attribute it to. Say what is
+          // true -- the ladder differs across candidates that retrieval could not separate --
+          // rather than dressing a tie up as proximity losing.
+          decideResult.appendChild(
+            el("p", { class: "kv-line", text:
+              "These candidates are indistinguishable by distance, so proximity does not choose " +
+              "between them -- but their standing differs: " + shortId(strongest.memory_id) +
+              " is " + trustTierLabel(strongest.trust_tier) + " while the others are not. " +
+              "That difference was set by the outcome gate, with zero model calls." })
+          );
+        }
       }
     }
 

@@ -29,6 +29,19 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." >/dev/null 2>&1 && pwd)"
 
+# Deployment receipt (surfaced at GET /health, non-sensitive by construction).
+#
+# A dirty working tree gets a "-dirty" suffix rather than a clean-looking SHA. A receipt that
+# names a commit while deploying uncommitted code is precisely the class of false claim this
+# project exists to refuse -- better to say "f46ea16-dirty" and be believed.
+if git -C "$(dirname "${BASH_SOURCE[0]}")/.." rev-parse --git-dir >/dev/null 2>&1; then
+  _repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+  _sha="$(git -C "$_repo" rev-parse --short=10 HEAD 2>/dev/null || echo unknown)"
+  git -C "$_repo" diff --quiet HEAD 2>/dev/null || _sha="${_sha}-dirty"
+  export MEMORYSTAND_SOURCE_SHA="${MEMORYSTAND_SOURCE_SHA:-$_sha}"
+fi
+export MEMORYSTAND_DEPLOYED_AT="${MEMORYSTAND_DEPLOYED_AT:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
+
 FUNCTION_NAME="${FUNCTION_NAME:-memorystand}"
 REGION="${REGION:-${AWS_REGION:-${AWS_DEFAULT_REGION:-us-west-2}}}"
 ROLE_NAME="${ROLE_NAME:-memorystand-lambda-role}"
@@ -300,6 +313,12 @@ print(json.dumps({"Variables": {
     #
     # NOTE: no apostrophes in this block. It lives inside python3 -c with single quotes, so
     # one apostrophe closes the shell string and errors far from the real cause.
+    # Deployment receipt, surfaced non-sensitively at GET /health. Lets anyone check that the
+    # commit they are reading is the commit that is answering -- this project has already had a
+    # live security fix sit in git for hours before it reached production, and "the repo is fixed"
+    # is a different claim from "the service is fixed".
+    "MEMORYSTAND_SOURCE_SHA": os.environ.get("MEMORYSTAND_SOURCE_SHA", "unknown"),
+    "MEMORYSTAND_DEPLOYED_AT": os.environ.get("MEMORYSTAND_DEPLOYED_AT", "unknown"),
     "MEMORYSTAND_CHAT_MODEL": os.environ.get("MEMORYSTAND_CHAT_MODEL", "us.amazon.nova-lite-v1:0"),
     "MEMORYSTAND_BEDROCK_REGION": os.environ.get("MEMORYSTAND_BEDROCK_REGION", "us-west-2"),
     # Second reasoning provider, used only when Bedrock is unavailable -- which on this

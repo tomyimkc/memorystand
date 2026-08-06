@@ -394,6 +394,28 @@ def _route_health(qs: dict[str, Any], headers: dict[str, str], request_id: str) 
         body["gc_window_seconds"] = replay.gc_window_seconds()
     except Exception:  # noqa: BLE001
         body["gc_window_seconds"] = None
+
+    # A DEPLOYMENT RECEIPT: which source, which Lambda version, which schema.
+    #
+    # Without it, "the repository is fixed" and "the service you are talking to is fixed" are two
+    # different claims, and a reviewer can only check the first. This project has already shipped
+    # a live security fix that existed in git for hours before it existed in production; anyone
+    # auditing it deserves to see which commit is actually answering.
+    #
+    # Every field is non-sensitive by construction: a commit SHA of a public repo, an AWS-assigned
+    # version number, and migration filenames. No account ids, no ARNs, no configuration.
+    deployment: dict[str, Any] = {
+        # Baked at deploy time by infra/deploy.sh. "unknown" is the honest answer for a local run
+        # and is deliberately not defaulted to anything that could be mistaken for a real SHA.
+        "source_sha": os.environ.get("MEMORYSTAND_SOURCE_SHA", "unknown"),
+        "deployed_at": os.environ.get("MEMORYSTAND_DEPLOYED_AT", "unknown"),
+        "lambda_version": os.environ.get("AWS_LAMBDA_FUNCTION_VERSION", "local"),
+    }
+    try:
+        deployment["schema_migrations"] = db.applied_migrations()
+    except Exception:  # noqa: BLE001 - health reports a DB outage, it does not die of one
+        deployment["schema_migrations"] = None
+    body["deployment"] = deployment
     return 200, body
 
 

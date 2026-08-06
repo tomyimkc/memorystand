@@ -110,6 +110,15 @@ That is a different zero from the `confirm_outcome` / trust-promotion path's **z
 so no model — Bedrock, router, or otherwise — is ever in the path that grants trust. That zero is
 the deliberate, genuine one.
 
+**The seeded demo tenant has ~18 collapsible duplicate rows, and they are deliberately left
+alone.** Repeated capture runs re-ingested the same facts, so `checkout-api` queries return several
+near-identical memories at byte-identical distance (0.5034624821297287 — a lexical embedding stub
+maps near-identical text to the same vector). That was measured, and so was the consequence: the
+`payments-service` query the demo actually uses is unaffected and still separates
+`22207f6e` (unconfirmed, d=0.5778) from `fb3b7ec0` (verified, d=0.6938) with a real 0.116 gap.
+Deleting live rows to tidy a cosmetic artifact was not worth the risk, and the dashboard now
+refuses to narrate proximity when distances tie rather than papering over it.
+
 **Reproducing this deployment.** The router is not the code default (which is the safe
 `api.anthropic.com`); the live Lambda is deliberately deployed against it:
 
