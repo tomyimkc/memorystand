@@ -53,9 +53,10 @@ model, and this one structurally cannot. Lead with the comparison, concede the i
 > whole claim collapses into the self-consistency bucket everyone else is already in.
 >
 > CockroachDB is not incidental to this — it is why the mechanism is cheap to build correctly.
-> `AS OF SYSTEM TIME` lets `cross-examine` reconstruct the accepted-memory belief state and the
-> recorded consulted ids as of the instant it paged someone, with no separate version table
-> (`replay.recall_as_of()` re-runs the ranked query and exists, but is not yet wired to that route). SERIALIZABLE isolation (the only
+> `AS OF SYSTEM TIME` lets `cross-examine` re-run the agent's own ranked recall query — same
+> ORDER BY, same k, real distances — pinned to the instant it paged someone, with no separate
+> version table, alongside the belief state and a diff against now. Decisions predating the
+> retrieval receipt return `recalled_as_of: null` with a reason rather than a substitute. SERIALIZABLE isolation (the only
 > isolation level CockroachDB offers) is what makes two agents racing to write contradictory
 > memories about the same incident resolve to exactly one winner, provably, under real `40001`
 > contention — not a mocked test. And a prefix-partitioned vector index on
@@ -113,7 +114,7 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > → cross-examine loop with no AWS account and no CockroachDB Cloud account. Embeddings fall back
 > to a deterministic local stub (`MEMORYSTAND_EMBED_STUB=1`, set automatically by the script and
 > announced on screen — a stub result is never presented as a real embedding). `pytest -q` runs
-> the 135-test suite. `python cli/memorystand.py recall --query "payments failover"` drives the CLI
+> the 139-test suite. `python cli/memorystand.py recall --query "payments failover"` drives the CLI
 > directly. A deployed demo also exists now — see Field 1's URL,
 > `https://main.d19xad9aeccy3e.amplifyapp.com`, no account or login needed — this local path
 > remains as a fallback for judges who prefer to run it themselves.

@@ -294,6 +294,10 @@ def _route_decide(body: dict[str, Any], headers: dict[str, str], request_id: str
         rationale,
         consulted_ids,
         produced_memory_ids=produced,
+        # The retrieval receipt: what was asked and how many rows were taken, so
+        # /timemachine can re-run this exact ranked query instead of approximating it.
+        query_text=query,
+        recall_k=k,
         requires_approval=requires_approval,
         task_id=task_id,
     )
