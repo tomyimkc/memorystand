@@ -1,6 +1,7 @@
 # MemoryStand — memory that has to stand up
 
-> **Every shipping agent-memory system asks a model whether its own memory is true.**
+> **The major shipping agent-memory systems we checked — Mem0, Zep, AWS AgentCore — ask a model
+> whether their own memory is true.**
 > MemoryStand asks CloudWatch — and refuses the promotion when CloudWatch disagrees.
 
 **The agent reasons over its own memory, and the trust ladder is what it reasons over.** A real
@@ -116,7 +117,7 @@ against what else is known, and then against what actually happened. Most of wha
 MemoryStand makes a memory stand up twice before an agent is allowed to rely on it: once when it
 is written, against everything already believed, and once afterwards, against reality.
 
-Every agent-memory system on the market decides what to trust using one of three signals:
+The agent-memory systems we surveyed decide what to trust using one of three signals:
 **recency** (newest fact wins), **source authority** (trust the runbook over Slack), or
 **self-consistency** (ask the model whether it believes itself). All three are the agent grading
 its own homework.
@@ -208,7 +209,8 @@ Stated as a list, because these are the specific concessions:
 
 ### So what is actually different: who is allowed to decide a memory is true
 
-Every shipping agent-memory system answers "is this memory still true?" by asking a model.
+The shipping agent-memory systems we checked (Mem0, Zep, AWS AgentCore) answer "is this memory
+still true?" by asking a model.
 
 | System | Who decides truth | Evidence |
 |---|---|---|

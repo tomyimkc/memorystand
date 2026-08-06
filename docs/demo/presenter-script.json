@@ -69,7 +69,7 @@
         "footnote": "Each line cites the vendor's own docs or issue tracker. See README."
       },
       "shots": [
-        "Every other agent memory today just asks an AI whether its own memory is right. That's marking your own homework.",
+        "The big agent-memory systems today just ask an AI whether their own memory is right. That's marking your own homework.",
         "Mem0 does it. Zep does it. So does Amazon's own AgentCore. None of them check against anything real."
       ]
     },

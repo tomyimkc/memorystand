@@ -27,13 +27,13 @@ then **Technical Implementation**. Prizes: 1st $5,000, 2nd $2,500, 3rd $1,250.
 
 Longer form, for the description field where the character budget allows it:
 
-> Every agent-memory system asks a model whether its own memory is true.
+> The major shipping agent-memory systems we checked (Mem0, Zep, AWS AgentCore) ask a model whether their own memory is true.
 > MemoryStand asks CloudWatch — and refuses the promotion when CloudWatch disagrees.
 
 **Why this framing and not "we invented outcome-gated trust".** The idea is decades old
 (Doyle's JTMS, 1979; CHEF, 1986; NELL's promoted beliefs, 2010; EigenTrust, 2003), and a judge
 who knows the field would puncture a novelty claim in one search. What is defensible and
-checkable is the *enforcement*: every shipping system delegates "is this memory true?" to a
+checkable is the *enforcement*: the shipping systems we checked delegate "is this memory true?" to a
 model, and this one structurally cannot. Lead with the comparison, concede the idea.
 
 ### Opening three paragraphs (long description)
