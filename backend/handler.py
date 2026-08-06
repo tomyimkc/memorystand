@@ -85,6 +85,15 @@ SHARED_SECRET_ENV = "MEMORYSTAND_SHARED_SECRET"
 SHARED_SECRET_SSM_PARAM = os.environ.get("MEMORYSTAND_SHARED_SECRET_SSM_PARAM", "/memorystand/shared_secret")
 SHARED_SECRET_HEADER = "x-memorystand-secret"
 
+# The public demo credential. Published on the dashboard on purpose: it is scoped server-side to
+# a single tenant (see _scope_tenant), so a judge can exercise the real write paths -- ingest,
+# decide, confirm an outcome and watch a tier move -- without being handed the operator secret.
+# Absent config, there is no demo credential and nothing changes.
+DEMO_SECRET_ENV = "MEMORYSTAND_DEMO_SECRET"
+DEMO_SECRET_SSM_PARAM = os.environ.get("MEMORYSTAND_DEMO_SECRET_SSM_PARAM", "/memorystand/demo_secret")
+DEMO_TENANT_ENV = "MEMORYSTAND_DEMO_TENANT"
+DEMO_TENANT_SSM_PARAM = os.environ.get("MEMORYSTAND_DEMO_TENANT_SSM_PARAM", "/memorystand/demo_tenant")
+
 WRITE_PATHS = {"/ingest", "/decide", "/confirm_outcome"}
 SECRET_GATED_PATHS = {"/ingest", "/decide", "/confirm_outcome"}
 
@@ -188,15 +197,69 @@ def _get_header(headers: dict[str, str], name: str) -> str | None:
     return None
 
 
-def _check_shared_secret(headers: dict[str, str]) -> None:
-    expected = _configured_shared_secret()
-    if not expected:
+def _configured_demo_secret() -> str | None:
+    env_value = os.environ.get(DEMO_SECRET_ENV)
+    if env_value:
+        return env_value
+    return _get_ssm_param(DEMO_SECRET_SSM_PARAM, decrypt=True, default=None)
+
+
+def _configured_demo_tenant() -> str | None:
+    env_value = os.environ.get(DEMO_TENANT_ENV)
+    if env_value:
+        return env_value
+    return _get_ssm_param(DEMO_TENANT_SSM_PARAM, decrypt=False, default=None)
+
+
+def _check_shared_secret(headers: dict[str, str]) -> str:
+    """Authenticate a write. Returns which credential was used: 'operator' or 'demo'.
+
+    THERE ARE TWO CREDENTIALS, AND THAT IS THE POINT.
+
+    Until now a single global secret authorised every write on every tenant -- one credential
+    that, if leaked, owned the whole store. That is also why a judge could only ever read the
+    dashboard: handing out the operator secret to let someone try the product would hand out
+    everything.
+
+    The demo credential is deliberately weaker in a way the server enforces rather than
+    documents: it authenticates, and then ``_scope_tenant`` refuses any request whose
+    ``tenant_id`` is not the one demo tenant. So it can be published on the dashboard, a judge can
+    ingest, decide and confirm outcomes for real, and it still cannot touch another tenant's
+    memories -- the same isolation boundary the promotion path was hardened for.
+
+    Compared by ``hmac.compare_digest`` against both, always, so a timing difference cannot tell
+    an attacker which credential they nearly guessed.
+    """
+    operator = _configured_shared_secret()
+    demo = _configured_demo_secret()
+    if not operator:
         # Fail closed: an unconfigured secret on a Bedrock-calling route is a
         # misconfiguration, not an invitation. Loud and rejected, not silently open.
         raise _Unauthorized("shared secret not configured on the server")
     provided = _get_header(headers, SHARED_SECRET_HEADER) or ""
-    if not hmac.compare_digest(provided, expected):
-        raise _Unauthorized("invalid or missing shared secret")
+    is_operator = hmac.compare_digest(provided, operator)
+    is_demo = bool(demo) and hmac.compare_digest(provided, demo)
+    if is_operator:
+        return "operator"
+    if is_demo:
+        return "demo"
+    raise _Unauthorized("invalid or missing shared secret")
+
+
+def _scope_tenant(credential: str, tenant_id: str) -> None:
+    """The demo credential may only ever act on the demo tenant."""
+    if credential != "demo":
+        return
+    allowed = _configured_demo_tenant()
+    if not allowed:
+        raise _Unauthorized("demo credential is configured without a demo tenant; refusing")
+    if str(tenant_id) != str(allowed):
+        # Same message whichever way it fails, so this cannot be used to probe which tenant ids
+        # exist -- the same reasoning as the decision lookup in backend/trust.py.
+        raise _Unauthorized(
+            "this credential is scoped to the public demo tenant and cannot act on another "
+            "tenant. Use the operator secret for that."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -236,8 +299,9 @@ def _get_bedrock_runtime() -> Any:
 
 
 def _route_ingest(body: dict[str, Any], headers: dict[str, str], request_id: str) -> tuple[int, dict]:
-    _check_shared_secret(headers)
+    credential = _check_shared_secret(headers)
     tenant_id = _require(body, "tenant_id")
+    _scope_tenant(credential, tenant_id)
     agent_id = _require(body, "agent_id")
     content = _require(body, "content")
     result = memory.remember(
@@ -257,8 +321,9 @@ def _route_ingest(body: dict[str, Any], headers: dict[str, str], request_id: str
 
 
 def _route_decide(body: dict[str, Any], headers: dict[str, str], request_id: str) -> tuple[int, dict]:
-    _check_shared_secret(headers)
+    credential = _check_shared_secret(headers)
     tenant_id = _require(body, "tenant_id")
+    _scope_tenant(credential, tenant_id)
     agent_id = _require(body, "agent_id")
     query = _require(body, "query")
     k = int(body.get("k", 5))
@@ -323,8 +388,9 @@ def _route_confirm_outcome(body: dict[str, Any], headers: dict[str, str], reques
     # promote memories to 'verified' -- the exact outcome this project exists to prevent, on
     # the one path whose integrity the whole submission rests on. It is now gated like every
     # other mutating route, and scoped to a tenant.
-    _check_shared_secret(headers)
+    credential = _check_shared_secret(headers)
     tenant_id = _require(body, "tenant_id")
+    _scope_tenant(credential, tenant_id)
     decision_id = _require(body, "decision_id")
     evidence = {
         "source": body.get("source"),
@@ -420,6 +486,33 @@ def _route_health(qs: dict[str, Any], headers: dict[str, str], request_id: str) 
     except Exception:  # noqa: BLE001 - health reports a DB outage, it does not die of one
         deployment["schema_migrations"] = None
     body["deployment"] = deployment
+
+    # THE PUBLIC DEMO CREDENTIAL, published on purpose.
+    #
+    # It is a write credential served over an unauthenticated route, which is only defensible
+    # because the server refuses it for any tenant but the one named right here (_scope_tenant).
+    # Publishing it is what lets a reviewer actually exercise ingest, decide and confirm-outcome
+    # instead of reading a dashboard they cannot drive.
+    #
+    # Served from the API rather than baked into frontend/ for two reasons: a credential-shaped
+    # string does not belong in a public repository even when it is meant to be public, and this
+    # way it can be rotated in SSM without redeploying the dashboard.
+    #
+    # The OPERATOR secret is never exposed here. `_configured_shared_secret` is deliberately not
+    # referenced in this function, and a test asserts it appears nowhere in a /health response.
+    demo_secret = _configured_demo_secret()
+    demo_tenant = _configured_demo_tenant()
+    if demo_secret and demo_tenant:
+        body["demo"] = {
+            "credential": demo_secret,
+            "tenant_id": demo_tenant,
+            "header": SHARED_SECRET_HEADER,
+            "note": (
+                "Public, deliberately. This credential can write ONLY to the tenant named here; "
+                "the server returns 401 for any other tenant. Use it to try /ingest, /decide and "
+                "/confirm_outcome for real."
+            ),
+        }
     return 200, body
 
 

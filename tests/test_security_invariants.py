@@ -360,3 +360,104 @@ def test_a_direct_invoke_does_run_the_sweep(monkeypatch):
 def test_an_unknown_scheduled_task_is_refused_not_guessed():
     out = handler.lambda_handler({"memorystand_task": "drop_everything"}, None)
     assert out["ok"] is False and "unknown task" in out["error"]
+
+
+# --- 5. The public demo credential is scoped to one tenant, server-side ---------------------
+
+def _http(path, body, secret):
+    return {
+        "requestContext": {"http": {"method": "POST", "path": path}, "requestId": "r"},
+        "rawPath": path,
+        "headers": {"content-type": "application/json", "x-memorystand-secret": secret},
+        "body": json.dumps(body),
+    }
+
+
+def test_demo_credential_cannot_write_to_another_tenant(monkeypatch, agent_id):
+    """The whole reason the demo secret can be published.
+
+    A single global secret authorised every write on every tenant, so letting a judge try the
+    product meant handing over everything -- which is why three of four dashboard panels were
+    read-only. The demo credential authenticates and is then refused for any tenant but the demo
+    one, ENFORCED HERE rather than documented. Published credential, contained blast radius.
+    """
+    demo_tenant = str(uuid.uuid4())
+    monkeypatch.setenv("MEMORYSTAND_SHARED_SECRET", "operator-secret")
+    monkeypatch.setenv("MEMORYSTAND_DEMO_SECRET", "demo-secret")
+    monkeypatch.setenv("MEMORYSTAND_DEMO_TENANT", demo_tenant)
+    monkeypatch.setenv("MEMORYSTAND_KILL_SWITCH", "off")
+
+    victim = str(uuid.uuid4())
+    for path, body in (
+        ("/ingest", {"tenant_id": victim, "agent_id": agent_id, "content": "x"}),
+        ("/decide", {"tenant_id": victim, "agent_id": agent_id, "query": "x"}),
+        ("/confirm_outcome", {"tenant_id": victim, "decision_id": str(uuid.uuid4()),
+                              "outcome": "success", "source": "metric", "external_ref": "r"}),
+    ):
+        resp = handler.lambda_handler(_http(path, body, "demo-secret"), None)
+        assert resp["statusCode"] == 401, f"{path} let the demo credential touch another tenant"
+        assert "scoped to the public demo tenant" in resp["body"]
+
+
+def test_operator_credential_is_not_tenant_scoped(monkeypatch, agent_id):
+    """The demo scoping must not accidentally restrict the real operator credential."""
+    monkeypatch.setenv("MEMORYSTAND_SHARED_SECRET", "operator-secret")
+    monkeypatch.setenv("MEMORYSTAND_DEMO_SECRET", "demo-secret")
+    monkeypatch.setenv("MEMORYSTAND_DEMO_TENANT", str(uuid.uuid4()))
+    monkeypatch.setenv("MEMORYSTAND_KILL_SWITCH", "off")
+
+    resp = handler.lambda_handler(
+        _http("/ingest", {"tenant_id": str(uuid.uuid4()), "agent_id": agent_id,
+                          "content": "operator writes anywhere"}, "operator-secret"), None)
+    assert resp["statusCode"] != 401, "the operator secret must not be tenant-scoped"
+
+
+def test_a_wrong_secret_is_still_refused(monkeypatch, agent_id):
+    monkeypatch.setenv("MEMORYSTAND_SHARED_SECRET", "operator-secret")
+    monkeypatch.setenv("MEMORYSTAND_DEMO_SECRET", "demo-secret")
+    monkeypatch.setenv("MEMORYSTAND_DEMO_TENANT", str(uuid.uuid4()))
+    monkeypatch.setenv("MEMORYSTAND_KILL_SWITCH", "off")
+
+    resp = handler.lambda_handler(
+        _http("/ingest", {"tenant_id": "t", "agent_id": agent_id, "content": "x"}, "guess"), None)
+    assert resp["statusCode"] == 401
+    assert "invalid or missing" in resp["body"]
+
+
+def test_demo_credential_is_inert_when_unconfigured(monkeypatch, agent_id):
+    """With no demo secret configured, nothing changes -- the feature is opt-in by deployment."""
+    monkeypatch.setenv("MEMORYSTAND_SHARED_SECRET", "operator-secret")
+    monkeypatch.delenv("MEMORYSTAND_DEMO_SECRET", raising=False)
+    monkeypatch.setenv("MEMORYSTAND_DEMO_SECRET_SSM_PARAM", "/nonexistent/demo_secret")
+    monkeypatch.setenv("MEMORYSTAND_KILL_SWITCH", "off")
+
+    resp = handler.lambda_handler(
+        _http("/ingest", {"tenant_id": "t", "agent_id": agent_id, "content": "x"}, "demo-secret"), None)
+    assert resp["statusCode"] == 401
+
+
+def test_health_publishes_the_demo_credential_but_never_the_operator_secret(monkeypatch):
+    """/health hands out the demo credential on purpose, and must never hand out the other one.
+
+    Publishing a write credential on an unauthenticated route is only defensible because the
+    server refuses it for any tenant but the demo one. That reasoning does not extend one inch
+    further: the operator secret authorises every tenant, so its appearance here would be a total
+    compromise. This asserts the negative, because that is the half that would be catastrophic.
+    """
+    monkeypatch.setenv("MEMORYSTAND_SHARED_SECRET", "OPERATOR-SUPER-SECRET-VALUE")
+    monkeypatch.setenv("MEMORYSTAND_DEMO_SECRET", "demo-public-value")
+    monkeypatch.setenv("MEMORYSTAND_DEMO_TENANT", "11111111-2222-3333-4444-555555555555")
+
+    _, body = handler._route_health({}, {}, "req")
+    assert body["demo"]["credential"] == "demo-public-value"
+    assert body["demo"]["tenant_id"] == "11111111-2222-3333-4444-555555555555"
+    assert "OPERATOR-SUPER-SECRET-VALUE" not in json.dumps(body), "/health leaked the operator secret"
+
+
+def test_health_omits_the_demo_block_when_unconfigured(monkeypatch):
+    monkeypatch.delenv("MEMORYSTAND_DEMO_SECRET", raising=False)
+    monkeypatch.setenv("MEMORYSTAND_DEMO_SECRET_SSM_PARAM", "/nonexistent/demo_secret")
+    monkeypatch.setenv("MEMORYSTAND_DEMO_TENANT_SSM_PARAM", "/nonexistent/demo_tenant")
+    monkeypatch.delenv("MEMORYSTAND_DEMO_TENANT", raising=False)
+    _, body = handler._route_health({}, {}, "req")
+    assert "demo" not in body
