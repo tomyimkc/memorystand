@@ -463,7 +463,7 @@ honest status, the exact judge-facing URL shape, and what stays free for a ~6-we
   `docs/BEDROCK_QUOTA.md`); Titan Text Embeddings V2 (512-dim) for embeddings. Deliberately
   *absent* from the promotion path.
 - **AWS Lambda** — the whole backend, behind a Function URL.
-- **Amazon EventBridge Scheduler** — the keep-warm schedule that pings `/health` (`infra/keepwarm.sh`). Re-verification (`backend/reverify.py`) is not yet on a schedule; it runs on demand — see the roadmap.
+- **Amazon EventBridge Scheduler** — two schedules: the keep-warm ping to `/health` (`infra/keepwarm.sh`), and the daily **trust-decay sweep** (`infra/schedule_reverify.sh`), which invokes the Lambda directly under a role granting exactly `lambda:InvokeFunction` on exactly this function. The sweep demotes standing CloudWatch no longer supports, is **not** an HTTP route, logs a per-run receipt, and has a CloudWatch alarm on its own failure token.
 - **AWS Systems Manager Parameter Store** — the CockroachDB DSN as a SecureString.
 - **Amazon CloudWatch Logs** — structured, correlated logs with explicit retention.
 - **AWS Amplify Hosting** — the static demo dashboard.
