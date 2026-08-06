@@ -455,9 +455,15 @@ def test_health_publishes_the_demo_credential_but_never_the_operator_secret(monk
 
 
 def test_health_omits_the_demo_block_when_unconfigured(monkeypatch):
-    monkeypatch.delenv("MEMORYSTAND_DEMO_SECRET", raising=False)
-    monkeypatch.setenv("MEMORYSTAND_DEMO_SECRET_SSM_PARAM", "/nonexistent/demo_secret")
-    monkeypatch.setenv("MEMORYSTAND_DEMO_TENANT_SSM_PARAM", "/nonexistent/demo_tenant")
-    monkeypatch.delenv("MEMORYSTAND_DEMO_TENANT", raising=False)
+    """With no demo credential configured, /health must not grow a demo block.
+
+    Patches the RESOLVERS, not the environment. `DEMO_SECRET_SSM_PARAM` is a module-level
+    constant bound at import time, so setting the env var afterwards changes nothing -- an
+    earlier version of this test did that and passed only because the machine had no working
+    AWS credentials. The moment credentials existed it read the real parameter and failed. A test
+    whose result depends on whether you happen to be logged in is not a test.
+    """
+    monkeypatch.setattr(handler, "_configured_demo_secret", lambda: None)
+    monkeypatch.setattr(handler, "_configured_demo_tenant", lambda: None)
     _, body = handler._route_health({}, {}, "req")
     assert "demo" not in body

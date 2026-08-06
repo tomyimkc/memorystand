@@ -371,9 +371,13 @@ def test_health_reports_a_deployment_receipt(monkeypatch):
     assert receipt["lambda_version"] == "local"          # not running in Lambda
     assert isinstance(receipt["schema_migrations"], (list, type(None)))
 
+    # Look for credential VALUES and connection strings, not the word "secret": the demo block
+    # legitimately names the HEADER `x-memorystand-secret`, and a substring check on "secret"
+    # flags that as a leak. A check that cries wolf on its own field names gets weakened or
+    # deleted the first time it is inconvenient, which is worse than not having it.
     blob = json.dumps(body).lower()
-    for secret_ish in ("password", "sslrootcert", "postgresql://", "secret", "aws_access"):
-        assert secret_ish not in blob, f"/health leaked {secret_ish!r}"
+    for leak in ("password", "sslrootcert", "postgresql://", "aws_access", "aws_secret_access"):
+        assert leak not in blob, f"/health leaked {leak!r}"
 
 
 def test_source_sha_is_unknown_rather_than_fabricated(monkeypatch):
