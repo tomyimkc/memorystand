@@ -360,9 +360,8 @@ def main() -> int:
     bf.text(
         draw,
         (quota_box[0] + 14, quota_box[1] + 10),
-        'This account’s Bedrock quota is 0. Every live /decide today returns '
-        'reasoning_source="fallback_heuristic" — a deterministic keyword rule, not a model. '
-        "Latency is real; the reasoning is not.",
+        "Bedrock quota here is 0, so it never answers. Live /decide reasons through a disclosed "
+        "router standby that reasoning_source names. The promotion path calls no model either way.",
         size=15,
         color=bf.INK,
         bold=True,

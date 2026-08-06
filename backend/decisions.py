@@ -35,14 +35,17 @@ def _insert(
     produced: Sequence[str],
     requires_approval: bool,
     task_id: str | None,
+    query_text: str | None = None,
+    recall_k: int | None = None,
 ) -> dict:
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
             """
             INSERT INTO agent_decisions
                 (tenant_id, agent_id, task_id, action, rationale,
-                 consulted_memory_ids, produced_memory_ids, requires_approval)
-            VALUES (%s,%s,%s,%s,%s,%s::UUID[],%s::UUID[],%s)
+                 consulted_memory_ids, produced_memory_ids, requires_approval,
+                 query_text, recall_k)
+            VALUES (%s,%s,%s,%s,%s,%s::UUID[],%s::UUID[],%s,%s,%s)
             RETURNING decision_id::string AS decision_id, decided_at, requires_approval
             """,
             (
@@ -54,6 +57,8 @@ def _insert(
                 list(consulted),
                 list(produced),
                 requires_approval,
+                query_text,
+                recall_k,
             ),
         )
         row = dict(cur.fetchone())
@@ -84,8 +89,15 @@ def decide(
     produced_memory_ids: Sequence[str] = (),
     requires_approval: bool = False,
     task_id: str | None = None,
+    query_text: str | None = None,
+    recall_k: int | None = None,
 ) -> dict:
-    """Record an action and its evidential basis."""
+    """Record an action and its evidential basis.
+
+    ``query_text``/``recall_k`` are the RETRIEVAL RECEIPT: what was actually asked, and how many
+    rows were taken. Storing them is what lets ``replay.cross_examine`` re-run the agent's own
+    ranked query against the past rather than approximating it with a belief-state dump.
+    """
     row = db.retry_serializable(
         _insert,
         tenant_id=tenant_id,
@@ -96,6 +108,8 @@ def decide(
         produced=produced_memory_ids,
         requires_approval=requires_approval,
         task_id=task_id,
+        query_text=query_text,
+        recall_k=recall_k,
     )
     return {
         "decision_id": row["decision_id"],

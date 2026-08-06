@@ -264,18 +264,28 @@ def belief_diff(tenant_id: str, instant: Any, *, limit: int = 500) -> list[dict]
 
 def cross_examine(tenant_id: str, decision_id: str) -> dict:
     """The headline operation: what did the agent know when it made this call?"""
+    # THE READ IS MIGRATION-TOLERANT, DELIBERATELY. The retrieval-receipt columns arrive with
+    # migration 003, and code and schema never land at the same instant. A deploy that requires
+    # its migration to have run first is a deploy with an ordering trap, and here the failure mode
+    # would be a 500 on the audit route rather than a degraded answer. So ask for the receipt, and
+    # fall back to the pre-003 column list if the database has not caught up yet.
+    base = """
+        SELECT decision_id::string AS decision_id, action, rationale, decided_at,
+               outcome, consulted_memory_ids::STRING[] AS consulted_memory_ids,
+               produced_memory_ids::STRING[] AS produced_memory_ids,
+               agent_id::string AS agent_id{extra}
+        FROM agent_decisions WHERE decision_id = %s AND tenant_id = %s
+    """
     conn = db.get_conn()
+    schema_has_receipt = True
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
-                """
-                SELECT decision_id::string AS decision_id, action, rationale, decided_at,
-                       outcome, consulted_memory_ids::STRING[] AS consulted_memory_ids,
-                       produced_memory_ids::STRING[] AS produced_memory_ids
-                FROM agent_decisions WHERE decision_id = %s AND tenant_id = %s
-                """,
-                (decision_id, tenant_id),
-            )
+            try:
+                cur.execute(base.format(extra=", query_text, recall_k"), (decision_id, tenant_id))
+            except db.psycopg2.errors.UndefinedColumn:
+                conn.rollback()
+                schema_has_receipt = False
+                cur.execute(base.format(extra=""), (decision_id, tenant_id))
             decision = cur.fetchone()
         conn.commit()
     finally:
@@ -285,11 +295,49 @@ def cross_examine(tenant_id: str, decision_id: str) -> dict:
         raise ValueError(f"no such decision: {decision_id}")
 
     decision = dict(decision)
+
+    # THE ACTUAL RE-RUN. With a recorded retrieval receipt we can replay the agent's own ranked
+    # vector query pinned to the instant it decided -- same ORDER BY, same k, real distances --
+    # which is what "cross-examine" is supposed to mean. recall_as_of() has always been able to
+    # do this; until migration 003 nothing knew what the original query was, so this fell back to
+    # a belief-state dump and the docs quietly overclaimed.
+    #
+    # Decisions written before that migration have no query_text, and inventing one would be
+    # fabricated provenance. Those get None plus a reason, so a reader is never left to assume a
+    # belief-state listing is a re-ranked recall.
+    recalled_as_of: list[dict] | None = None
+    recall_note: str | None = None
+    if decision.get("query_text"):
+        try:
+            recalled_as_of = recall_as_of(
+                tenant_id, decision.get("agent_id"), decision["query_text"],
+                decision["decided_at"], k=decision.get("recall_k") or 5,
+            )
+        except GCWindowExceeded as exc:
+            recall_note = str(exc)
+        except Exception as exc:  # noqa: BLE001 - the audit view degrades, it does not fail
+            recall_note = f"could not replay the ranked recall: {type(exc).__name__}: {exc}"
+    elif not schema_has_receipt:
+        recall_note = (
+            "no retrieval receipt: migration 003, which records the query and k, has not been "
+            "applied to this database yet. The belief state below is what existed and was "
+            "accepted at that instant -- it is not the agent's ranked retrieval."
+        )
+    else:
+        recall_note = (
+            "no retrieval receipt: this decision predates migration 003, which began recording "
+            "the query and k. The belief state below is what existed and was accepted at that "
+            "instant -- it is not the agent's ranked retrieval."
+        )
+
     at_the_time = belief_state_at(tenant_id, decision["decided_at"])
     changes = [d for d in belief_diff(tenant_id, decision["decided_at"]) if d["delta"] != "unchanged"]
 
     return {
         "decision": decision,
+        # The agent's own ranked query, re-run against the past. None when there is no receipt.
+        "recalled_as_of": recalled_as_of,
+        "recall_note": recall_note,
         "believed_at_decision_time": at_the_time,
         "changed_since": changes,
         "consulted": [str(m) for m in (decision["consulted_memory_ids"] or [])],

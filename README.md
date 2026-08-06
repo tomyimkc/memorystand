@@ -97,6 +97,8 @@ on AWS Amplify Hosting. The API it talks to is
 route (`GET /` returns 404 by design — it is not a page to open in a browser). ·
 [deployment status](docs/DEPLOY_STATUS.md)
 
+![MemoryStand architecture — the promotion path asks CloudWatch, not a model](docs/architecture.png)
+
 **Submission for the [CockroachDB × AWS Hackathon — Build with Agentic Memory](https://cockroachdb-ai.devpost.com).**
 
 > **Built 2026-08-03 onward.** Deployed and verified against real AWS and CockroachDB Cloud —
@@ -140,13 +142,14 @@ agent already believes: a deterministic attribute-conflict check plus a vector-n
 similarity search. Conflicting memories are held for review and never returned by recall; a
 corrected fact supersedes the old one rather than deleting it.
 
-**3. Cross-examination.** `SELECT … AS OF SYSTEM TIME '<t>'` reconstructs the memories that
-existed and were *accepted* at the instant a past decision was made, alongside the exact
-`consulted_memory_ids` that decision recorded — so you can ask what the agent believed when it
-paged you, and diff that against now. (It reconstructs the belief state, not the original vector
-ranking; `replay.recall_as_of()` would re-run the ranked query but is not yet wired to this path.
-CockroachDB rejects `AS OF SYSTEM TIME` inside a subquery, so the diff is two pinned reads — see
-[SPIKE-RESULTS.md](SPIKE-RESULTS.md).)
+**3. Cross-examination.** Every decision records what was actually asked (`query_text`, `recall_k`),
+so `cross-examine` **re-runs the agent's own ranked vector query** pinned to the instant it
+decided — same `ORDER BY`, same `k`, real per-row distances — inside a transaction fixed at that
+timestamp with `AS OF SYSTEM TIME`. It returns that alongside the full belief state and a diff
+against now. A decision recorded before migration 003 has no receipt; it returns
+`recalled_as_of: null` **with a reason**, rather than passing a belief-state listing off as a
+re-ranked recall. (CockroachDB rejects `AS OF SYSTEM TIME` inside a subquery, so the diff is two
+pinned reads — see [SPIKE-RESULTS.md](SPIKE-RESULTS.md).)
 
 ```
 $ memorystand cross-examine --decision-id <id>
@@ -262,7 +265,7 @@ Everything marked ✅ was run against a real CockroachDB v26.2.5 cluster, not ju
 |---|---|
 | Schema, admission control, outcome gate, cross-examination | ✅ end to end |
 | Incident fixtures (101 records, 2 designed conflicts) | ✅ 99 admitted, 2 held |
-| Test suite (`pytest`) | ✅ **135 passing** |
+| Test suite (`pytest`) | ✅ **139 passing** |
 | Concurrency + TOCTOU proof (`scripts/race_demo.py`) | ✅ real `40001` captured |
 | Benchmark harness (`scripts/loadtest.py`) | ✅ 10k rows, numbers below |
 | Lambda handler, 7 routes, kill switch, degraded mode | ✅ exercised over HTTP |
@@ -414,7 +417,7 @@ git clone <this-repo> && cd memorystand
 Then:
 
 ```bash
-.venv/bin/python -m pytest -q                                   # 135 tests
+.venv/bin/python -m pytest -q                                   # 139 tests
 .venv/bin/python cli/memorystand.py recall --query "payments failover"
 .venv/bin/python scripts/loadtest.py --rows 10000 --tenants 50  # reproduce the numbers below
 ```
@@ -460,7 +463,7 @@ honest status, the exact judge-facing URL shape, and what stays free for a ~6-we
   `docs/BEDROCK_QUOTA.md`); Titan Text Embeddings V2 (512-dim) for embeddings. Deliberately
   *absent* from the promotion path.
 - **AWS Lambda** — the whole backend, behind a Function URL.
-- **Amazon EventBridge Scheduler** — the keep-warm schedule that pings `/health` (`infra/keepwarm.sh`). Re-verification (`backend/reverify.py`) is not yet on a schedule; it runs on demand — see the roadmap.
+- **Amazon EventBridge Scheduler** — two schedules: the keep-warm ping to `/health` (`infra/keepwarm.sh`), and the daily **trust-decay sweep** (`infra/schedule_reverify.sh`), which invokes the Lambda directly under a role granting exactly `lambda:InvokeFunction` on exactly this function. The sweep demotes standing CloudWatch no longer supports, is **not** an HTTP route, logs a per-run receipt, and has a CloudWatch alarm on its own failure token.
 - **AWS Systems Manager Parameter Store** — the CockroachDB DSN as a SecureString.
 - **Amazon CloudWatch Logs** — structured, correlated logs with explicit retention.
 - **AWS Amplify Hosting** — the static demo dashboard.

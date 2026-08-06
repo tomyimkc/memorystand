@@ -93,7 +93,7 @@ after the second failure; the third and fourth return in under a second because 
 short-circuits straight to the deterministic fallback instead of dialing Bedrock at all. The
 local equivalent for `agent.propose()` shows the same shape: 12.35 s -> 8.66 s -> 0.00 s -> 0.00 s.
 
-Test suite: 135 passing (was 47); new files `tests/test_latency_budget.py` and
+Test suite: 139 passing (was 47); new files `tests/test_latency_budget.py` and
 `tests/test_security_invariants.py`.
 
 ## Honest state: the deployed agent reasons through a disclosed router standby, not Bedrock
@@ -118,6 +118,19 @@ maps near-identical text to the same vector). That was measured, and so was the 
 `22207f6e` (unconfirmed, d=0.5778) from `fb3b7ec0` (verified, d=0.6938) with a real 0.116 gap.
 Deleting live rows to tidy a cosmetic artifact was not worth the risk, and the dashboard now
 refuses to narrate proximity when distances tie rather than papering over it.
+
+**Trust decay runs on a schedule.** `infra/schedule_reverify.sh` provisions an EventBridge
+Scheduler rule (`memorystand-reverify`, `rate(1 day)`, ENABLED, 2 retries) that invokes the Lambda
+directly with `{"memorystand_task":"reverify"}`. It is deliberately **not** an HTTP route: the
+sweep demotes trust tiers, and exposing it would mean a mutating endpoint on an auth-NONE Function
+URL plus a second copy of the shared secret inside EventBridge. IAM does the gating instead — the
+scheduler role grants exactly `lambda:InvokeFunction` on exactly this function.
+
+Verified live: a dry-run invoke returned `ok: true, model_calls: 0`; and `POST /reverify` with the
+marker in the body returns **404** even with a valid shared secret, because the task is not on the
+route table at all. Each run logs `reverify_sweep_completed` with its counts, and the alarm
+`memorystand-reverify-failed` fires on the `reverify_sweep_failed` token via a metric filter —
+not on the Lambda's `Errors` metric, which cannot tell a broken sweep from a bad HTTP request.
 
 **Reproducing this deployment.** The router is not the code default (which is the safe
 `api.anthropic.com`); the live Lambda is deliberately deployed against it:
