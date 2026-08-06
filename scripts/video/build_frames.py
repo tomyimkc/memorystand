@@ -763,9 +763,16 @@ def _scene_05_outcome_gate(scene: dict[str, Any], evidence: dict[str, Any], dest
 
     rounded_panel(image, (90, 740, 1840, 950), fill=PANEL_2)
     text(draw, (122, 776),
-         "Every shipping agent-memory system asks a model whether its own memory is true.",
+         "The major shipping agent-memory systems we checked -- Mem0, Zep, AWS AgentCore --",
+         # Hedged from "Every shipping agent-memory system". Three are evidenced in the README;
+         # an unhedged universal is falsifiable by one counter-example, and this project cannot
+         # afford a caught overclaim in its own opening frame.
+         # (second line below completes the sentence)
          size=24, color=MUTED, max_width=1680)
-    text(draw, (122, 818),
+    text(draw, (122, 800),
+         "ask a model whether their own memory is true.",
+         size=24, color=MUTED, max_width=1680)
+    text(draw, (122, 848),
          "MemoryStand asks CloudWatch -- and refuses the promotion when CloudWatch disagrees.",
          size=32, color=INK, bold=True, max_width=1680)
     image.save(destination)
