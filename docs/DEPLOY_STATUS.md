@@ -1,13 +1,13 @@
 # Deployment status
 
-Last updated 2026-08-04. Written to be accurate rather than encouraging — a project whose
+Last updated 2026-08-07. Written to be accurate rather than encouraging — a project whose
 argument is "check claims before trusting them" cannot have an aspirational status page.
 
 ## Working, verified against real AWS
 
 | Component | Evidence |
 |---|---|
-| CockroachDB Cloud cluster `memorystand` | BASIC, AWS, us-west-2, CockroachDB CCL v26.2.1 (cluster id `3b37f0d1-33ca-4d3f-a7b5-29bb74dcc641`). `agent_memories` now holds 50,131 rows: 40 synthetic tenants at exactly 1,250 rows each (`scripts/loadtest.py --rows 50000 --tenants 40`), plus a curated 131-row demo tenant `9c8f6e5a-9d1a-4a1c-8f2e-3b6d1c7a4e10` (117 with `verdict='accepted'`) |
+| CockroachDB Cloud cluster `memorystand` | BASIC, AWS, us-west-2, cluster id `3b37f0d1-33ca-4d3f-a7b5-29bb74dcc641`. Live `/health` reported CockroachDB CCL v26.2.5 on 2026-08-07. The last recorded inventory remains 50,131 rows: 40 synthetic tenants at exactly 1,250 rows each (`scripts/loadtest.py --rows 50000 --tenants 40`), plus a curated 131-row demo tenant `9c8f6e5a-9d1a-4a1c-8f2e-3b6d1c7a4e10` (117 with `verdict='accepted'`); rows were not re-counted during this health check. |
 | Vector index on Cloud Basic | `vector search` + `prefix spans` on the real `recall()` query, confirmed by `EXPLAIN` on both a 1,250-row synthetic tenant and the 117-row demo tenant. The index engaged at 117 rows — the C-SPANN index here is prefix-scoped per tenant, so per-tenant row count does not gate index selection. An earlier hypothesis this session, that 131 rows was too few and the planner would fall back to a scan, was wrong; the 50k seed supplied realistic multi-tenant volume, not a working index — say that plainly rather than implying the seed is what made the index work |
 | Circuit breakers (`backend/breaker.py`) | shared by both Bedrock clients — 2 consecutive failures opens for 60 s, then one half-open probe. State exposed live at `GET /health` |
 | SSM SecureStrings | `/memorystand/{dsn,shared_secret,kill_switch}`, values never printed |
@@ -93,7 +93,7 @@ after the second failure; the third and fourth return in under a second because 
 short-circuits straight to the deterministic fallback instead of dialing Bedrock at all. The
 local equivalent for `agent.propose()` shows the same shape: 12.35 s -> 8.66 s -> 0.00 s -> 0.00 s.
 
-Test suite: 139 passing (was 47); new files `tests/test_latency_budget.py` and
+Current isolated readiness run: 147 core tests passed and one artifact check skipped in the clean worktree; after supplying the separately verified local video render, all 148 passed; `tests/test_latency_budget.py` and
 `tests/test_security_invariants.py`.
 
 ## Honest state: the deployed agent reasons through a disclosed router standby, not Bedrock
