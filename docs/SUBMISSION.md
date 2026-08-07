@@ -76,14 +76,14 @@ model, and this one structurally cannot. Lead with the comparison, concede the i
 |---|---|---|---|---|
 | 1 | Demo app URL | 27812 | Yes | **OWNER ONLY** — deploy is live; paste `https://main.d19xad9aeccy3e.amplifyapp.com` (the Amplify dashboard), not the raw Lambda Function URL, which has no root route and 404s on `GET /` |
 | 2 | Testing credentials/instructions | 28078 | No | Drafted below |
-| 3 | Public repo URL | 27813 | Yes | **OWNER ONLY** — blocked on making the repo public, then `https://github.com/tomyimkc/memorystand` |
-| 4 | OSS license file URL | 27814 | Yes | `https://github.com/tomyimkc/memorystand/blob/main/LICENSE` (once public) |
+| 3 | Public repo URL | 27813 | Yes | Ready: `https://github.com/tomyimkc/memorystand` is public (verified 2026-08-07) |
+| 4 | OSS license file URL | 27814 | Yes | Ready: `https://github.com/tomyimkc/memorystand/blob/main/LICENSE`; GitHub identifies Apache-2.0 |
 | 5 | CockroachDB tools used | 27815 | Yes (≥2) | Drafted below — all four |
 | 6 | AWS services used | 27816 | Yes (≥1) | Drafted below |
 | 7 | How meaningfully integrated | 27817 | Yes | Drafted below |
 | 8 | Project start date | 27818 | Yes | `08-03-26` |
 | 9 | Pre-existing code disclosure | 27819 | Yes | Drafted below |
-| 10 | Architecture diagram | 27820 | No | Source exists (`ARCHITECTURE.md`, two Mermaid diagrams, lines 9 and 80) — **OWNER ONLY** to render/export and upload |
+| 10 | Architecture diagram | 27820 | No | `docs/architecture.png` is already exported at 1920×1080; **OWNER ONLY** to upload it to Devpost |
 | 11 | Feedback on CockroachDB AI tools | 27821 | No | Drafted below |
 | 12 | Submitter type | 27822 | Yes | **OWNER ONLY** |
 | 13 | Country of residence | 27823 | Yes | **OWNER ONLY** |
@@ -124,7 +124,7 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > → cross-examine loop with no AWS account and no CockroachDB Cloud account. Embeddings fall back
 > to a deterministic local stub (`MEMORYSTAND_EMBED_STUB=1`, set automatically by the script and
 > announced on screen — a stub result is never presented as a real embedding). `pytest -q` runs
-> the 139-test suite. `python cli/memorystand.py recall --query "payments failover"` drives the CLI
+> the test suite (147 core tests passed and one artifact check skipped in the clean worktree; all 148 passed when the separately verified local video artifacts were supplied). `python cli/memorystand.py recall --query "payments failover"` drives the CLI
 > directly. A deployed demo also exists now — see Field 1's URL,
 > `https://main.d19xad9aeccy3e.amplifyapp.com`, no account or login needed — this local path
 > remains as a fallback for judges who prefer to run it themselves.
@@ -371,12 +371,7 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 
 ## Fields only the owner can answer
 
-Rows 1, 3, 10, 12, 13, 14, 16, 17, 18, 19, 20 above. In particular: field 1 (demo URL) is ready to
-paste now that `infra/deploy.sh` and `infra/deploy_frontend.sh` have been run against real AWS
-credentials — use the Amplify dashboard URL, not the raw Lambda Function URL (see the table
-above); field 3 depends on flipping the repo from private to public; field 10 needs the existing
-Mermaid source in `ARCHITECTURE.md` rendered to an image and uploaded; fields 12–14 and 16–20 are
-personal/eligibility answers no one else can supply.
+Rows 1, 10, 12, 13, 14, 16, 17, 18, 19, 20 above. Field 1 is ready to paste now that the live Amplify dashboard has been independently fetched; use that URL, not the raw Lambda Function URL. Field 3 is no longer blocked: the repository is public. Field 10 has an exported `docs/architecture.png` ready for owner upload. Fields 12–14 and 16–20 are personal/eligibility answers no one else can supply.
 
 ---
 
@@ -386,17 +381,16 @@ personal/eligibility answers no one else can supply.
       have already been run once against real AWS + `ccloud` credentials (see Field 6) —
       re-verify closer to the deadline that the deployment is still live, since a cluster or
       Lambda can be torn down or rotated in the interim.
-- [ ] Repo is public; GitHub's own license badge shows Apache-2.0 in the "About" sidebar.
+- [x] Repo is public; GitHub API reports Apache-2.0 (verified 2026-08-07).
 - [ ] `git log -p` spot-checked for anything that shouldn't go public before flipping visibility —
       a private→public flip is not cleanly reversible once anyone has cloned it.
 - [ ] `README.md`'s Status table reflects reality — no checkmark for anything that wasn't actually
       run against real infrastructure.
 - [ ] Demo video recorded, edited, uploaded, set to **Public** — watch the public link once,
       logged out, start to finish.
-- [ ] Demo app URL hit from a browser/network that isn't the owner's, to catch a firewall or CORS
-      surprise before a judge does.
+- [x] Demo app URL fetched through an external web reader on 2026-08-07; it returned the MemoryStand dashboard. Re-check immediately before submission.
 - [ ] Every field above except the owner-only rows is filled in on the live Devpost draft.
-- [ ] Architecture diagram exported from `ARCHITECTURE.md` and uploaded (field 10).
+- [ ] Architecture diagram is exported at `docs/architecture.png` (1920×1080); owner must upload it in field 10.
 
 ## Day of (2026-08-18)
 

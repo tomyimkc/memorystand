@@ -270,7 +270,7 @@ Everything marked ✅ was run against a real CockroachDB v26.2.5 cluster, not ju
 |---|---|
 | Schema, admission control, outcome gate, cross-examination | ✅ end to end |
 | Incident fixtures (101 records, 2 designed conflicts) | ✅ 99 admitted, 2 held |
-| Test suite (`pytest`) | ✅ **139 passing** |
+| Test suite (`pytest`) | ✅ **147 core tests passing; 148 with the verified local video artifacts present** on the isolated readiness branch (2026-08-07) |
 | Concurrency + TOCTOU proof (`scripts/race_demo.py`) | ✅ real `40001` captured |
 | Benchmark harness (`scripts/loadtest.py`) | ✅ 10k rows, numbers below |
 | Lambda handler, 7 routes, kill switch, degraded mode | ✅ exercised over HTTP |
@@ -283,9 +283,9 @@ Everything marked ✅ was run against a real CockroachDB v26.2.5 cluster, not ju
 | ccloud provisioning (`infra/provision.sh`) | ✅ flags verified against `ccloud 0.8.23`, and run for real — see cloud cluster row below |
 | AWS deploy scripts (`infra/provision.sh`, `infra/ssm_setup.sh`, `infra/deploy.sh`, `infra/deploy_frontend.sh`, IAM, SSM, keep-warm) | ✅ **all run against a real AWS account.** Lambda is Active, dashboard is live on Amplify. See [docs/DEPLOY.md](docs/DEPLOY.md) for the URL shape. |
 | Reasoning provider | ⚠️ Bedrock is tried first but this account's Bedrock quota is ~0, so it never answers. Live `/decide` reasons through a third-party Anthropic-compatible router (`reasoning_source: api.teamorouter.com:claude-haiku-4-5`, `model_calls: 1`) — a deliberate, disclosed standby, see [`DISCLOSURES.md`](DISCLOSURES.md). The promotion path stays model-free regardless. |
-| Cloud cluster | ✅ CockroachDB Cloud BASIC, AWS us-west-2, CCL v26.2.1. `agent_memories` holds 50,131 rows: 40 synthetic tenants at 1,250 rows each, plus the curated demo tenant (131 rows, 117 accepted). |
+| Cloud cluster | ✅ CockroachDB Cloud BASIC, AWS us-west-2. Live `/health` reported CCL v26.2.5 on 2026-08-07. The last recorded row inventory remains 50,131 rows: 40 synthetic tenants at 1,250 rows each, plus the curated demo tenant (131 rows, 117 accepted); that inventory was not re-counted during the 2026-08-07 health check. |
 | MCP server wiring | ✅ working end to end (see [CockroachDB tools used](#cockroachdb-tools-used) for the honest access-level finding) |
-| Video | ⬜ |
+| Video | ✅ local 1920×1080 H.264/AAC render verified at 172.0 s (SHA-256 `4a92925e95ea6fea8a281af32de7c70cfcb78857bc3046a4f7c35c29ed48c077`); public YouTube/Vimeo upload remains pending |
 
 ## Measured results
 
@@ -422,7 +422,7 @@ git clone <this-repo> && cd memorystand
 Then:
 
 ```bash
-.venv/bin/python -m pytest -q                                   # 139 tests
+.venv/bin/python -m pytest -q                                   # 147 passed + 1 artifact check skipped; 148 with a local render
 .venv/bin/python cli/memorystand.py recall --query "payments failover"
 .venv/bin/python scripts/loadtest.py --rows 10000 --tenants 50  # reproduce the numbers below
 ```

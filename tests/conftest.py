@@ -82,6 +82,21 @@ def pytest_report_header(config: pytest.Config) -> str:
     return f"standing: CockroachDB cluster {status}"
 
 
+@pytest.fixture(autouse=True)
+def _isolate_cloudwatch_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Keep evidence-verification tests independent of local AWS credential state.
+
+    Tests that exercise CloudWatch patch ``evidence._average`` with deterministic
+    datapoints. Supplying an inert cached client prevents boto3 from resolving an
+    expired local SSO profile before that fake is called. Tests for an unreachable
+    verifier still override ``_get_client`` explicitly.
+    """
+    from backend import evidence
+
+    monkeypatch.setattr(evidence, "_client", object())
+    yield
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _close_pool_at_session_end() -> Iterator[None]:
     yield
