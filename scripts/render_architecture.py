@@ -278,10 +278,8 @@ def main() -> int:
         [
             "POST /ingest → memory.remember() → embeddings.embed()",
             "POST /decide → memory.recall() → agent.propose() → decisions.decide()",
-            "only VERIFIED memories enter autonomous model reasoning; ATTESTED is advisory "
-            "and held for approval",
-            "wired to call Bedrock for embeddings + reasoning; falls back to a deterministic "
-            "rule if the model call fails or quota is 0",
+            "VERIFIED may steer autonomously; ATTESTED stays advisory + approval",
+            "Bedrock first; deterministic fallback on error or zero quota",
         ],
         fill=RED_FILL,
         outline=bf.RED,
@@ -376,15 +374,14 @@ def main() -> int:
     panel(
         image,
         cw_box,
-        "Amazon CloudWatch — the trust oracle, not observability",
+        "Amazon CloudWatch — outcome evidence",
         [
-            "get_metric_statistics before/after the decision, ±15 min",
-            "at least 3 datapoints per window; exact normalized entity dimension required",
-            "direction checked first, then magnitude within 50% tolerance",
-            "confirmed → verified · contradicted → HTTP 400, refused",
-            "unavailable / not_verifiable → attested; advisory only, approval required",
-            "pagerduty and human sources always land here as not_verifiable — no system of "
-            "record to re-query",
+            "GetMetricStatistics: ±15 min around the decision",
+            "≥3 datapoints/window; exact normalized entity dimension match",
+            "check direction, then magnitude (50% tolerance)",
+            "confirmed → verified; contradicted → refused (HTTP 400)",
+            "unavailable / not_verifiable → attested + approval",
+            "PagerDuty / human are not re-queryable here → attested",
         ],
         fill=GREEN_FILL,
         outline=bf.GREEN,
