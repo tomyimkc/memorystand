@@ -1,159 +1,156 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "title": "MemoryStand",
-  "targetDurationSeconds": 156,
+  "targetDurationSeconds": 145,
   "candidateOnly": true,
   "canClaimAGI": false,
   "_notes": [
-    "PLAIN-LANGUAGE CUT. Written to be followed by someone who has never used an agent framework.",
-    "Rules applied: no jargon that is not immediately unpacked; no schema or SQL spoken aloud (it",
-    "stays on the panel for the technical judge to read); concrete nouns over abstractions; and one",
-    "idea per shot. The opening beat now says what was built before arguing why it matters -- the",
-    "an earlier cut opened on a vendor critique; the evidence-first render now opens on the product authority boundary.",
-    "",
-    "ON-SCREEN DISCLOSURES REMOVED at the author's request: the synthesised-presenter line and the",
-    "candidateOnly/no-AGI tag. The presenter disclosure moves to the Devpost 'Which AI tools have",
-    "you leveraged' field and the video description -- see docs/SUBMISSION.md. One caveat was KEPT,",
-    "on beat 04's panel: the embeddings are a deterministic lexical stub because Bedrock quota on",
-    "this account is zero, so 'closest' means lexically closest, not semantically. That one guards",
-    "an actual claim the video makes on screen rather than signalling research etiquette.",
-    "",
-    "MEASURED CONSTRAINTS of grok image_to_video:",
-    "  - duration accepts 6 or 10 ONLY; 15 returns '`duration` must be either 6 or 10 seconds.'",
-    "  - the generator fits the given line into the given clip, so clip length sets delivery speed.",
-    "    6s forced 3.3-4.7 words/sec; 10s puts 20 words in 8.54s = 2.34 words/sec. Hence 17-24",
-    "    words per shot, enforced by make_clips.py.",
-    "  - shots after the first in a beat are seeded from the previous shot's LAST FRAME, so a beat",
-    "    plays as one unbroken take rather than a jump cut on identical framing.",
-    "  - it invents dialogue if the prompt has no words, so every clip is transcribed and compared.",
-    "",
-    "Every number spoken is traceable:",
-    "  beat 04 -> db/schema.sql:63,74 · backend/memory.py:369-381",
-    "  beat 05 -> live POST /ingest, artifacts/video/capture/evidence.json 2026-08-05T09:40Z",
-    "  beat 06 -> benchmarks/poisoning.md (540 attacks + 60 honest controls; autonomous authority scored separately)",
-    "  beat 07 -> live POST /confirm_outcome, same capture",
-    "  beat 08 -> recorded /decide run, README.md:25-26; prior art in README",
-    "CLARITY PASS. Reviewer note: the plain-language cut traded jargon for vagueness. Every abstraction that could not be pictured was replaced with the concrete thing it stood for -- 'what worked last time' -> 'an AI assistant suggests a fix because it remembers that fix working'; 'the real numbers' -> 'the latency CloudWatch recorded'; 'this lives in one table' -> the four things in the row; 'every new claim' -> 'one fact about one service'; the bare 800/300/500 -> milliseconds of one service's circuit-breaker timeout; 'we tested it' -> 600 deterministic cases with authority scored separately; 'the actual numbers' -> AWS/Lambda Duration. Panels carrying figures now state in words what those figures are."
+    "GENERAL-PUBLIC CUT. The story is understandable without prior knowledge of AI agents, vector databases, or cloud operations.",
+    "Editorial rule: explain the safety boundary with one analogy — a memory must show its receipt before it gets the keys.",
+    "Each beat has exactly two 10-second Grok presenter shots. Each line is 17-24 words so delivery stays natural.",
+    "Technical proof remains on screen for judges, while the spoken narration uses ordinary language.",
+    "Current limitation is explicit: search matches words rather than meaning, and /decide used a fixed fallback because paid model quota was unavailable.",
+    "That runtime limitation never changes the authority path: promotion is deterministic, externally checked, and uses zero model calls.",
+    "Every generated shot must pass transcript comparison before compose.py will include it.",
+    "The final MP4 burns English subtitles into the image and also writes a selectable English SRT."
   ],
   "beats": [
     {
-      "id": "01-what-it-is",
+      "id": "01-receipt-first",
       "presenterSide": "LEFT",
-      "baseFrom": "01-claim",
       "panelData": {
         "kind": "hero",
-        "headline": "Memory an agent has to earn.",
+        "headline": "Receipt first. Keys second.",
         "bullets": [
-          "A claim arrives  →  it is admitted, or put on hold",
-          "It only becomes trusted once the monitoring data agrees",
-          "If the data later disagrees, it loses that standing"
+          "Stored memory is not permission to act",
+          "A receipt is outside evidence that the claim held up",
+          "No receipt means no autonomous keys"
         ],
         "footnote": "github.com/tomyimkc/memorystand"
       },
       "shots": [
-        "I built MemoryStand — a memory for AI agents that refuses to trust a claim nobody ever checked.",
-        "It's for on-call engineers, when an AI assistant suggests a fix because it remembers that fix working before."
+        "MemoryStand is a safer memory system for AI assistants that help engineers during urgent service incidents at night.",
+        "Here is the rule in plain English: a memory must show its receipt before it gets the keys."
       ]
     },
     {
-      "id": "02-the-problem",
+      "id": "02-dangerous-coincidence",
       "presenterSide": "RIGHT",
-      "baseFrom": "02-the-failure",
-      "panelData": {
-        "kind": "quote",
-        "lines": [
-          "Stored memory and action authority are different decisions.",
-          "Model-led reconciliation can manage memory without independently proving an outcome.",
-          "MemoryStand requires an external, entity-bound outcome before autonomous use."
-        ],
-        "footnote": "Mechanism-level comparison and primary-source links: README, Prior art."
-      },
-      "shots": [
-        "Agent-memory products often use recency, source authority, or model-led reconciliation to manage what they store.",
-        "MemoryStand adds a stricter boundary: a stored memory cannot act autonomously until an external outcome corroborates it."
-      ]
-    },
-    {
-      "id": "03-the-failure",
-      "presenterSide": "LEFT",
-      "baseFrom": "03-measured",
       "panelData": {
         "kind": "story",
-        "headline": "Nobody lied. The memory is still false.",
-        "body": "And it will be handed to an agent at the next incident. That is how a memory store fills with true-sounding operational folklore."
+        "headline": "A coincidence can become a dangerous memory.",
+        "body": "The restart happened before the alert stopped, but the service never improved. An assistant could still repeat that story during the next outage.",
+        "footnote": "The problem is not dishonesty. It is treating timing as proof."
       },
       "shots": [
-        "Here is how a memory goes wrong. An engineer restarts a service at two in the morning and the alert stops.",
-        "They report the restart fixed it. But the latency CloudWatch recorded never actually dropped. Nobody lied. It's still wrong."
+        "AI can remember that a restart seemed to fix an outage, then confidently suggest that same restart again.",
+        "But timing is not proof. The alert may stop while the real performance numbers never improve at all."
       ]
     },
     {
-      "id": "04-where-it-lives",
-      "presenterSide": "RIGHT",
-      "baseFrom": "04-only-one-works",
-      "panelData": {
-        "kind": "schema",
-        "code": [
-          "embedding  VECTOR(512)",
-          "",
-          "VECTOR INDEX agent_memories_tenant_idx",
-          "  (tenant_id, verdict, embedding vector_cosine_ops)",
-          "",
-          "WHERE  tenant_id = %s AND verdict = 'accepted'",
-          "ORDER BY  embedding <=> %s   LIMIT %s"
-        ],
-        "note": "Admission is checked inside the vector search. Trust tier comes back as a column and is ranked afterwards, in code.",
-        "footnote": "db/schema.sql:63,74 · backend/memory.py:369-381 · embeddings are a deterministic lexical stub (Bedrock quota is 0), so “closest” is lexical",
-        "title": "one row per memory, in the agent_memories table"
-      },
-      "shots": [
-        "Every memory lives in one CockroachDB table: the text, its source, how trusted it is, and a search vector.",
-        "So a single query finds the closest memories and skips the ones it never admitted. No separate search database."
-      ]
-    },
-    {
-      "id": "05-admission",
+      "id": "03-cockroachdb-aws",
       "presenterSide": "LEFT",
-      "baseFrom": "05-trust-beats-proximity",
+      "panelData": {
+        "kind": "hero",
+        "headline": "One memory record. One audit trail.",
+        "bullets": [
+          "CockroachDB stores the claim, source, trust level, and search vector together",
+          "Its vector index finds related memories without a separate search database",
+          "Time-travel reads replay exactly what the assistant knew when it decided"
+        ],
+        "footnote": "CockroachDB Cloud · VECTOR(512) · C-SPANN · AS OF SYSTEM TIME"
+      },
+      "shots": [
+        "MemoryStand stores each memory in CockroachDB with its source, trust level, searchable words, and decision receipts all together.",
+        "The public demo runs on AWS: Lambda serves requests, CloudWatch checks outcomes, and Amplify hosts the dashboard."
+      ]
+    },
+    {
+      "id": "04-held-for-review",
+      "presenterSide": "RIGHT",
       "panelData": {
         "kind": "admission",
         "rows": [
           {
-            "source": "human — on-call lead",
-            "value": "500",
+            "source": "runbook",
+            "value": "800 ms",
             "verdict": "accepted"
           },
           {
-            "source": "runbook",
-            "value": "800",
+            "source": "Slack message",
+            "value": "300 ms",
             "verdict": "held"
           },
           {
-            "source": "Slack hearsay",
-            "value": "300",
-            "verdict": "held"
+            "source": "on-call lead",
+            "value": "500 ms",
+            "verdict": "accepted"
           }
         ],
-        "reason": "contradicts memory 025d7524 which asserts '500'; sources rank equal, so a human decides",
-        "footnote": "live POST /ingest · captured 2026-08-05T09:40Z",
-        "title": "checkout-api · circuit breaker timeout, in milliseconds"
+        "reason": "The weaker disagreement waits for a person; the stronger correction remains linked to the earlier claim.",
+        "footnote": "Live ingest receipts · one service · one timeout setting",
+        "title": "Contradicting claims do not silently overwrite each other"
       },
       "shots": [
-        "A claim is one fact about one service — a timeout setting, an owner, or what fixed the last incident.",
-        "Three sources disagreed about one timeout: the runbook said eight hundred milliseconds, Slack said three hundred, an engineer said five hundred.",
-        "Five hundred was already stored, and neither other source outranks it, so both were held for a human to settle."
+        "New claims do not automatically become trusted. A stronger source can win, while weaker disagreements wait for human review.",
+        "In the live example, a runbook said eight hundred milliseconds, Slack said three hundred, and the on-call lead corrected both to five hundred."
       ]
     },
     {
-      "id": "06-measured",
+      "id": "05-cloudwatch-receipt",
+      "presenterSide": "LEFT",
+      "panelData": {
+        "kind": "oracle",
+        "rows": [
+          {
+            "claimed": "−14,200",
+            "observed": "−14,204.91",
+            "verdict": "confirmed",
+            "status": "200"
+          },
+          {
+            "claimed": "−10",
+            "observed": "−14,200",
+            "verdict": "refused",
+            "status": "400"
+          }
+        ],
+        "note": "Same service, same metric, matching direction, and matching magnitude are all required.",
+        "footnote": "Live AWS CloudWatch outcome receipts · promotion path model_calls: 0",
+        "title": "CloudWatch acts as the outside receipt"
+      },
+      "shots": [
+        "To earn autonomous authority, the memory must match outside evidence from AWS CloudWatch for the same service and metric.",
+        "A matching outcome earns verified status. A wrong size, direction, or service is refused before the memory can steer action."
+      ]
+    },
+    {
+      "id": "06-four-trust-levels",
       "presenterSide": "RIGHT",
-      "baseFrom": "06-close",
+      "panelData": {
+        "kind": "quote",
+        "lines": [
+          "VERIFIED — may guide an automatic action",
+          "ATTESTED — may advise, but a person approves",
+          "UNCONFIRMED — inspection only",
+          "DISPUTED — inspection only"
+        ],
+        "footnote": "Similarity affects retrieval order. It never grants authority."
+      },
+      "shots": [
+        "Verified memory may guide an automatic action. Attested memory may advise, but still needs a person to approve.",
+        "Unconfirmed or disputed memory stays visible for inspection, yet cannot quietly gain the keys through similarity alone."
+      ]
+    },
+    {
+      "id": "07-attack-test",
+      "presenterSide": "LEFT",
       "panelData": {
         "kind": "table",
         "columns": [
           "",
-          "attacks autonomous",
-          "honest autonomous"
+          "attacks got keys",
+          "honest kept"
         ],
         "rows": [
           [
@@ -162,78 +159,43 @@
             "100%"
           ],
           [
-            "outcome-gated",
+            "outcome gate",
             "0%",
             "100%"
           ]
         ],
-        "footnote": "540 attacks + 60 honest controls · deterministic receipt: benchmarks/poisoning.md",
-        "title": "600 cases · storage and autonomous authority scored separately"
+        "footnote": "540 attack cases + 60 honest controls · deterministic authority benchmark",
+        "title": "600 fixed cases, with storage and action authority scored separately"
       },
       "shots": [
-        "We ran six hundred deterministic cases: five hundred forty deliberate attacks, plus sixty honest controls.",
-        "Trusting the caller gave every attack authority. The outcome gate gave none autonomous control and preserved every honest control."
+        "We tested six hundred fixed cases: five hundred forty attacks designed to fool memory, plus sixty honest controls.",
+        "A system that trusted callers gave every attack the keys. MemoryStand gave attacks none and preserved every honest case."
       ]
     },
     {
-      "id": "07-the-oracle",
-      "presenterSide": "LEFT",
-      "baseFrom": "07-deciding",
-      "panelData": {
-        "kind": "oracle",
-        "rows": [
-          {
-            "claimed": "−14,200.0",
-            "observed": "−14,204.91",
-            "verdict": "confirmed",
-            "status": "200"
-          },
-          {
-            "claimed": "−10.0",
-            "observed": "−14,200",
-            "verdict": "refused",
-            "status": "400"
-          }
-        ],
-        "note": "outcome_rejected — \"a disagreement beyond the 50% tolerance\"",
-        "footnote": "live POST /confirm_outcome · captured 2026-08-05T09:40Z",
-        "title": "AWS/Lambda Duration — the function's run time, in milliseconds"
-      },
-      "shots": [
-        "Only the third approach works. MemoryStand asks Amazon CloudWatch for the service's own metric — here, the function's run time in milliseconds.",
-        "A claimed drop of fourteen thousand milliseconds matched CloudWatch within five. A claimed drop of ten did not, and was refused."
-      ]
-    },
-    {
-      "id": "08-close",
+      "id": "08-honest-status",
       "presenterSide": "RIGHT",
-      "baseFrom": "08-close",
       "panelData": {
-        "kind": "recall",
-        "rows": [
-          {
-            "id": "22207f6e",
-            "distance": "0.414",
-            "tier": "unconfirmed",
-            "value": "restart_service",
-            "chosen": false
-          },
-          {
-            "id": "fb3b7ec0",
-            "distance": "0.565",
-            "tier": "verified",
-            "value": "scale_up",
-            "chosen": true
-          }
+        "kind": "hero",
+        "headline": "Honest status today.",
+        "bullets": [
+          "Search matches words, not meaning, while Bedrock quota is unavailable",
+          "/decide used a fixed fallback after the configured model route returned HTTP 402",
+          "The evidence gate still used zero model calls and cannot be bypassed"
         ],
-        "note": "Recorded run. Today's live /decide also calls a model to pick the action; the promotion path never does — backend/trust.py imports no model client.",
-        "footnote": "recorded /decide run, README.md:25-26 · tiers re-confirmed live 2026-08-05"
+        "footnote": "Hackathon candidate · public code and receipts · no general-intelligence claim"
       },
       "shots": [
-        "In a recorded run, the closer memory was unchecked and the further one was verified. Only the verified memory could steer the action.",
-        "Being closer did not grant authority. External corroboration did. The idea is old; this build makes the boundary executable."
+        "Today, search matches words rather than meaning, and decisions use a fixed fallback because paid model quota is unavailable.",
+        "That limitation never bypasses the gate. Promotion uses zero model calls, so memories still need receipts before getting autonomous keys."
       ]
     }
   ],
+  "outro": {
+    "tagline": "A memory must show its receipt before it gets the keys.",
+    "repository": "github.com/tomyimkc/memorystand",
+    "status": "Hackathon candidate · no general-intelligence claim",
+    "disclosure": "Synthetic presenter generated with xAI Grok from a creator-owned reference photo."
+  },
   "subtitles": true
 }

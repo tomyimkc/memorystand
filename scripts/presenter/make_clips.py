@@ -196,11 +196,24 @@ def generate(line: str, source: Path, out: Path) -> bool:
     # three times, sequentially and in parallel, against an account that could not possibly
     # succeed. A generator that cannot say WHY it failed will be retried until someone gives up.
     detail = ((proc.stderr or "") + (proc.stdout or "")).strip()
+    surfaced = False
     for marker in ("Payment Required", "usage balance", "rate limit", "quota", "error"):
-        line = next((ln for ln in detail.splitlines() if marker.lower() in ln.lower()), None)
-        if line:
-            print(f"    grok said: {line.strip()[:180]}")
+        detail_line = next(
+            (ln for ln in detail.splitlines() if marker.lower() in ln.lower()),
+            None,
+        )
+        if detail_line:
+            print(f"    grok said: {detail_line.strip()[:300]}")
+            surfaced = True
             break
+    if not surfaced:
+        tail = [ln.strip() for ln in detail.splitlines() if ln.strip()][-6:]
+        if tail:
+            print("    grok returned without the requested file:")
+            for detail_line in tail:
+                print(f"      {detail_line[:300]}")
+        else:
+            print(f"    grok returned exit code {proc.returncode} with no output")
     return False
 
 
@@ -236,6 +249,18 @@ def main() -> int:
         for i, line in enumerate(beat["shots"]):
             out = CLIP_DIR / f"{beat['id']}-{i}.mp4"
             tag = f"{beat['id']}-{i}"
+            words = len(line.split())
+            if not WORDS_MIN <= words <= WORDS_MAX:
+                print(
+                    f"    {tag}: INVALID SCRIPT — {words} words is outside "
+                    f"{WORDS_MIN}-{WORDS_MAX} for a {DURATION_S}s shot"
+                )
+                missing += 1
+                continue
+
+            if args.force and out.is_file() and not args.verify_only:
+                out.unlink()
+                print(f"    {tag}: removed existing clip for forced regeneration")
 
             # A continuous beat seeds each shot after the first from its predecessor's last
             # frame, so the whole beat plays as one take.
@@ -246,10 +271,6 @@ def main() -> int:
                     source = last_frame(previous, CLIP_DIR / f"{beat['id']}-{i - 1}-last.png")
 
             if not out.is_file() and not args.verify_only:
-                words = len(line.split())
-                if not WORDS_MIN <= words <= WORDS_MAX:
-                    print(f"    {tag}: {words} words is outside {WORDS_MIN}-{WORDS_MAX} for a "
-                          f"{DURATION_S}s shot -- it will rush or pad. Rewrite the line.")
                 print(f"==> {tag}: generating ({words} words, {DURATION_S}s, from {source.name})")
                 if not generate(line, source, out):
                     print(f"    FAILED: {out} was not written")

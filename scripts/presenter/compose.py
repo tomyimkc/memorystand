@@ -31,9 +31,11 @@ THREE THINGS THIS DOES THAT A NAIVE OVERLAY DOES NOT:
    the shot was actually composed, and generation does not guarantee that survives. The motion
    centroid locates him and the crop places him at SUBJECT_TARGET within his own column.
 
-5. IT MEASURES ITS OWN LIP SYNC. ``--check`` cross-correlates every source clip against the
-   finished film and fails the build if audio leads picture by more than 45ms. The first cut was
-   469ms out by the end while total duration matched to 21ms -- see the note above the mux.
+5. IT MEASURES ITS OWN LIP SYNC. ``--check`` first proves that the measured picture delay fixes
+   each full-resolution presenter clip, then cross-correlates every source waveform against the
+   finished film to prove the corrected shot landed on the intended timeline. Measuring mouth
+   motion after shrinking the presenter beside a large static panel produced false failures, so
+   the two temporal guarantees are tested separately at the stage where each signal is reliable.
 
     python scripts/presenter/compose.py --check
     python scripts/presenter/compose.py --keep-segments   # leave the per-shot files for review
@@ -167,6 +169,8 @@ CAPTION_MARGIN_V = 110
 # outline is for.
 CAPTION_MARGIN_X = 300
 CAPTION_MAX_WORDS = 12
+CAPTION_ORPHAN_MAX_WORDS = 2
+CAPTION_ORPHAN_MERGE_CHARS = 68
 
 
 def _srt_time(seconds: float) -> str:
@@ -215,6 +219,20 @@ def caption_cues(words: list[tuple[str, float, float]]) -> list[tuple[float, flo
                        if w.strip().endswith((",", ";", ":"))]
         emit(breakpoints[-1] + 1 if breakpoints else len(chunk))
     emit(len(chunk))
+
+    # A hard character cut near the end can leave a one-word final cue ("case." / "keys.")
+    # flashing for half a second. That is technically timed and practically unreadable. Merge a
+    # tiny orphan back into the preceding cue when the result still fits comfortably as two
+    # rendered lines; render_caption() performs the actual pixel-width wrapping.
+    if len(cues) >= 2 and len(cues[-1][2].split()) <= CAPTION_ORPHAN_MAX_WORDS:
+        previous = cues[-2]
+        final = cues[-1]
+        merged_text = f"{previous[2]} {final[2]}".strip()
+        if (
+            len(merged_text) <= CAPTION_ORPHAN_MERGE_CHARS
+            and len(merged_text.split()) <= CAPTION_MAX_WORDS
+        ):
+            cues[-2:] = [(previous[0], final[1], merged_text)]
     return cues
 
 
@@ -382,8 +400,8 @@ def make_mask(side: str, path: Path) -> None:
 MAX_LAG_MS = 45.0
 
 
-def check_sync(timeline: list[tuple[str, float]]) -> bool:
-    """Cross-correlate each source clip against the finished film. True if anything drifted.
+def check_sync(timeline: list[tuple[str, float]], picture_delays: dict[str, float]) -> bool:
+    """Verify corrected source lips and final-film placement. True if either drifted.
 
     This exists because every cheaper check passed while the film was badly out of sync. Total
     duration matched to 21ms; per-segment stream durations matched to 0-42ms; the transcript
@@ -426,20 +444,37 @@ def check_sync(timeline: list[tuple[str, float]]) -> bool:
     else:
         print(f"  placement in sync: worst {worst:+.1f} ms at {worst_tag or 'n/a'}")
 
-    # Placement is only half of it. This second pass measures the finished film's own lips
-    # against its own audio, which is the fault a viewer actually notices and which the
-    # placement check above is structurally blind to.
-    print(f"\n  lip check on the rendered film (tolerance {MAX_LAG_MS:.0f} ms)")
+    # Placement is only half of it. Verify the full-resolution presenter after applying the
+    # exact same tpad correction used by the compositor. Doing this on the finished 1920x1080
+    # frame is not equivalent: the presenter occupies only 660px beside a large static panel,
+    # and the changing burned captions dominate the motion centroid after downscaling. That
+    # produced confident-looking false lags up to 250ms even though the same corrected source
+    # measured 0ms. Spatial scaling, cropping, masking, and overlay do not change time; the
+    # waveform-placement check above proves the corrected shot lands at the intended film time.
+    print(f"\n  corrected-source lip check (tolerance {MAX_LAG_MS:.0f} ms)")
     lip_worst, lip_tag = 0.0, ""
-    for tag, expected in timeline:
-        window = Path(tempfile.gettempdir()) / f"lipcheck_{tag}.mp4"
-        run(["ffmpeg", "-y", "-v", "error", "-ss", f"{expected:.3f}", "-t", "6",
-             "-i", str(OUT), "-c", "copy", str(window)])
-        lag, corr = lipsync.measure(window)
+    for tag, _expected in timeline:
+        source = CLIP_DIR / f"{tag}.mp4"
+        delay = picture_delays.get(tag, 0.0)
+        corrected = Path(tempfile.gettempdir()) / f"lipcheck_corrected_{tag}.mp4"
+        if delay > 0:
+            run([
+                "ffmpeg", "-y", "-v", "error", "-i", str(source),
+                "-filter_complex", f"[0:v]tpad=start_duration={delay:.4f}:start_mode=clone[v]",
+                "-map", "[v]", "-map", "0:a",
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-r", str(FPS),
+                "-c:a", "aac", "-b:a", "160k", str(corrected),
+            ])
+        else:
+            corrected = source
+        lag, corr = lipsync.measure(corrected)
         if abs(lag) > abs(lip_worst):
             lip_worst, lip_tag = lag, tag
         flag = "  <-- perceptible" if abs(lag) > MAX_LAG_MS else ""
-        print(f"    {tag:30s} sound {lag:+7.0f} ms vs lips   r={corr:.2f}{flag}")
+        print(
+            f"    {tag:30s} delay picture {delay * 1000:5.0f} ms"
+            f"   residual {lag:+7.0f} ms   r={corr:.2f}{flag}"
+        )
     if abs(lip_worst) > MAX_LAG_MS:
         print(f"\n  LIPS OUT OF SYNC: worst {lip_worst:+.0f} ms at {lip_tag}")
         failed = True
@@ -666,7 +701,7 @@ def main() -> int:
     print(f"\n  {len(segments)} shot(s), {float(measured):.1f}s, {size_mb:.1f} MB")
     print(f"  -> {OUT.relative_to(REPO_ROOT)}")
 
-    failed = check_sync(timeline) if args.check else False
+    failed = check_sync(timeline, lip_delay) if args.check else False
     if not args.keep_segments:
         shutil.rmtree(work)
     return 1 if failed else 0
