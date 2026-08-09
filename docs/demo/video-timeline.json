@@ -12,8 +12,8 @@
       "frame": "01-hook.png",
       "evidenceClass": "LIVE AWS",
       "cues": [
-        "The major shipping agent-memory systems we checked ask a model whether their own memory is true. Mem0, Zep, AWS AgentCore.",
-        "MemoryStand asks CloudWatch instead, and refuses the promotion when CloudWatch disagrees. Here it is doing that, live."
+        "Agent-memory products commonly use recency, source authority, or model-led reconciliation. MemoryStand separates a memory being stored from that memory having authority to act.",
+        "Only an outcome re-checked against CloudWatch can make a memory autonomous. If CloudWatch disagrees, the promotion is refused."
       ]
     },
     {
@@ -42,8 +42,8 @@
       "frame": "04-agent-decides.png",
       "evidenceClass": "LIVE AWS · OUTCOME PATH · STUB EMBEDDINGS",
       "cues": [
-        "An incident hits: payments-gateway latency is spiking. Recall surfaces the corrected five-hundred-millisecond fact, and the agent reasons over it.",
-        "This is a real model call. The rationale cites the memory it used, by id, and proposes one action from a closed allow-list -- it cannot invent an action that is not on the list.",
+        "An incident hits: payments-gateway latency is spiking. Recall returns the recorded history, but unchecked memories are inspection-only and cannot steer the action.",
+        "The agent proposes one action from a closed allow-list. Its receipt separates every recalled row from the smaller set it actually cited, and only verified memory may enter autonomous reasoning.",
         "One honest disclosure: this AWS account has zero Bedrock quota, so embeddings are still a lexical stub, not semantic. Recall matches wording, not meaning."
       ]
     },
@@ -53,9 +53,9 @@
       "frame": "05-outcome-gate.png",
       "evidenceClass": "LIVE AWS · OUTCOME GATE · RE-CHECKED",
       "cues": [
-        "The incident resolves in PagerDuty. That's a real external signal, so the memory moves up -- but only to attested, because nothing here can re-check PagerDuty.",
-        "Now a metric claim: latency fell. MemoryStand re-queries CloudWatch, CloudWatch agrees, and only now does the memory reach verified. Model calls to decide that: zero.",
-        "And when the claim is wrong, watch. Claimed ten milliseconds; CloudWatch says eleven thousand four hundred and fifty-two. Refused. A memory gains nothing from a claim its own metric contradicts."
+        "A PagerDuty resolution is recorded as attested because this deployment cannot re-check it. Attested memory may advise, but the action is held for human approval.",
+        "For a metric claim, MemoryStand re-queries CloudWatch, requires enough datapoints, and binds the metric to the memory's entity. Only a match reaches verified and may act autonomously. Zero model calls occur on that authority path.",
+        "A wrong magnitude, opposite direction, or another service's metric is refused. A real number about the wrong subject is still not evidence for this memory."
       ]
     },
     {
@@ -85,7 +85,7 @@
       "evidenceClass": "PRIOR ART · CANDIDATE ONLY",
       "cues": [
         "None of this is a new idea. Doyle's truth maintenance systems retracted beliefs when their justification failed, in 1979. Bitemporal replay ships in Zep today.",
-        "What is measured is the difference. Against six hundred poisoned claims plus honest controls: trusting the caller admits every attack. An LLM judge blocks every attack -- and every honest claim too, so it is useless. Only the outcome gate tells them apart.",
+        "Across six hundred deterministic cases, the permissive baseline gave every attack autonomous authority. The outcome gate gave unverifiable reports zero autonomous control, refused bad metrics and wrong entities, and preserved every honest control.",
         "Hackathon build: candidate only, no general-intelligence claim, code's public."
       ]
     }

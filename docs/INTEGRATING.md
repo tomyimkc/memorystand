@@ -77,13 +77,12 @@ consult, default 5) and `task_id` are optional. The response (HTTP 201) is:
 }
 ```
 
-Read `reasoning_source` before you read anything else in that response. On the live deployment
-right now it is `"fallback_heuristic"`, not `"bedrock:amazon.nova-lite-v1:0"` — the Bedrock
-quota on this AWS account is still effectively zero (see `docs/BEDROCK_QUOTA.md`), so every live
-`/decide` call is answered by an explicit, deterministic keyword rule in `backend/agent.py`, not
-by a model. The rationale string in the response says as much verbatim. Don't build an
-integration that assumes the deployed agent is reasoning with an LLM; today it is not. Check
-`reasoning_source` in your own client instead of assuming.
+Read `reasoning_source` before you read anything else in that response. In a live 2026-08-09
+check it was `"fallback_heuristic"`, not `"bedrock:amazon.nova-lite-v1:0"`: Bedrock quota is
+effectively zero and the configured router standby returned HTTP 402 `insufficient_balance`.
+The explicit deterministic rule in `backend/agent.py` handled the request and the rationale said
+so verbatim. Provider availability can change, so do not hard-code this snapshot either — check
+`reasoning_source` and `model_calls` in your own client instead of assuming.
 
 If you already know what action you want recorded — you're driving this from your own agent
 loop and MemoryStand is just the memory layer — pass `action` and `rationale` directly in the

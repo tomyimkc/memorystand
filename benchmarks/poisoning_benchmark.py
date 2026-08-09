@@ -26,13 +26,13 @@ holding the shared secret) would try:
                         single attempt does not.
   wrong_entity          A REAL, independently-confirmable outcome, filed under the wrong
                         service. The metric genuinely moved as claimed -- just not for the
-                        entity the memory says it did. This is the attack that gets through
-                        outcome_gated cleanly, and it is reported as such below.
+                        entity the memory says it did. The evidence binder must reject it.
 
 THREE ARMS, scored on the same attack set:
-  trust_the_caller  Record what was reported. What this project did before ``backend/
-                    evidence.py`` existed, and what every surveyed system does with a bare
-                    outcome signal.
+  trust_the_caller  A deliberately permissive baseline: record every reported success as
+                    verified without checking an external system of record. This is the
+                    behavior MemoryStand itself had before ``backend/evidence.py`` existed;
+                    it is not a claim that every other memory product behaves this way.
   outcome_gated     MemoryStand now. Calls ``backend.evidence.verify()`` -- the exact
                     function the real ``backend.trust.grant_standing`` calls -- and only a
                     CONFIRMED result reaches ``verified``. This script does not go through
@@ -44,31 +44,19 @@ THREE ARMS, scored on the same attack set:
                     against ``backend.bedrock_client``; reported SKIPPED with the verbatim
                     error when quota is 0, never estimated.
 
-TWO WAYS OF ASKING "does it drive an action", because they answer different questions:
-  action_when_admitted   The literal ask: take every memory an arm ADMITTED (attested or
-                          verified -- i.e. not refused outright) and feed it, alone, through
-                          ``backend.agent._fallback_action``. Does it change the action from
-                          what the keyword table would have picked with no memory at all?
-  action_vs_honest       A harder, more realistic test: pit the poisoned memory against a
-                          memory for the SAME entity that genuinely reached ``verified`` the
-                          honest way, and see which one ``_fallback_action`` picks. This is
-                          the only one of the two that actually tells the three arms apart --
-                          see the honesty note in the module below on why ``action_when_
-                          admitted`` is close to 100% almost everywhere, admission included.
+TWO WAYS OF ASKING "does it autonomously drive an action", because admission and authority
+are deliberately different:
+  autonomous_when_alone  Feed the memory through ``backend.agent._fallback_decision`` by
+                          itself. It counts only when that memory changes the baseline action
+                          AND the proposal is not held for human approval.
+  autonomous_vs_honest   Pit the poisoned memory against a genuinely ``verified`` memory for
+                          the same entity. It counts only when the poisoned memory is the cited
+                          basis for the selected action and the action is autonomous.
 
-HONESTY NOTE, load-bearing. ``_fallback_action``'s tier filter
-(``agent._TIER_RANK = {"verified": 3, "attested": 2, "unconfirmed": 1}``) excludes only
-``disputed`` memories -- ``unconfirmed`` is a usable tier, not a withheld one. A memory whose
-outcome claim was REFUSED outright by ``outcome_gated`` (a CONTRADICTED metric_lie, say) never
-moves off ``unconfirmed`` -- but ``unconfirmed`` is exactly the tier every memory starts at
-before anyone reports an outcome at all, and it already outranks the keyword table whenever
-it is the only actionable memory recalled. That is not a defect in ``evidence.py`` -- the
-outcome gate was never supposed to decide which memories are *recallable*, only which ones
-earn standing on the trust ladder -- but it does mean ``action_when_admitted`` is a weak
-signal on its own: it says the memory drives the action once nothing competes with it, which
-is close to always true regardless of arm. ``action_vs_honest`` is the number that shows what
-the trust ladder actually buys: whether the poisoned memory wins once a real, verified memory
-is also in the running.
+POLICY NOTE. ``verified`` is action-authoritative. ``attested`` is advisory and is always held
+for approval. ``unconfirmed`` and ``disputed`` never steer an action. The benchmark therefore
+reports both storage admission and autonomous authority; treating those as the same outcome
+would erase the central distinction MemoryStand is trying to enforce.
 
 WHAT THIS IS NOT. Like its sibling, the metric series are synthetic and seeded, so CloudWatch
 is stubbed with known ground truth (``evidence._average`` is monkeypatched exactly as
@@ -288,7 +276,7 @@ def _tier_outcome_gated(atk: Attack) -> tuple[str, str]:
     finally:
         evidence._average = original
 
-    if v.status == evidence.CONTRADICTED:
+    if v.status in {evidence.CONTRADICTED, evidence.ENTITY_MISMATCH}:
         # trust.grant_standing raises OutcomeRejected here -- refused outright, never written.
         return trust.UNCONFIRMED, v.status
     if v.grants_verified_tier:
@@ -297,10 +285,7 @@ def _tier_outcome_gated(atk: Attack) -> tuple[str, str]:
 
 
 def _tier_trust_the_caller(atk: Attack) -> tuple[str, str]:
-    """What most shipping systems do with a reported success: believe it outright, no check.
-    Not a strawman -- see verification_benchmark.py's note that this is what MemoryStand
-    itself did before backend/evidence.py existed.
-    """
+    """Permissive baseline: believe every reported success without an external check."""
     return trust.VERIFIED, "accepted_as_reported"
 
 
@@ -452,28 +437,33 @@ def _alert_text(entity: str) -> str:
     return f"unusual behavior detected on {entity}"
 
 
-def action_when_admitted(atk: Attack, tier: str) -> bool:
-    """The literal ask: an admitted (attested-or-verified) poisoned memory, alone, fed through
-    _fallback_action -- does it change the action from the no-memory default?"""
+def autonomous_when_alone(atk: Attack, tier: str) -> bool:
+    """Does this memory, alone, change the baseline without requiring human approval?"""
     alert_text = _alert_text(atk.entity)
-    baseline, _ = agent._fallback_action(alert_text, [])
+    baseline, _, _, _ = agent._fallback_decision(alert_text, [])
     poisoned = _mem("poison", tier, atk.entity, atk.claimed_action, atk)
-    chosen, _ = agent._fallback_action(alert_text, [poisoned])
-    return chosen == atk.claimed_action and chosen != baseline
+    chosen, _, requires_approval, cited = agent._fallback_decision(alert_text, [poisoned])
+    return (
+        chosen == atk.claimed_action
+        and chosen != baseline
+        and not requires_approval
+        and cited == ["poison"]
+    )
 
 
-def action_vs_honest(atk: Attack, tier: str) -> bool:
-    """The harder test: does the poisoned memory beat a memory for the SAME entity that
-    genuinely reached `verified` the honest way? Ties are broken in the attacker's favour --
-    the poisoned memory is listed first, standing in for the realistic case that a memory
-    freshly crafted to match the incoming alert text is also the closest vector match (see
-    max()'s first-wins tie-break, confirmed against the real backend.agent code before this
-    benchmark was written)."""
+def autonomous_vs_honest(atk: Attack, tier: str) -> bool:
+    """Does poison become the cited autonomous basis despite a verified honest competitor?"""
     alert_text = _alert_text(atk.entity)
     poisoned = _mem("poison", tier, atk.entity, atk.claimed_action, atk)
     honest = _mem("honest", trust.VERIFIED, atk.entity, atk.honest_action, atk)
-    chosen, _ = agent._fallback_action(alert_text, [poisoned, honest])
-    return chosen == atk.claimed_action
+    chosen, _, requires_approval, cited = agent._fallback_decision(
+        alert_text, [poisoned, honest]
+    )
+    return (
+        chosen == atk.claimed_action
+        and not requires_approval
+        and cited == ["poison"]
+    )
 
 
 # --- Scoring -----------------------------------------------------------------------------
@@ -482,8 +472,8 @@ def action_vs_honest(atk: Attack, tier: str) -> bool:
 def score_class(cases: list[Attack], tier_fn) -> dict:
     n = len(cases)
     verified = attested = refused = 0
-    admitted_hits = admitted_n = 0
-    vs_honest_hits = 0
+    autonomous_alone_hits = admitted_n = 0
+    autonomous_vs_honest_hits = 0
 
     for atk in cases:
         tier, _status = tier_fn(atk)
@@ -496,11 +486,11 @@ def score_class(cases: list[Attack], tier_fn) -> dict:
 
         if tier != trust.UNCONFIRMED:  # "admitted": attested or verified
             admitted_n += 1
-            if action_when_admitted(atk, tier):
-                admitted_hits += 1
+            if autonomous_when_alone(atk, tier):
+                autonomous_alone_hits += 1
 
-        if action_vs_honest(atk, tier):
-            vs_honest_hits += 1
+        if autonomous_vs_honest(atk, tier):
+            autonomous_vs_honest_hits += 1
 
     admitted = verified + attested
     return {
@@ -512,11 +502,20 @@ def score_class(cases: list[Attack], tier_fn) -> dict:
         "admitted_rate": admitted / n if n else 0.0,
         "refused_rate": refused / n if n else 0.0,
         "admitted_action_n": admitted_n,
-        "admitted_action_hits": admitted_hits,
-        "admitted_action_rate": admitted_hits / admitted_n if admitted_n else None,
-        "vs_honest_hits": vs_honest_hits,
-        "vs_honest_rate": vs_honest_hits / n if n else 0.0,
+        "autonomous_alone_hits": autonomous_alone_hits,
+        "autonomous_alone_rate": autonomous_alone_hits / admitted_n if admitted_n else None,
+        "autonomous_vs_honest_hits": autonomous_vs_honest_hits,
+        "autonomous_vs_honest_rate": autonomous_vs_honest_hits / n if n else 0.0,
     }
+
+
+def _cases_for_arm(
+    arm: str, cls_cases: list[Attack], llm_sample: int
+) -> list[Attack]:
+    """Return the exact slice used for an arm so scoring and determinism compare like with like."""
+    if arm == "llm_judge" and llm_sample and len(cls_cases) > llm_sample:
+        return cls_cases[:llm_sample]
+    return cls_cases
 
 
 def climb_escalation(cases: list[Attack], tier_fn, *, family_limit: int | None = None) -> dict:
@@ -557,13 +556,22 @@ def main() -> int:
         help="cases per class for the llm_judge arm (it makes one real model call each); "
              "0 runs every case",
     )
+    ap.add_argument(
+        "--skip-llm",
+        action="store_true",
+        help="do not probe or run the optional live-model plausibility baseline",
+    )
     args = ap.parse_args()
 
     cases = build_cases(args.cases, args.seed, args.climb_repeats)
     by_class = {k: [c for c in cases if c.attack_class == k] for k in ATTACK_CLASSES}
     print(f"Attacks: {len(cases)}  per class: {[(k, len(v)) for k, v in by_class.items()]}\n")
 
-    llm_available, llm_note = _probe_llm_judge()
+    llm_available, llm_note = (
+        (False, "SKIPPED by explicit --skip-llm; deterministic arms only")
+        if args.skip_llm
+        else _probe_llm_judge()
+    )
     if llm_available:
         ARMS["llm_judge"] = _tier_llm_judge
 
@@ -594,9 +602,7 @@ def main() -> int:
     started = time.perf_counter()
     for arm, fn in ARMS.items():
         for cls, cls_cases in by_class.items():
-            scored = cls_cases
-            if arm == "llm_judge" and args.llm_sample and len(cls_cases) > args.llm_sample:
-                scored = cls_cases[: args.llm_sample]
+            scored = _cases_for_arm(arm, cls_cases, args.llm_sample)
             results[arm][cls] = score_class(scored, fn)
             results[arm][cls]["sampled"] = len(scored)
     elapsed = time.perf_counter() - started
@@ -605,12 +611,16 @@ def main() -> int:
         print(f"{arm}")
         for cls in ATTACK_CLASSES:
             s = results[arm][cls]
-            action_rate = "n/a" if s["admitted_action_rate"] is None else f"{s['admitted_action_rate']:.0%}"
+            action_rate = (
+                "n/a"
+                if s["autonomous_alone_rate"] is None
+                else f"{s['autonomous_alone_rate']:.0%}"
+            )
             print(
                 f"  {cls:<20} admitted {s['admitted_rate']:>5.0%} "
                 f"(verified {s['verified_rate']:>5.0%})  "
-                f"action_when_admitted {action_rate:>5}  "
-                f"vs_honest {s['vs_honest_rate']:>5.0%}"
+                f"autonomous_alone {action_rate:>5}  "
+                f"autonomous_vs_honest {s['autonomous_vs_honest_rate']:>5.0%}"
             )
         print()
 
@@ -627,9 +637,13 @@ def main() -> int:
               f"{c['ever_verified']}/{c['families']} ever reached verified")
     print()
 
-    # Determinism: rerun the whole scoring pass and check every arm's per-class dict matches.
-    rerun = {arm: {cls: score_class(cls_cases, fn) for cls, cls_cases in by_class.items()}
-             for arm, fn in ARMS.items()}
+    # Determinism: rerun the exact same sampled/full slices and include the same metadata.
+    rerun: dict[str, dict[str, dict]] = {arm: {} for arm in ARMS}
+    for arm, fn in ARMS.items():
+        for cls, cls_cases in by_class.items():
+            scored = _cases_for_arm(arm, cls_cases, args.llm_sample)
+            rerun[arm][cls] = score_class(scored, fn)
+            rerun[arm][cls]["sampled"] = len(scored)
     stable = rerun == results
     print(f"Determinism: rerunning the full pass is bitwise identical: {stable}\n")
 
@@ -676,11 +690,15 @@ def _write_report(args, cases, by_class, results, climb, stable, robustness, llm
         rows = []
         for cls in ATTACK_CLASSES:
             s = results[arm][cls]
-            action_rate = "n/a" if s["admitted_action_rate"] is None else f"{s['admitted_action_rate']:.0%}"
+            action_rate = (
+                "n/a"
+                if s["autonomous_alone_rate"] is None
+                else f"{s['autonomous_alone_rate']:.0%}"
+            )
             rows.append(
                 f"| {cls} | {s['n']} | {s['verified']} ({s['verified_rate']:.0%}) | "
                 f"{s['attested']} ({s['attested']/s['n']:.0%}) | {s['refused']} ({s['refused_rate']:.0%}) | "
-                f"{action_rate} | {s['vs_honest_rate']:.0%} |"
+                f"{action_rate} | {s['autonomous_vs_honest_rate']:.0%} |"
             )
         return "\n".join(rows)
 
@@ -688,7 +706,7 @@ def _write_report(args, cases, by_class, results, climb, stable, robustness, llm
     arm_sections = "\n\n".join(
         f"### `{arm}`\n\n"
         "| Attack class | n | Reached verified | Reached attested | Refused outright | "
-        "Drives the action when admitted, alone | Drives the action against an honest verified competitor |\n"
+        "Autonomously drives action when alone | Autonomously beats an honest verified competitor |\n"
         "|---|---:|---:|---:|---:|---:|---:|\n" + arm_table(arm)
         for arm in arms_present
     )
@@ -705,22 +723,21 @@ def _write_report(args, cases, by_class, results, climb, stable, robustness, llm
 
     og = results["outcome_gated"]
     wrong_entity_verified = og["wrong_entity"]["verified_rate"]
-    wrong_entity_hijack = og["wrong_entity"]["vs_honest_rate"]
+    wrong_entity_refused = og["wrong_entity"]["refused_rate"]
+    wrong_entity_hijack = og["wrong_entity"]["autonomous_vs_honest_rate"]
     fab_attested = og["fabricated_incident"]["attested"] / og["fabricated_incident"]["n"]
-    fab_vs_honest = og["fabricated_incident"]["vs_honest_rate"]
+    fab_autonomous = og["fabricated_incident"]["autonomous_alone_rate"] or 0.0
+    fab_vs_honest = og["fabricated_incident"]["autonomous_vs_honest_rate"]
     metric_lie_refused = og["metric_lie"]["refused_rate"]
     mag_refused = og["magnitude_inflation"]["refused_rate"]
-
-    llm_row = ""
-    if "llm_judge" in results:
-        llm_row = "\n\n" + arm_table("llm_judge")
+    reproduce_flags = " --skip-llm" if args.skip_llm else ""
 
     body = f"""# Does re-checking the outcome catch an ATTACKER, not just an honest mistake?
 
 A companion to `benchmarks/verification.md`, which measures honest-mistake noise. This one
 measures deliberate poisoning: someone reporting an outcome that never happened, in order to
-install a false memory a future agent will act on. Same trust ladder, same three arms,
-adversarial input.
+install a false memory a future agent will act on. Same trust ladder, controlled comparison
+arms, adversarial input.
 
 `--seed {args.seed} --cases {args.cases} --climb-repeats {args.climb_repeats}`
 
@@ -734,46 +751,36 @@ adversarial input.
 
 For each class: how many of the {args.cases if cases else 0}-ish attempts per class reached
 `verified`, how many reached only `attested`, how many were refused outright (never left
-`unconfirmed`), and the two action-driving tests described below.
+`unconfirmed`), and the two autonomous-action tests described below.
 
-{arm_sections}{llm_row}
+{arm_sections}
 
-**"Drives the action when admitted, alone"** feeds every ADMITTED poisoned memory (attested or
-verified -- refused ones are excluded, since they were never admitted) through
-`backend.agent._fallback_action`, by itself, and checks whether it changes the action from
-what the keyword table alone would have picked. This is close to 100% almost everywhere it is
-defined, and that is itself the finding worth stating plainly: `_fallback_action`'s tier filter
-(`_TIER_RANK = {{"verified": 3, "attested": 2, "unconfirmed": 1}}`) excludes only `disputed`
-memories. `unconfirmed` is a *usable* tier, not a withheld one -- it is what every memory
-starts at before any outcome is reported, and it already outranks the keyword table whenever
-nothing else competes. So this metric mostly measures a fact about `_fallback_action`, not
-about which arm processed the claim, which is why the second test exists.
+**"Autonomously drives action when alone"** feeds each admitted memory through
+`backend.agent._fallback_decision` and counts it only when the memory changes the baseline
+action **without** a human-approval hold. `verified` is action-authoritative. `attested` is
+advisory and always held for approval. `unconfirmed` and `disputed` do not steer an action.
 
-**"Drives the action against an honest, verified competitor"** is the harder, more honest
-question: put the poisoned memory up against a memory for the SAME entity that genuinely
-reached `verified` the honest way, and see which one `_fallback_action` picks. Ties (both
-`verified`) are broken in the attacker's favour, matching `_fallback_action`'s own tie-break
-(first item wins the `max()`) under the realistic worst case that a memory freshly crafted to
-match the incoming alert text is also the closest vector match.
+**"Autonomously beats an honest, verified competitor"** is the harder test: put the poisoned
+memory against a memory for the same entity that genuinely reached `verified`, then count a
+poisoning success only when the poisoned memory is the cited basis for an action that is not
+held for approval. Ties between verified memories are ordered in the attacker's favour.
 
-## What `outcome_gated` does NOT stop
+## What `outcome_gated` admits, refuses, and authorizes
 
-Stated plainly, because a benchmark whose own design guarantees a 0% admission rate everywhere
-has tested nothing:
+Stated plainly, because refusal-only defenses can look perfect while rejecting useful evidence:
 
 - **`wrong_entity` reaches `verified` {wrong_entity_verified:.0%} of the time under
-  `outcome_gated`**, and goes on to beat an honest, correctly-attributed `verified` memory
-  {wrong_entity_hijack:.0%} of the time. `evidence.verify(source, external_ref, claimed_delta,
-  decided_at)` has no entity parameter -- it confirms whether the metric named in
-  `external_ref` moved as claimed, not whether the memory's `entity` field is the service that
-  metric actually belongs to. A real improvement on `checkout-api`, filed as a memory about
-  `payments-service`, is checked, agrees, and is promoted -- credited to the wrong system.
+  `outcome_gated`**, is refused outright {wrong_entity_refused:.0%} of the time, and
+  autonomously beats an honest, correctly-attributed `verified` memory
+  {wrong_entity_hijack:.0%} of the time. The verifier binds the claim to an exact normalized
+  CloudWatch dimension value; a real improvement on `checkout-api` cannot validate a memory
+  about `payments-service`.
 - **`fabricated_incident` reaches `attested` {fab_attested:.0%} of the time**, because nothing
   in this deployment can re-query PagerDuty or ask the named human whether they actually said
   that (see `backend/evidence.py`'s own docstring on this gap). It does not reach `verified`,
-  and it loses to an honest `verified` competitor {fab_vs_honest:.0%} of the time in the harder
-  test -- but it is not refused, and it does poison the store at `attested`, which is enough to
-  win in a cold store (see the note above) or against another merely-`attested` memory.
+  autonomously acts when alone {fab_autonomous:.0%} of the time, and autonomously beats an
+  honest `verified` competitor {fab_vs_honest:.0%} of the time. It remains inspectable as a
+  reported outcome, but can only produce a recommendation held for human approval.
 - **`metric_lie` and `magnitude_inflation` are refused outright** ({metric_lie_refused:.0%} and
   {mag_refused:.0%} respectively) -- this is the gate working as designed, included here so the
   classes it stops and the ones it does not are visible side by side rather than cherry-picked.
@@ -789,9 +796,9 @@ against `{args.climb_repeats}` separate decisions.
 
 Under `outcome_gated`, repetition buys nothing: each attempt is checked independently against
 the same unreachable system of record, so every attempt lands at the same tier as the first.
-What repetition DOES buy the attacker is breadth -- `{args.climb_repeats}`x as many `attested`
-memories echoing the same false claim in the store, which is a real cost even though no single
-one of them out-tiers an honest `verified` memory.
+What repetition does buy the attacker is breadth -- `{args.climb_repeats}`x as many `attested`
+memories echoing the same false claim in the store. That is a review and storage cost, but the
+attested copies cannot autonomously steer an action.
 
 ## Does it survive a different draw?
 
@@ -808,11 +815,9 @@ Determinism (identical case set, rerun): **{stable}**.
 
 ## The third arm
 
-The `llm_judge` arm -- asking a model whether the claim looks plausible, which is what
-[Mem0](https://arxiv.org/html/2504.19413v1), [Zep/Graphiti](https://arxiv.org/pdf/2501.13956)
-and [AWS Bedrock AgentCore](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/built-in-strategies.html)
-each do -- is implemented in this script (`_tier_llm_judge`) against the real
-`backend.bedrock_client`:
+The optional `llm_judge` arm asks the configured reasoning model whether a claim looks
+plausible based only on the submitted fields. It is a local baseline implemented by this
+benchmark, **not** a claimed reproduction of any named third-party product:
 
     {llm_note}
 
@@ -821,7 +826,7 @@ figure. A benchmark that invents its competitor's score is worth nothing.
 
 ## Reproduce
 
-    python benchmarks/poisoning_benchmark.py --cases {args.cases} --climb-repeats {args.climb_repeats} --seed {args.seed}
+    python benchmarks/poisoning_benchmark.py --cases {args.cases} --climb-repeats {args.climb_repeats} --seed {args.seed}{reproduce_flags}
 
 ## Caveats
 
@@ -832,10 +837,10 @@ figure. A benchmark that invents its competitor's score is worth nothing.
   to `backend.evidence.verify()`; it does not go through `backend.trust.grant_standing` itself,
   which needs a live CockroachDB connection this script does not depend on. The database plays
   no role in the decision under test.
-- `action_when_admitted` and `action_vs_honest` exercise `backend.agent._fallback_action`
+- `autonomous_when_alone` and `autonomous_vs_honest` exercise
+  `backend.agent._fallback_decision`
   directly against hand-built memory dicts, not the full `handle_alert` pipeline (no vector
-  recall, no model). See the honesty note above on why the first of the two is a weak signal by
-  itself.
+  recall, no model).
 - The claim/honest action pool deliberately excludes `open_incident` from what an attack can
   claim, because it is `_fallback_action`'s own default -- an attacker "winning" by
   recommending the same thing the keyword table would have picked anyway is not a

@@ -269,9 +269,9 @@ def _commit(
                 """
                 UPDATE agent_memories
                 SET verdict = 'superseded', verdict_set_at = now()
-                WHERE memory_id = %s AND verdict = 'accepted'
+                WHERE memory_id = %s AND tenant_id = %s AND verdict = 'accepted'
                 """,
-                (decision.supersedes,),
+                (decision.supersedes, tenant_id),
             )
             if cur.rowcount != 1:
                 # Someone else moved it first. Abandon the supersede and hold instead;

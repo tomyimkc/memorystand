@@ -1,22 +1,20 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The outcome gate: granting standing to memories that survived contact with reality.
+"""The outcome gate: granting action authority to memories that survived an external check.
 
-This is the one thing MemoryStand does that shipped agent-memory products do not.
+Agent-memory systems commonly use recency, source authority, extraction confidence, or
+model-led reconciliation to manage stored memory. MemoryStand adds a separate boundary:
+storage and recall do not by themselves grant permission to steer an autonomous action.
 
-Every mainstream system decides how much to trust a stored memory using one of three
-signals: recency (the newest write wins), source authority (a runbook outranks Slack), or
-model self-consistency (ask the model whether it still believes itself). All three are
-the system grading its own homework.
-
-MemoryStand uses a fourth: did acting on this memory actually work? A memory produced by a
-decision is promoted to ``verified`` only when an external, non-model signal confirms the
-decision succeeded -- PagerDuty resolving the incident, a monitored metric recovering, or
-a named human signing off. If the action was rolled back or turned out to be a false
-positive, the memories it produced are demoted to ``disputed``.
+A produced memory reaches ``verified`` only when a machine-checkable, non-model signal is
+re-queried, bound to that memory's entity, and corroborates the claimed direction and
+magnitude. A PagerDuty resolution or human sign-off that this deployment cannot re-check
+lands at ``attested`` and remains advisory; an action based on it requires approval. If the
+action was rolled back or turned out to be a false positive, the memories it produced move
+to ``disputed``.
 
 INVARIANT, and it is load-bearing: **no model call may occur on this path.** This module
-imports no model client -- its entire import list is ``typing``, ``psycopg2.extras`` and
-``. db`` -- and ``assert_no_model_calls()`` is invoked at the top of every
+imports no model client -- its only network-capable dependency is the CloudWatch evidence
+checker -- and ``assert_no_model_calls()`` is invoked at the top of every
 ``grant_standing()`` call, so the invariant is checked on the live path rather than
 asserted in prose. If a model could influence promotion, the claim above would be false
 and the product would collapse into the self-consistency bucket with everything else.
@@ -215,9 +213,9 @@ def _apply(
             UPDATE agent_decisions
             SET outcome = %s, outcome_confirmed_at = now(), outcome_metric_delta = %s,
                 outcome_source = %s, outcome_external_ref = %s
-            WHERE decision_id = %s
+            WHERE decision_id = %s AND tenant_id = %s
             """,
-            (outcome, delta, source, ref, decision_id),
+            (outcome, delta, source, ref, decision_id, tenant_id),
         )
 
         promoted: list[str] = []
@@ -274,8 +272,8 @@ def _apply(
     }
 
 
-def _decided_at(tenant_id: str, decision_id: str):
-    """Read the decision's timestamp and subject, so evidence can be checked before the write.
+def _decision_evidence_context(tenant_id: str, decision_id: str):
+    """Read the decision timestamp and every produced-memory subject before the write.
 
     Deliberately a separate small read rather than doing the external check inside
     ``_apply``: ``_apply`` runs under ``retry_serializable``, and a CloudWatch round trip
@@ -286,18 +284,21 @@ def _decided_at(tenant_id: str, decision_id: str):
     conn = db.get_conn()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            # The entity comes along because evidence has to be checked against the SUBJECT of
-            # the claim, not just the number. A confirmable metric filed under the wrong
-            # service was a clean path to `verified` until benchmarks/poisoning_benchmark.py
-            # found it.
+            # Evidence has to be checked against the SUBJECT of the claim, not just the number.
+            # Return every produced-memory entity rather than an arbitrary LIMIT 1: a decision
+            # may produce memories about several entities, and row order must not decide whether
+            # otherwise valid evidence is accepted.
             cur.execute(
                 """
                 SELECT d.decided_at,
-                       (SELECT m.entity FROM agent_memories m
-                        WHERE m.memory_id = ANY(d.produced_memory_ids)
-                          AND m.tenant_id = d.tenant_id
-                          AND m.entity IS NOT NULL
-                        LIMIT 1) AS entity
+                       ARRAY(
+                           SELECT DISTINCT m.entity
+                           FROM agent_memories m
+                           WHERE m.memory_id = ANY(d.produced_memory_ids)
+                             AND m.tenant_id = d.tenant_id
+                             AND m.entity IS NOT NULL
+                           ORDER BY m.entity
+                       )::STRING[] AS entities
                 FROM agent_decisions d
                 WHERE d.decision_id = %s AND d.tenant_id = %s
                 """,
@@ -305,7 +306,11 @@ def _decided_at(tenant_id: str, decision_id: str):
             )
             row = cur.fetchone()
         conn.commit()
-        return (row["decided_at"], row["entity"]) if row else (None, None)
+        return (
+            (row["decided_at"], [str(entity) for entity in (row["entities"] or [])])
+            if row
+            else (None, [])
+        )
     finally:
         db.put_conn(conn)
 
@@ -329,9 +334,21 @@ def grant_standing(tenant_id: str, decision_id: str, evidence: dict[str, Any]) -
     # the half of the central claim that used to be missing: _validate only ever confirmed
     # that external_ref was a non-empty string, so "an external signal said so" was
     # something the caller asserted rather than something anyone checked.
-    decided_at, entity = _decided_at(tenant_id, decision_id)
+    decided_at, entities = _decision_evidence_context(tenant_id, decision_id)
+    # Metric evidence must identify at least one produced-memory subject. Pick the matching
+    # subject deterministically for the external check; `_apply` independently filters which
+    # individual memories receive VERIFIED standing. If none match, pass a real produced
+    # subject (when one exists) so evidence.verify returns ENTITY_MISMATCH rather than hiding
+    # the attribution error as an unbound claim.
+    entity = next(
+        (candidate for candidate in entities if evidence_check.entity_matches(candidate, ref)),
+        entities[0] if entities else None,
+    )
     verification = evidence_check.verify(source, ref, delta, decided_at, entity=entity)
-    if verification.status == evidence_check.CONTRADICTED:
+    if verification.status in {
+        evidence_check.CONTRADICTED,
+        evidence_check.ENTITY_MISMATCH,
+    }:
         raise OutcomeRejected(
             f"the external system of record disagrees: {verification.detail}"
         )

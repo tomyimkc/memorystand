@@ -340,7 +340,7 @@ beat3_human_corrects() {
 beat4_alert_decide() {
   if [[ "$QUIET" -eq 0 ]]; then
     beat_banner 4 "An alert arrives -- recall, propose, decide"
-    say_narration "An incident hits: the payments gateway's latency is spiking. Before doing anything, the agent recalls what it knows about checkout-api's breaker -- that 500-millisecond fact comes back first, ranked by CockroachDB's own vector index. It proposes raising the timeout to 1200 milliseconds, and records that decision, with the recalled memory as its evidence."
+    say_narration "An incident hits: the payments gateway's latency is spiking. Recall shows the recorded history, but unchecked rows cannot steer an autonomous action. This scripted CLI beat records a caller-supplied action and the full retrieval receipt; the deployed API separately reports which verified memories, if any, were actually cited."
     countdown
     show_cmd "$PYTHON cli/memorystand.py recall --query \"checkout-api circuit breaker timeout gateway latency incident\""
   fi
@@ -386,7 +386,7 @@ beat4_alert_decide() {
 beat5_grant_standing() {
   if [[ "$QUIET" -eq 0 ]]; then
     beat_banner 5 "PagerDuty resolves -- grant_standing (0 model calls)"
-    say_narration "Here's the part nobody else does. The incident resolves in PagerDuty. That real-world outcome -- not a model -- raises this memory's standing, in one serializable CockroachDB transaction, with zero model calls. PagerDuty has no machine-checkable record, so it reaches attested; a CloudWatch metric is what carries a memory all the way to verified. Either way, it's the world confirming it, not the model deciding it."
+    say_narration "The incident resolves in PagerDuty. Because this deployment cannot re-check PagerDuty, the memory reaches attested and remains advisory. A machine-checkable, entity-bound CloudWatch metric is required for verified standing and autonomous authority. The whole outcome path records and re-tiers in one serializable transaction with zero model calls."
     countdown
     show_cmd "$PYTHON cli/memorystand.py confirm --decision-id ${DECISION_ID:+$(short "$DECISION_ID")} --outcome success --source pagerduty --ref INC-7734"
   fi
