@@ -23,12 +23,12 @@ Design decisions that matter for a judge reading this file:
     ``/confirm_outcome`` -- compared with ``hmac.compare_digest``. It originally gated only
     the first two, on the reasoning that those spend real money and quota. That reasoning
     left the route which GRANTS TRUST wide open, and anyone with a decision id could promote
-    memories to ``verified``. Gate by what a route changes, not by what it costs. The four
-    read routes (``/recall``, ``/timemachine``,
-    ``/diff``, ``/health``) stay open on purpose: they are index-backed, cheap, and a
-    judge needs to be able to poke them directly from a browser or curl without first
-    being handed a secret. Gating reads the same way would just be security theatre
-    around data that is, by design, meant to be inspectable.
+    memories to ``verified``. Gate by what a route changes, not by what it costs.
+
+  * Public reads are demo-scoped. ``/recall``, ``/timemachine`` and ``/diff`` remain directly
+    inspectable without a credential, but only for the isolated tenant named by the deployment.
+    The operator credential can inspect another tenant. Knowing a tenant UUID is therefore not
+    enough to enumerate its memory. ``/health`` stays public and contains no tenant memory.
 
   * Graceful degradation. A CockroachDB connection or timeout error never becomes a
     stack trace in the response. It becomes ``{"degraded": "memory_unreachable"}`` with
@@ -96,6 +96,7 @@ DEMO_TENANT_SSM_PARAM = os.environ.get("MEMORYSTAND_DEMO_TENANT_SSM_PARAM", "/me
 
 WRITE_PATHS = {"/ingest", "/decide", "/confirm_outcome"}
 SECRET_GATED_PATHS = {"/ingest", "/decide", "/confirm_outcome"}
+MAX_RECALL_K = int(os.environ.get("MEMORYSTAND_MAX_RECALL_K", "20"))
 
 CHAT_MODEL_ID = os.environ.get("MEMORYSTAND_CHAT_MODEL", "amazon.nova-lite-v1:0")
 
@@ -189,6 +190,20 @@ def _require(params: dict[str, Any], key: str) -> Any:
     return value
 
 
+def _bounded_int(
+    params: dict[str, Any], key: str, default: int, *, minimum: int, maximum: int
+) -> int:
+    """Parse an integer request parameter and enforce a public resource budget."""
+    raw = params.get(key, default)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise _BadRequest(f"{key} must be an integer") from exc
+    if not minimum <= value <= maximum:
+        raise _BadRequest(f"{key} must be between {minimum} and {maximum}")
+    return value
+
+
 def _get_header(headers: dict[str, str], name: str) -> str | None:
     name = name.lower()
     for k, v in (headers or {}).items():
@@ -262,6 +277,36 @@ def _scope_tenant(credential: str, tenant_id: str) -> None:
         )
 
 
+def _optional_credential(headers: dict[str, str]) -> str | None:
+    """Identify an optional credential without requiring one for public demo reads."""
+    provided = _get_header(headers, SHARED_SECRET_HEADER) or ""
+    operator = _configured_shared_secret()
+    demo = _configured_demo_secret()
+    if operator and hmac.compare_digest(provided, operator):
+        return "operator"
+    if demo and hmac.compare_digest(provided, demo):
+        return "demo"
+    return None
+
+
+def _scope_read_tenant(headers: dict[str, str], tenant_id: str) -> None:
+    """Keep unauthenticated reads inside the isolated public demo tenant.
+
+    Local development remains open when no demo tenant is configured. On the public deployment,
+    an unauthenticated caller may inspect only the server-selected demo tenant. The operator
+    credential retains cross-tenant administration; merely knowing another tenant UUID does not.
+    """
+    demo_tenant = _configured_demo_tenant()
+    if not demo_tenant or str(tenant_id) == str(demo_tenant):
+        return
+    if _optional_credential(headers) == "operator":
+        return
+    raise _Unauthorized(
+        "public reads are restricted to the isolated demo tenant; operator authentication "
+        "is required for any other tenant"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Structured logging -- one helper, one line per event, every line JSON.
 # ---------------------------------------------------------------------------
@@ -326,7 +371,7 @@ def _route_decide(body: dict[str, Any], headers: dict[str, str], request_id: str
     _scope_tenant(credential, tenant_id)
     agent_id = _require(body, "agent_id")
     query = _require(body, "query")
-    k = int(body.get("k", 5))
+    k = _bounded_int(body, "k", 5, minimum=1, maximum=MAX_RECALL_K)
     task_id = body.get("task_id")
 
     consulted = memory.recall(tenant_id, agent_id, query, k=k)
@@ -343,6 +388,7 @@ def _route_decide(body: dict[str, Any], headers: dict[str, str], request_id: str
         # never exercised. Callers who do this are labelled, loudly, as not-the-agent.
         reasoning_source = "caller_supplied"
         model_calls = 0
+        cited_memory_ids: list[str] = []
     else:
         proposed = agent.propose(query, consulted)
         action = proposed["action"]
@@ -350,6 +396,7 @@ def _route_decide(body: dict[str, Any], headers: dict[str, str], request_id: str
         requires_approval = requires_approval or proposed["requires_approval"]
         reasoning_source = proposed["reasoning_source"]
         model_calls = proposed["model_calls"]
+        cited_memory_ids = list(proposed["cited_memory_ids"])
 
     produced = tuple(str(m) for m in (body.get("produced_memory_ids") or ()))
     result = decisions.decide(
@@ -379,6 +426,7 @@ def _route_decide(body: dict[str, Any], headers: dict[str, str], request_id: str
         "rationale": rationale,
         "reasoning_source": reasoning_source,
         "model_calls": model_calls,
+        "cited_memory_ids": cited_memory_ids,
     }
 
 
@@ -415,9 +463,10 @@ def _route_confirm_outcome(body: dict[str, Any], headers: dict[str, str], reques
 
 def _route_recall(qs: dict[str, Any], headers: dict[str, str], request_id: str) -> tuple[int, dict]:
     tenant_id = _require(qs, "tenant_id")
+    _scope_read_tenant(headers, tenant_id)
     agent_id = qs.get("agent_id")
     query = _require(qs, "q")
-    k = int(qs.get("k", 5))
+    k = _bounded_int(qs, "k", 5, minimum=1, maximum=MAX_RECALL_K)
     results = memory.recall(tenant_id, agent_id, query, k=k)
     _log("recall_served", request_id, tenant_id=tenant_id, count=len(results))
     return 200, {"results": results}
@@ -425,6 +474,7 @@ def _route_recall(qs: dict[str, Any], headers: dict[str, str], request_id: str) 
 
 def _route_timemachine(qs: dict[str, Any], headers: dict[str, str], request_id: str) -> tuple[int, dict]:
     tenant_id = _require(qs, "tenant_id")
+    _scope_read_tenant(headers, tenant_id)
     decision_id = _require(qs, "decision_id")
     try:
         result = replay.cross_examine(tenant_id, decision_id)
@@ -436,6 +486,7 @@ def _route_timemachine(qs: dict[str, Any], headers: dict[str, str], request_id: 
 
 def _route_diff(qs: dict[str, Any], headers: dict[str, str], request_id: str) -> tuple[int, dict]:
     tenant_id = _require(qs, "tenant_id")
+    _scope_read_tenant(headers, tenant_id)
     instant = _require(qs, "instant")
     result = replay.belief_diff(tenant_id, instant)
     _log("diff_served", request_id, tenant_id=tenant_id, count=len(result))
@@ -459,7 +510,7 @@ def _route_health(qs: dict[str, Any], headers: dict[str, str], request_id: str) 
         body["database"] = "reachable"
     except Exception as exc:  # noqa: BLE001
         body["database"] = "unreachable"
-        body["database_error"] = f"{type(exc).__name__}: {exc}"
+        body["database_error"] = type(exc).__name__
     try:
         body["gc_window_seconds"] = replay.gc_window_seconds()
     except Exception:  # noqa: BLE001
@@ -574,7 +625,7 @@ def _response(status: int, body: Any, *, cors: bool = True, extra_headers: dict[
     headers = {"content-type": "application/json"}
     if cors:
         headers["access-control-allow-origin"] = "*"
-        headers["access-control-allow-methods"] = "GET,OPTIONS"
+        headers["access-control-allow-methods"] = "GET,POST,OPTIONS"
     if extra_headers:
         headers.update(extra_headers)
     body_str = "" if body is None else json.dumps(body, default=_json_default)
@@ -694,6 +745,8 @@ def lambda_handler(event: dict[str, Any], context: Any = None) -> dict[str, Any]
         return _response(404, {"error": "not_found", "detail": str(exc)}, cors=True)
     except trust.OutcomeRejected as exc:
         return _response(400, {"error": "outcome_rejected", "detail": str(exc)}, cors=True)
+    except decisions.InvalidMemoryReference as exc:
+        return _response(400, {"error": "invalid_memory_reference", "detail": str(exc)}, cors=True)
     except replay.InvalidInstant as exc:
         # A refused instant is the caller's fault, not the server's. Returning 500 here
         # would report a rejected injection attempt as "MemoryStand crashed", which both
@@ -719,7 +772,15 @@ def lambda_handler(event: dict[str, Any], context: Any = None) -> dict[str, Any]
             path=path,
             detail=f"{type(exc).__name__}: {exc}",
         )
-        return _response(500, {"error": "internal_error", "detail": str(exc)}, cors=True)
+        return _response(
+            500,
+            {
+                "error": "internal_error",
+                "detail": "the request could not be completed",
+                "request_id": request_id,
+            },
+            cors=True,
+        )
 
 
 # Alias some AWS Lambda configurations expect (``backend.handler.handler``); the console

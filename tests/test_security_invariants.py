@@ -158,12 +158,9 @@ def test_attacker_cannot_promote_another_tenants_memory_via_their_own_decision(
     verbatim (``handler.py``) and inserted without validation (``decisions.py``), so nothing
     stopped them.
 
-    The decision-row lookup was tenant-scoped; the UPDATE that actually moves the tier was
-    not. Both statements sit in ``trust._apply`` fifty lines apart, and the docstring
-    asserting the fix described only the first one.
-
-    The victim's memory must come back untouched, and -- just as important -- the attacker's
-    own call must report an empty promotion set rather than a success it did not achieve.
+    The strongest boundary is at decision creation: a tenant must not be allowed to persist a
+    decision that points at another tenant's memories. The tenant-scoped promotion UPDATE remains
+    defence in depth, but the malformed decision itself is now rejected.
     """
     victim = memory.remember(
         tenant_id, agent_id, "checkout-api circuit breaker trips at 500ms, confirmed by on-call"
@@ -177,22 +174,15 @@ def test_attacker_cannot_promote_another_tenants_memory_via_their_own_decision(
     attacker_tenant = str(uuid.uuid4())
     attacker_agent = str(uuid.uuid4())
     try:
-        attack = decisions.decide(
-            attacker_tenant,
-            attacker_agent,
-            action="scale_up",
-            rationale="a decision the attacker is entitled to file",
-            consulted_memory_ids=[],
-            produced_memory_ids=[victim_id],          # <-- not the attacker's memory
-        )
-        result = trust.grant_standing(
-            attacker_tenant,
-            attack["decision_id"],
-            {"outcome": "success", "source": "pagerduty", "external_ref": "INC-ATTACK"},
-        )
-        assert [str(m) for m in result["promoted"]] == [], (
-            "the promotion path reported promoting a memory belonging to another tenant"
-        )
+        with pytest.raises(decisions.InvalidMemoryReference, match="owned by this tenant"):
+            decisions.decide(
+                attacker_tenant,
+                attacker_agent,
+                action="scale_up",
+                rationale="a decision the attacker is entitled to file",
+                consulted_memory_ids=[],
+                produced_memory_ids=[victim_id],          # <-- not the attacker's memory
+            )
 
         after = memory.get(tenant_id, victim_id)
         assert after is not None
@@ -221,15 +211,13 @@ def test_one_metric_only_verifies_memories_about_its_own_entity(tenant_id, agent
     only the memory whose own entity matches the checked metric reaches 'verified'; the other had
     a reported-good outcome but no metric of its own, so it lands at 'attested', not 'verified'.
 
-    `_decided_at` picks which entity to check with a `LIMIT 1` whose result is unordered, so the
-    checked entity is pinned here to make the assertion deterministic; the security property --
-    the unrelated entity never reaches 'verified' -- holds whichever entity is picked.
+    The evidence lookup must consider every produced-memory entity rather than selecting an
+    arbitrary first row. Alphabetical ordering places ``ledger-worker`` before
+    ``payments-service`` here, so this also proves valid evidence is not rejected merely because
+    the matching subject was not first.
     """
     ref = "AWS/Lambda|Duration|FunctionName=payments-service"
     monkeypatch.setattr(evidence, "_average", _averages(100.0, 60.0))
-    real_decided_at = trust._decided_at
-    monkeypatch.setattr(trust, "_decided_at",
-                        lambda t, d: (real_decided_at(t, d)[0], "payments-service"))
 
     mem_x = memory.remember(tenant_id, agent_id, "scaling payments-service cleared the spike",
                             entity="payments-service")
@@ -373,6 +361,18 @@ def _http(path, body, secret):
     }
 
 
+def _http_get(path, query, secret=None):
+    headers = {}
+    if secret is not None:
+        headers["x-memorystand-secret"] = secret
+    return {
+        "requestContext": {"http": {"method": "GET", "path": path}, "requestId": "r"},
+        "rawPath": path,
+        "headers": headers,
+        "queryStringParameters": query,
+    }
+
+
 def test_demo_credential_cannot_write_to_another_tenant(monkeypatch, agent_id):
     """The whole reason the demo secret can be published.
 
@@ -467,3 +467,118 @@ def test_health_omits_the_demo_block_when_unconfigured(monkeypatch):
     monkeypatch.setattr(handler, "_configured_demo_tenant", lambda: None)
     _, body = handler._route_health({}, {}, "req")
     assert "demo" not in body
+
+
+# --- 6. Public reads are inspectable but contained -------------------------------------------
+
+def test_public_read_cannot_enumerate_another_tenant(monkeypatch):
+    demo_tenant = str(uuid.uuid4())
+    victim_tenant = str(uuid.uuid4())
+    monkeypatch.setenv("MEMORYSTAND_SHARED_SECRET", "operator-secret")
+    monkeypatch.setenv("MEMORYSTAND_DEMO_SECRET", "demo-secret")
+    monkeypatch.setenv("MEMORYSTAND_DEMO_TENANT", demo_tenant)
+    monkeypatch.setattr(
+        memory,
+        "recall",
+        lambda *args, **kwargs: pytest.fail("tenant scoping must happen before recall"),
+    )
+
+    resp = handler.lambda_handler(
+        _http_get("/recall", {"tenant_id": victim_tenant, "q": "secrets"}),
+        None,
+    )
+
+    assert resp["statusCode"] == 401
+    assert "isolated demo tenant" in resp["body"]
+
+
+def test_demo_tenant_read_remains_public_and_bounded(monkeypatch):
+    demo_tenant = str(uuid.uuid4())
+    seen = {}
+    monkeypatch.setenv("MEMORYSTAND_SHARED_SECRET", "operator-secret")
+    monkeypatch.setenv("MEMORYSTAND_DEMO_SECRET", "demo-secret")
+    monkeypatch.setenv("MEMORYSTAND_DEMO_TENANT", demo_tenant)
+
+    def _recall(tenant_id, agent_id, query, *, k):
+        seen.update({"tenant_id": tenant_id, "query": query, "k": k})
+        return []
+
+    monkeypatch.setattr(memory, "recall", _recall)
+    resp = handler.lambda_handler(
+        _http_get("/recall", {"tenant_id": demo_tenant, "q": "latency", "k": "20"}),
+        None,
+    )
+
+    assert resp["statusCode"] == 200
+    assert seen == {"tenant_id": demo_tenant, "query": "latency", "k": 20}
+
+
+def test_operator_can_read_a_non_demo_tenant(monkeypatch):
+    demo_tenant = str(uuid.uuid4())
+    victim_tenant = str(uuid.uuid4())
+    seen = {}
+    monkeypatch.setenv("MEMORYSTAND_SHARED_SECRET", "operator-secret")
+    monkeypatch.setenv("MEMORYSTAND_DEMO_SECRET", "demo-secret")
+    monkeypatch.setenv("MEMORYSTAND_DEMO_TENANT", demo_tenant)
+    monkeypatch.setattr(
+        memory,
+        "recall",
+        lambda tenant_id, agent_id, query, *, k: seen.update({"tenant_id": tenant_id}) or [],
+    )
+
+    resp = handler.lambda_handler(
+        _http_get(
+            "/recall",
+            {"tenant_id": victim_tenant, "q": "latency"},
+            secret="operator-secret",
+        ),
+        None,
+    )
+
+    assert resp["statusCode"] == 200
+    assert seen["tenant_id"] == victim_tenant
+
+
+@pytest.mark.parametrize("bad_k", ["0", "21", "not-an-integer"])
+def test_public_recall_rejects_unbounded_or_invalid_k(monkeypatch, bad_k):
+    demo_tenant = str(uuid.uuid4())
+    monkeypatch.setenv("MEMORYSTAND_DEMO_TENANT", demo_tenant)
+    monkeypatch.setattr(
+        memory,
+        "recall",
+        lambda *args, **kwargs: pytest.fail("invalid k must be rejected before querying"),
+    )
+
+    resp = handler.lambda_handler(
+        _http_get("/recall", {"tenant_id": demo_tenant, "q": "latency", "k": bad_k}),
+        None,
+    )
+
+    assert resp["statusCode"] == 400
+    assert "\"error\": \"bad_request\"" in resp["body"]
+
+
+def test_unhandled_errors_do_not_leak_internal_details(monkeypatch):
+    demo_tenant = str(uuid.uuid4())
+    monkeypatch.setenv("MEMORYSTAND_DEMO_TENANT", demo_tenant)
+    monkeypatch.setattr(
+        memory,
+        "recall",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            RuntimeError("postgresql://admin:super-secret@internal.example")
+        ),
+    )
+
+    resp = handler.lambda_handler(
+        _http_get("/recall", {"tenant_id": demo_tenant, "q": "latency"}),
+        None,
+    )
+
+    assert resp["statusCode"] == 500
+    assert "super-secret" not in resp["body"]
+    assert "internal.example" not in resp["body"]
+    assert json.loads(resp["body"]) == {
+        "error": "internal_error",
+        "detail": "the request could not be completed",
+        "request_id": "r",
+    }

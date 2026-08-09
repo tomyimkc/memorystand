@@ -56,14 +56,26 @@ def test_unreachable_cloudwatch_neither_grants_nor_denies(monkeypatch) -> None:
         raise RuntimeError("no credentials")
 
     monkeypatch.setattr(evidence, "_get_client", boom)
-    v = evidence.verify("metric", "AWS/Lambda|Errors|FunctionName=memorystand", -1.0, None)
+    v = evidence.verify(
+        "metric",
+        "AWS/Lambda|Errors|FunctionName=memorystand",
+        -1.0,
+        None,
+        entity="memorystand",
+    )
     assert v.status == evidence.UNAVAILABLE
     assert not v.grants_verified_tier
 
 
 def test_agreement_confirms(monkeypatch) -> None:
     monkeypatch.setattr(evidence, "_average", _fake_averages(before=100.0, after=60.0))
-    v = evidence.verify("metric", "AWS/Lambda|Duration|FunctionName=memorystand", -40.0, None)
+    v = evidence.verify(
+        "metric",
+        "AWS/Lambda|Duration|FunctionName=memorystand",
+        -40.0,
+        None,
+        entity="memorystand",
+    )
     assert v.status == evidence.CONFIRMED
     assert v.grants_verified_tier
     assert v.observed == pytest.approx(-40.0)
@@ -72,7 +84,13 @@ def test_agreement_confirms(monkeypatch) -> None:
 def test_a_claim_in_the_opposite_direction_is_contradicted(monkeypatch) -> None:
     """The failure that matters most: 'latency fell' when the metric shows it rose."""
     monkeypatch.setattr(evidence, "_average", _fake_averages(before=100.0, after=140.0))
-    v = evidence.verify("metric", "AWS/Lambda|Duration|FunctionName=memorystand", -40.0, None)
+    v = evidence.verify(
+        "metric",
+        "AWS/Lambda|Duration|FunctionName=memorystand",
+        -40.0,
+        None,
+        entity="memorystand",
+    )
     assert v.status == evidence.CONTRADICTED
     assert not v.grants_verified_tier
     assert "opposite direction" in v.detail
@@ -80,7 +98,13 @@ def test_a_claim_in_the_opposite_direction_is_contradicted(monkeypatch) -> None:
 
 def test_a_wildly_wrong_magnitude_is_contradicted(monkeypatch) -> None:
     monkeypatch.setattr(evidence, "_average", _fake_averages(before=100.0, after=99.0))
-    v = evidence.verify("metric", "AWS/Lambda|Duration|FunctionName=memorystand", -40.0, None)
+    v = evidence.verify(
+        "metric",
+        "AWS/Lambda|Duration|FunctionName=memorystand",
+        -40.0,
+        None,
+        entity="memorystand",
+    )
     assert v.status == evidence.CONTRADICTED
 
 
@@ -128,7 +152,12 @@ def test_an_unchecked_success_reaches_attested_but_not_verified(tenant_id, agent
 
 def test_a_confirmed_metric_reaches_verified(tenant_id, agent_id, monkeypatch) -> None:
     monkeypatch.setattr(evidence, "_average", _fake_averages(before=100.0, after=60.0))
-    mem = memory.remember(tenant_id, agent_id, "scaling checkout-api cut p99 latency")
+    mem = memory.remember(
+        tenant_id,
+        agent_id,
+        "scaling memorystand cut p99 latency",
+        entity="memorystand",
+    )
     decision = _produced_decision(tenant_id, agent_id, mem["memory_id"])
 
     result = trust.grant_standing(
@@ -150,7 +179,12 @@ def test_a_confirmed_metric_reaches_verified(tenant_id, agent_id, monkeypatch) -
 def test_a_contradicted_claim_is_refused_outright(tenant_id, agent_id, monkeypatch) -> None:
     """Refused, not downgraded. A memory must gain nothing from a disproved claim."""
     monkeypatch.setattr(evidence, "_average", _fake_averages(before=100.0, after=180.0))
-    mem = memory.remember(tenant_id, agent_id, "scaling checkout-api cut p99 latency")
+    mem = memory.remember(
+        tenant_id,
+        agent_id,
+        "scaling memorystand cut p99 latency",
+        entity="memorystand",
+    )
     decision = _produced_decision(tenant_id, agent_id, mem["memory_id"])
 
     with pytest.raises(trust.OutcomeRejected) as exc:
@@ -226,6 +260,34 @@ def test_a_real_metric_filed_under_the_wrong_entity_cannot_reach_verified(monkey
     assert "payments-service" in v.detail
 
 
+def test_wrong_entity_outcome_is_rejected_not_merely_attested(
+    tenant_id, agent_id, monkeypatch
+):
+    """A metric bound to another service contradicts the attribution, not just the magnitude."""
+    monkeypatch.setattr(evidence, "_average", _fake_averages(before=100.0, after=60.0))
+    mem = memory.remember(
+        tenant_id,
+        agent_id,
+        "scaling payments-service cut p99 latency",
+        entity="payments-service",
+    )
+    decision = _produced_decision(tenant_id, agent_id, mem["memory_id"])
+
+    with pytest.raises(trust.OutcomeRejected, match="does not identify (?:that )?entity"):
+        trust.grant_standing(
+            tenant_id,
+            decision["decision_id"],
+            {
+                "outcome": "success",
+                "source": "metric",
+                "external_ref": "AWS/Lambda|Duration|FunctionName=checkout-api",
+                "metric_delta": -40.0,
+            },
+        )
+
+    assert memory.get(tenant_id, mem["memory_id"])["trust_tier"] == trust.UNCONFIRMED
+
+
 def test_a_matching_entity_still_verifies(monkeypatch):
     """The check must not be so strict that honest evidence stops working."""
     monkeypatch.setattr(evidence, "_average", _fake_averages(before=100.0, after=60.0))
@@ -250,12 +312,13 @@ def test_entity_matching_ignores_separators_and_case(monkeypatch):
     assert v.status == evidence.CONFIRMED
 
 
-def test_no_entity_supplied_means_no_entity_check(monkeypatch):
-    """Callers that do not know the subject must not be failed closed for it.
+def test_no_entity_supplied_cannot_reach_verified(monkeypatch):
+    """A metric cannot verify a memory when the memory's subject is unknown.
 
-    Failing them closed would break every legitimate caller that predates this argument, and
-    "we do not know the subject" is not evidence of a mismatch.
+    A real metric for an unrelated resource is still real, so treating an absent entity as
+    permission to skip binding would let genuine telemetry launder a false memory.
     """
     monkeypatch.setattr(evidence, "_average", _fake_averages(before=100.0, after=60.0))
     v = evidence.verify("metric", "AWS/Lambda|Duration|FunctionName=anything", -40.0, None)
-    assert v.status == evidence.CONFIRMED
+    assert v.status == evidence.ENTITY_UNBOUND
+    assert not v.grants_verified_tier

@@ -422,7 +422,7 @@ def _scene_01_hook(scene: dict[str, Any], evidence: dict[str, Any], destination:
     text(
         draw,
         (122, 712),
-        "Recency, source authority, or self-consistency -- the model grading its own homework.",
+        "Stored memory is not the same thing as permission to act.",
         size=27,
         color=MUTED,
         max_width=1680,
@@ -430,7 +430,7 @@ def _scene_01_hook(scene: dict[str, Any], evidence: dict[str, Any], destination:
     text(
         draw,
         (122, 762),
-        "MemoryStand asks something different: last time this agent acted on a memory,\ndid it actually work?",
+        "MemoryStand asks: did an external system of record corroborate the outcome?\nOnly then can that memory steer an autonomous action.",
         size=38,
         color=INK,
         bold=True,
@@ -616,7 +616,7 @@ def _scene_04_agent_decides(scene: dict[str, Any], evidence: dict[str, Any], des
     header(
         image,
         eyebrow="GET /recall + POST /decide  ·  LIVE, AGAINST THE DEPLOYED API",
-        title_value="The agent recalls, proposes, and records a decision",
+        title_value="Recall stays visible; action authority stays explicit",
     )
     recall = step_payload(evidence, "recall")
     decide = step_payload(evidence, "decide")
@@ -636,7 +636,7 @@ def _scene_04_agent_decides(scene: dict[str, Any], evidence: dict[str, Any], des
     text(
         draw,
         (122, y + 6),
-        "Ranking shown is the real live response. Under the stub, distance is\nLEXICAL -- token overlap, not meaning. See the disclosure at right.",
+        "Every recalled row remains inspectable. Only VERIFIED memory may enter\nautonomous reasoning; lower tiers cannot silently steer the proposal.",
         size=16,
         color=FAINT,
         max_width=870,
@@ -694,7 +694,8 @@ def _scene_04_agent_decides(scene: dict[str, Any], evidence: dict[str, Any], des
     text(
         draw,
         (122, 844),
-        f"decision_id: {decide.get('decision_id')}   consulted: {len(decide.get('consulted', []))} memory(ies)",
+        f"decision_id: {decide.get('decision_id')}   recalled: "
+        f"{len(decide.get('consulted', []))}   cited: {len(decide.get('cited_memory_ids', []))}",
         size=18,
         color=FAINT,
         mono=True,
@@ -763,18 +764,15 @@ def _scene_05_outcome_gate(scene: dict[str, Any], evidence: dict[str, Any], dest
 
     rounded_panel(image, (90, 740, 1840, 950), fill=PANEL_2)
     text(draw, (122, 776),
-         "The major shipping agent-memory systems we checked -- Mem0, Zep, AWS AgentCore --",
-         # Hedged from "Every shipping agent-memory system". Three are evidenced in the README;
-         # an unhedged universal is falsifiable by one counter-example, and this project cannot
-         # afford a caught overclaim in its own opening frame.
-         # (second line below completes the sentence)
+         "Model-led extraction and reconciliation can manage memory, but they are not",
          size=24, color=MUTED, max_width=1680)
     text(draw, (122, 800),
-         "ask a model whether their own memory is true.",
+         "independent evidence that an action worked.",
          size=24, color=MUTED, max_width=1680)
     text(draw, (122, 848),
-         "MemoryStand asks CloudWatch -- and refuses the promotion when CloudWatch disagrees.",
+         "Only VERIFIED can act autonomously. ATTESTED requires human approval.",
          size=32, color=INK, bold=True, max_width=1680)
+    footer(image, scene["evidenceClass"])
     image.save(destination)
 
 
@@ -920,17 +918,35 @@ def _scene_08_close(scene: dict[str, Any], evidence: dict[str, Any], destination
     for bullet in bullets:
         y = text(draw, (122, y), f"•  {bullet}", size=19, color=INK, max_width=1690, spacing=6) + 20
 
-    rounded_panel(image, (90, 730, 1840, 900), fill=PANEL_2, outline=GREEN)
+    rounded_panel(image, (90, 730, 1840, 915), fill=PANEL_2, outline=GREEN)
     text(
         draw,
         (122, 758),
-        "MemoryStand: memory trusted because the world confirmed it worked,\nnot because a model said so.",
-        size=28,
+        "600 deterministic cases · autonomous authority",
+        size=20,
+        color=MUTED,
+        bold=True,
+        max_width=1680,
+    )
+    text(
+        draw,
+        (122, 792),
+        "Permissive baseline: 540 / 540 attacks   ·   Outcome gate: 0 / 540 attacks",
+        size=27,
         color=INK,
         bold=True,
         max_width=1680,
     )
-    text(draw, (122, 838), "github.com/tomyimkc/memorystand", size=22, color=ACCENT, bold=True)
+    text(
+        draw,
+        (122, 834),
+        "Honest controls preserved: 60 / 60   ·   stored is not authority",
+        size=23,
+        color=INK,
+        bold=True,
+        max_width=1680,
+    )
+    text(draw, (122, 872), "github.com/tomyimkc/memorystand", size=20, color=ACCENT, bold=True)
 
     text(
         draw,

@@ -212,8 +212,8 @@ def main() -> int:
     bf.text(
         draw,
         (90, 128),
-        'Promotion to "verified" never asks a model whether a memory is true — it asks Amazon '
-        "CloudWatch, and refuses the promotion when CloudWatch disagrees.",
+        'Storage is not action authority: only an entity-bound outcome corroborated by Amazon '
+        'CloudWatch reaches "verified" and may steer an autonomous action.',
         size=21,
         color=bf.ACCENT,
         bold=True,
@@ -240,13 +240,12 @@ def main() -> int:
     panel(
         image,
         lambda_box,
-        "AWS Lambda Function URL — auth: NONE",
+        "AWS Lambda Function URL",
         [
-            "backend/handler.py :: lambda_handler",
-            "1. kill switch first — fails CLOSED if SSM is unreadable",
-            "2. shared secret (hmac.compare_digest) on all 3 write routes",
-            "3. route table → 7 HTTP routes",
-            "512 MB · 30s timeout · reserved concurrency 15",
+            "handler.py :: lambda_handler; AWS-level auth NONE, application policy below",
+            "kill switch fails CLOSED if SSM is unreadable",
+            "HMAC secret on all writes; demo credential is restricted to one published tenant",
+            "7 routes · 512 MB · 30s timeout · reserved concurrency 15",
         ],
         outline=bf.ACCENT,
     )
@@ -279,6 +278,8 @@ def main() -> int:
         [
             "POST /ingest → memory.remember() → embeddings.embed()",
             "POST /decide → memory.recall() → agent.propose() → decisions.decide()",
+            "only VERIFIED memories enter autonomous model reasoning; ATTESTED is advisory "
+            "and held for approval",
             "wired to call Bedrock for embeddings + reasoning; falls back to a deterministic "
             "rule if the model call fails or quota is 0",
         ],
@@ -294,7 +295,8 @@ def main() -> int:
         [
             "trust.grant_standing(tenant_id, decision_id, evidence)",
             "assert_no_model_calls() runs first — checked structurally on the live path",
-            "evidence.verify() re-checks the claim before recording",
+            "evidence.verify() re-checks the claim before recording: exact entity, enough "
+            "datapoints, direction + magnitude",
             "secret-gated + tenant-scoped",
         ],
         fill=GREEN_FILL,
@@ -305,11 +307,12 @@ def main() -> int:
     panel(
         image,
         gray_box,
-        "OPEN READ ROUTES — no secret required",
+        "DEMO-SCOPED READ ROUTES",
         [
-            "GET /recall → memory.recall() — admitted memories only (verdict='accepted')",
-            "GET /timemachine → replay.cross_examine() — AS OF SYSTEM TIME",
-            "GET /diff → replay.belief_diff()",
+            "unauthenticated reads are restricted to the server-selected public demo tenant",
+            "operator secret may inspect another tenant; knowing a tenant UUID is insufficient",
+            "GET /recall → admitted memories only; k is bounded to 1–20",
+            "GET /timemachine + /diff → AS OF SYSTEM TIME and current-state comparison",
             "GET /health → db version, GC window, kill switch, embedding provenance, circuit breakers",
         ],
         outline=bf.BORDER_LIGHT,
@@ -325,9 +328,10 @@ def main() -> int:
         [
             "agent_memories — VECTOR INDEX (tenant_id, verdict, embedding vector_cosine_ops)",
             "verdict: accepted / quarantined / superseded — decides what recall can ever see",
-            "trust_tier: unconfirmed / attested / verified / disputed — how much reality has backed it",
-            "agent_decisions — consulted_memory_ids vs produced_memory_ids; only produced "
-            "memories get re-tiered",
+            "trust_tier: unconfirmed / attested / verified / disputed — only verified may act "
+            "autonomously; attested requires approval",
+            "agent_decisions — consulted vs cited vs produced; every referenced memory id is "
+            "validated as admitted and same-tenant",
             "belief_snapshots — SHA-256 checkpoint of the admitted set, re-derived with "
             "AS OF SYSTEM TIME",
             "tool_audit — every governed call, native row-level TTL = 180 days",
@@ -360,7 +364,7 @@ def main() -> int:
     bf.text(
         draw,
         (quota_box[0] + 14, quota_box[1] + 10),
-        "Bedrock quota here is 0, so it never answers. Live /decide reasons through a disclosed "
+        "Bedrock quota here has no usable on-demand capacity. Live /decide can use a disclosed "
         "router standby that reasoning_source names. The promotion path calls no model either way.",
         size=15,
         color=bf.INK,
@@ -375,9 +379,10 @@ def main() -> int:
         "Amazon CloudWatch — the trust oracle, not observability",
         [
             "get_metric_statistics before/after the decision, ±15 min",
+            "at least 3 datapoints per window; exact normalized entity dimension required",
             "direction checked first, then magnitude within 50% tolerance",
             "confirmed → verified · contradicted → HTTP 400, refused",
-            "unavailable / not_verifiable → attested (real, unchecked)",
+            "unavailable / not_verifiable → attested; advisory only, approval required",
             "pagerduty and human sources always land here as not_verifiable — no system of "
             "record to re-query",
         ],

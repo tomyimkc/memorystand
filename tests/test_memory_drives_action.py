@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Memory must change what the agent does -- with no model involved.
+"""Verified memory may change what the agent does; lower tiers may not do so autonomously.
 
 This is the project's central premise stated as a test, and until now it was false on the
 deployed system. `_fallback_action` took only the alert text and never looked at the recalled
@@ -11,9 +11,9 @@ That mattered more than it looked. The hackathon brief asks for memory that "is 
 makes an agent useful in production", and a judge inspecting the live API would have found a
 decision path memory does not touch.
 
-The rule now: a memory that has survived contact with reality outranks the keyword table, and
-the higher its trust tier the more it outranks. Still zero model calls, still deterministic,
-still auditable down to the memory_id that decided.
+The rule now: verified memory can outrank the keyword table; attested memory can recommend an
+action only behind approval; unconfirmed memory is inspectable context but is not
+action-authoritative. Still zero model calls, deterministic, and auditable down to the memory_id.
 """
 
 from __future__ import annotations
@@ -66,6 +66,93 @@ def test_higher_trust_wins_when_memories_disagree():
     )
     assert action == "restart_service"
     assert "m-high" in why
+
+
+def test_an_unconfirmed_memory_cannot_override_the_keyword_table():
+    action, why = agent._fallback_action(
+        "payments-service latency is climbing",
+        [_mem("m-unchecked", "unconfirmed", "restart_service")],
+    )
+    assert action == "scale_up"
+    assert "m-unchecked" not in why
+    assert "keyword table" in why
+
+
+def test_an_attested_memory_is_advisory_and_requires_approval():
+    action, why, requires_approval, cited = agent._fallback_decision(
+        "unusual behavior detected",
+        [_mem("m-attested", "attested", "restart_service")],
+    )
+    assert action == "restart_service"
+    assert requires_approval is True
+    assert cited == ["m-attested"]
+    assert "held for human approval" in why
+
+
+def test_only_verified_memories_are_sent_to_a_reasoning_model(monkeypatch):
+    seen = {}
+
+    class Provider:
+        @staticmethod
+        def converse(**kwargs):
+            seen["prompt"] = kwargs["messages"][0]["content"][0]["text"]
+            return {
+                "output": {"message": {"content": [{"toolUse": {
+                    "name": "propose_action",
+                    "input": {
+                        "action": "page_oncall",
+                        "rationale": "The verified memory supports paging.",
+                        "cited_memory_ids": ["m-verified"],
+                    },
+                }}]}}
+            }
+
+    monkeypatch.setattr(agent, "_providers", lambda: [("test:model", Provider)])
+    out = agent.propose(
+        "payments-service is down",
+        [
+            _mem("m-verified", "verified", "page_oncall"),
+            _mem("m-attested", "attested", "restart_service"),
+            _mem("m-unconfirmed", "unconfirmed", "scale_up"),
+        ],
+    )
+    assert "m-verified" in seen["prompt"]
+    assert "m-attested" not in seen["prompt"]
+    assert "m-unconfirmed" not in seen["prompt"]
+    assert out["cited_memory_ids"] == ["m-verified"]
+
+
+def test_attested_only_model_context_is_advisory_and_held(monkeypatch):
+    seen = {}
+
+    class Provider:
+        @staticmethod
+        def converse(**kwargs):
+            seen["prompt"] = kwargs["messages"][0]["content"][0]["text"]
+            return {
+                "output": {"message": {"content": [{"toolUse": {
+                    "name": "propose_action",
+                    "input": {
+                        "action": "restart_service",
+                        "rationale": "The attested memory supports an advisory restart.",
+                        "cited_memory_ids": ["m-attested"],
+                    },
+                }}]}}
+            }
+
+    monkeypatch.setattr(agent, "_providers", lambda: [("test:model", Provider)])
+    out = agent.propose(
+        "payments-service is unhealthy",
+        [
+            _mem("m-attested", "attested", "restart_service"),
+            _mem("m-unconfirmed", "unconfirmed", "scale_up"),
+        ],
+    )
+
+    assert "m-attested" in seen["prompt"]
+    assert "m-unconfirmed" not in seen["prompt"]
+    assert out["cited_memory_ids"] == ["m-attested"]
+    assert out["requires_approval"] is True
 
 
 def test_a_disputed_memory_never_steers_the_action():

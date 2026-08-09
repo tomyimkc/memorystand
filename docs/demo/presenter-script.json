@@ -9,7 +9,7 @@
     "Rules applied: no jargon that is not immediately unpacked; no schema or SQL spoken aloud (it",
     "stays on the panel for the technical judge to read); concrete nouns over abstractions; and one",
     "idea per shot. The opening beat now says what was built before arguing why it matters -- the",
-    "previous cut opened on a critique of Mem0 and Zep, which means nothing to a general viewer.",
+    "an earlier cut opened on a vendor critique; the evidence-first render now opens on the product authority boundary.",
     "",
     "ON-SCREEN DISCLOSURES REMOVED at the author's request: the synthesised-presenter line and the",
     "candidateOnly/no-AGI tag. The presenter disclosure moves to the Devpost 'Which AI tools have",
@@ -30,10 +30,10 @@
     "Every number spoken is traceable:",
     "  beat 04 -> db/schema.sql:63,74 · backend/memory.py:369-381",
     "  beat 05 -> live POST /ingest, artifacts/video/capture/evidence.json 2026-08-05T09:40Z",
-    "  beat 06 -> benchmarks/poisoning.md:14-19 (class n), :31-47 (per-arm), :65 (judge arm n=6)",
+    "  beat 06 -> benchmarks/poisoning.md (540 attacks + 60 honest controls; autonomous authority scored separately)",
     "  beat 07 -> live POST /confirm_outcome, same capture",
     "  beat 08 -> recorded /decide run, README.md:25-26; prior art in README",
-    "CLARITY PASS. Reviewer note: the plain-language cut traded jargon for vagueness. Every abstraction that could not be pictured was replaced with the concrete thing it stood for -- 'what worked last time' -> 'an AI assistant suggests a fix because it remembers that fix working'; 'the real numbers' -> 'the latency CloudWatch recorded'; 'this lives in one table' -> the four things in the row; 'every new claim' -> 'one fact about one service'; the bare 800/300/500 -> milliseconds of one service's circuit-breaker timeout; 'we tested it' -> 600 claims through three defences; 'the actual numbers' -> AWS/Lambda Duration. Panels carrying figures now state in words what those figures are."
+    "CLARITY PASS. Reviewer note: the plain-language cut traded jargon for vagueness. Every abstraction that could not be pictured was replaced with the concrete thing it stood for -- 'what worked last time' -> 'an AI assistant suggests a fix because it remembers that fix working'; 'the real numbers' -> 'the latency CloudWatch recorded'; 'this lives in one table' -> the four things in the row; 'every new claim' -> 'one fact about one service'; the bare 800/300/500 -> milliseconds of one service's circuit-breaker timeout; 'we tested it' -> 600 deterministic cases with authority scored separately; 'the actual numbers' -> AWS/Lambda Duration. Panels carrying figures now state in words what those figures are."
   ],
   "beats": [
     {
@@ -62,15 +62,15 @@
       "panelData": {
         "kind": "quote",
         "lines": [
-          "Mem0 — an LLM picks ADD/UPDATE/DELETE. No confidence score at all.",
-          "Zep — an LLM sets validity windows. \"Model-inferred, not authoritative.\"",
-          "AWS AgentCore — extraction and consolidation are LLM prompts. No verification API."
+          "Stored memory and action authority are different decisions.",
+          "Model-led reconciliation can manage memory without independently proving an outcome.",
+          "MemoryStand requires an external, entity-bound outcome before autonomous use."
         ],
-        "footnote": "Each line cites the vendor's own docs or issue tracker. See README."
+        "footnote": "Mechanism-level comparison and primary-source links: README, Prior art."
       },
       "shots": [
-        "The big agent-memory systems today just ask an AI whether their own memory is right. That's marking your own homework.",
-        "Mem0 does it. Zep does it. So does Amazon's own AgentCore. None of them check against anything real."
+        "Agent-memory products often use recency, source authority, or model-led reconciliation to manage what they store.",
+        "MemoryStand adds a stricter boundary: a stored memory cannot act autonomously until an external outcome corroborates it."
       ]
     },
     {
@@ -152,8 +152,8 @@
         "kind": "table",
         "columns": [
           "",
-          "attacks → verified",
-          "honest admitted"
+          "attacks autonomous",
+          "honest autonomous"
         ],
         "rows": [
           [
@@ -162,22 +162,17 @@
             "100%"
           ],
           [
-            "LLM-as-judge",
-            "0%",
-            "0%"
-          ],
-          [
             "outcome-gated",
             "0%",
             "100%"
           ]
         ],
-        "footnote": "540 attacks + 60 honest controls · poisoning.md:14-19, 31-47 · judge arm n=6/class",
-        "title": "600 claims · 540 fakes + 60 honest · three defences"
+        "footnote": "540 attacks + 60 honest controls · deterministic receipt: benchmarks/poisoning.md",
+        "title": "600 cases · storage and autonomous authority scored separately"
       },
       "shots": [
-        "We ran six hundred claims through three different defences: five hundred forty deliberate fakes, plus sixty honest ones as a control.",
-        "Simply trusting the caller let all five hundred forty fakes through. Asking an AI to judge blocked the honest ones too."
+        "We ran six hundred deterministic cases: five hundred forty deliberate attacks, plus sixty honest controls.",
+        "Trusting the caller gave every attack authority. The outcome gate gave none autonomous control and preserved every honest control."
       ]
     },
     {
@@ -235,8 +230,8 @@
         "footnote": "recorded /decide run, README.md:25-26 · tiers re-confirmed live 2026-08-05"
       },
       "shots": [
-        "In a recorded run, the closer memory was unchecked and the further one was confirmed. It chose the confirmed one.",
-        "Being closer didn't win. Being checked did. The idea is old; actually enforcing it is the new part."
+        "In a recorded run, the closer memory was unchecked and the further one was verified. Only the verified memory could steer the action.",
+        "Being closer did not grant authority. External corroboration did. The idea is old; this build makes the boundary executable."
       ]
     }
   ],

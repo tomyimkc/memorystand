@@ -171,11 +171,11 @@ short printed summary of the proposed-action memory and the recorded decision.
 # into --produced; see scripts/record-demo.sh for the exact calls)
 ```
 
-**Narration (52 words → 20.8s):**
-> An incident hits: the payments gateway's latency is spiking. Before doing anything, the agent
-> recalls what it knows about checkout-api's breaker — that 500-millisecond fact comes back first,
-> ranked by CockroachDB's own vector index. It proposes raising the timeout to 1200 milliseconds,
-> and records that decision, with the recalled memory as its evidence.
+**Narration:**
+> An incident hits: the payments gateway's latency is spiking. Recall shows the recorded history,
+> but unchecked rows cannot steer an autonomous action. This scripted CLI beat records a
+> caller-supplied action and the full retrieval receipt; the deployed API separately reports
+> which verified memories, if any, were actually cited.
 
 ---
 
@@ -190,12 +190,11 @@ memory id, and the line `model calls used to decide this: 0` in bold.
   --decision-id <decision-id> --outcome success --source pagerduty --ref INC-7734
 ```
 
-**Narration (48 words → 19.2s):**
-> Here's the part nobody else does. The incident resolves in PagerDuty. That real-world outcome —
-> not a model — raises this memory's standing to attested (a CloudWatch metric is what reaches
-> verified), in one serializable CockroachDB
-> transaction. Zero model calls on this path. This isn't the model deciding it worked. It's the
-> world confirming it did.
+**Narration:**
+> The incident resolves in PagerDuty. Because this deployment cannot re-check PagerDuty, the
+> memory reaches attested and remains advisory. A machine-checkable, entity-bound CloudWatch
+> metric is required for verified standing and autonomous authority. The whole outcome path
+> records and re-tiers in one serializable transaction with zero model calls.
 
 ---
 

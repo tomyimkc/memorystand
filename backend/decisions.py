@@ -17,11 +17,50 @@ open problem and is listed as a roadmap item rather than fudged.
 
 from __future__ import annotations
 
+import uuid
 from typing import Any, Sequence
 
 from psycopg2.extras import RealDictCursor
 
 from . import db
+
+
+class InvalidMemoryReference(ValueError):
+    """A decision named a memory outside its own admitted tenant memory set."""
+
+
+def _normalise_memory_ids(values: Sequence[str], field: str) -> list[str]:
+    normalised: list[str] = []
+    for value in values:
+        try:
+            normalised.append(str(uuid.UUID(str(value))))
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise InvalidMemoryReference(f"{field} contains an invalid memory id") from exc
+    return normalised
+
+
+def _validate_memory_ids(cur, tenant_id: str, memory_ids: Sequence[str], field: str) -> None:
+    """Every decision reference must name an admitted memory owned by the same tenant."""
+    unique = list(dict.fromkeys(memory_ids))
+    if not unique:
+        return
+    cur.execute(
+        """
+        SELECT memory_id::string AS memory_id
+        FROM agent_memories
+        WHERE tenant_id = %s
+          AND verdict = 'accepted'
+          AND memory_id = ANY(%s::UUID[])
+        """,
+        (tenant_id, unique),
+    )
+    found = {row["memory_id"] for row in cur.fetchall()}
+    missing = [mid for mid in unique if mid not in found]
+    if missing:
+        raise InvalidMemoryReference(
+            f"{field} contains {len(missing)} memory id(s) that are not admitted memories "
+            "owned by this tenant"
+        )
 
 
 def _insert(
@@ -39,6 +78,8 @@ def _insert(
     recall_k: int | None = None,
 ) -> dict:
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        _validate_memory_ids(cur, tenant_id, consulted, "consulted_memory_ids")
+        _validate_memory_ids(cur, tenant_id, produced, "produced_memory_ids")
         cur.execute(
             """
             INSERT INTO agent_decisions
@@ -98,14 +139,16 @@ def decide(
     rows were taken. Storing them is what lets ``replay.cross_examine`` re-run the agent's own
     ranked query against the past rather than approximating it with a belief-state dump.
     """
+    consulted = _normalise_memory_ids(consulted_memory_ids, "consulted_memory_ids")
+    produced = _normalise_memory_ids(produced_memory_ids, "produced_memory_ids")
     row = db.retry_serializable(
         _insert,
         tenant_id=tenant_id,
         agent_id=agent_id,
         action=action,
         rationale=rationale,
-        consulted=consulted_memory_ids,
-        produced=produced_memory_ids,
+        consulted=consulted,
+        produced=produced,
         requires_approval=requires_approval,
         task_id=task_id,
         query_text=query_text,
@@ -116,8 +159,8 @@ def decide(
         "decided_at": row["decided_at"],
         "action": action,
         "status": "held_for_approval" if row["requires_approval"] else "taken",
-        "consulted": list(consulted_memory_ids),
-        "produced": list(produced_memory_ids),
+        "consulted": consulted,
+        "produced": produced,
     }
 
 
@@ -163,4 +206,4 @@ def recent(tenant_id: str, limit: int = 20) -> list[dict]:
         db.put_conn(conn)
 
 
-__all__ = ["decide", "get", "recent"]
+__all__ = ["InvalidMemoryReference", "decide", "get", "recent"]

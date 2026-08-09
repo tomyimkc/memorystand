@@ -34,7 +34,7 @@
 //        No AWS creds are required for either fallback path.
 //     response: { decision_id, decided_at, action, status ("taken" |
 //                 "held_for_approval"), produced: string[], rationale,
-//                 reasoning_source, model_calls,
+//                 reasoning_source, model_calls, cited_memory_ids: string[],
 //                 consulted: [ { memory_id, content, entity, attribute_key,
 //                 attribute_value, trust_tier, confidence, source, distance,
 //                 verdict } ] }
@@ -61,11 +61,12 @@
 //                 trust_tier: "attested"|"verified"|"disputed"|null,
 //                 verification: { status, detail, observed, claimed } }
 //     `verification.status` is one of confirmed | contradicted | unavailable |
-//     not_verifiable. Only "confirmed" earns trust_tier "verified" -- everything else
-//     that succeeded lands on "attested", meaning an outcome was reported but nobody
-//     independently re-checked it.
+//     not_verifiable | entity_mismatch | entity_unbound. Only "confirmed" earns
+//     trust_tier "verified". Contradicted and wrong-entity claims are refused; evidence
+//     that cannot be checked can reach only "attested".
 //
-//   GET {API_BASE}/timemachine?tenant_id=...&decision_id=...     — open route
+//   GET {API_BASE}/timemachine?tenant_id=...&decision_id=...     — public demo tenant,
+//                                                             operator auth otherwise
 //     -> backend.replay.cross_examine(tenant_id, decision_id)
 //     response: { decision: { decision_id, action, rationale, decided_at,
 //                 outcome, consulted_memory_ids, produced_memory_ids },
@@ -214,24 +215,20 @@
 
   // Ranking weight for the ladder, for DISPLAY ONLY -- the backend ranking is the authority.
   //
-  // backend/agent.py::_TIER_RANK is {verified:3, attested:2, unconfirmed:1} and `disputed` is
-  // absent, which is not an oversight: _fallback_action filters candidates on membership in that
-  // dict, so a disputed memory is excluded from deciding anything at all. This function cannot
-  // exclude rows (they are still worth showing), so it gives disputed 0 instead. The effect is
-  // the same where it matters -- the "most trusted" comparison below requires a STRICTLY greater
-  // weight, so a disputed memory can never be presented as outranking another.
+  // backend/agent.py::_TIER_RANK contains only verified and attested. Verified is action-
+  // authoritative; attested is advisory and always held for approval. Unconfirmed and disputed
+  // remain visible but do not steer an action. This display weight shows standing, not permission.
   function tierWeight(tier) {
-    if (tier === "verified") return 3;
-    if (tier === "attested") return 2;
-    if (tier === "unconfirmed") return 1;
-    return 0; // disputed, or unknown
+    if (tier === "verified") return 2;
+    if (tier === "attested") return 1;
+    return 0; // unconfirmed, disputed, or unknown
   }
 
   // The attested-vs-verified distinction is the whole point of this project -- this is the
   // one sentence of explanation that travels with the badge every place it is shown.
   function trustTierExplain(tier) {
     if (tier === "verified") return "Re-queried against the external system of record (CloudWatch), which agreed.";
-    if (tier === "attested") return "An outcome was reported, but this deployment could not independently re-check it -- no PagerDuty token, or a human sign-off with no system of record to re-query.";
+    if (tier === "attested") return "An outcome was reported but not independently corroborated. It can advise, but any resulting action is held for human approval.";
     if (tier === "disputed") return "The reported outcome was a rollback or a false positive.";
     return "No outcome has been reported for this decision yet.";
   }
@@ -241,6 +238,8 @@
     if (status === "contradicted") return "contradicted";
     if (status === "unavailable") return "unavailable";
     if (status === "not_verifiable") return "not verifiable";
+    if (status === "entity_mismatch") return "wrong entity";
+    if (status === "entity_unbound") return "entity missing";
     return status || "unknown";
   }
 
@@ -249,6 +248,8 @@
     if (status === "contradicted") return "The external system of record was re-queried and disagreed with the claim.";
     if (status === "unavailable") return "The external system of record could not be reached, or had no datapoints in the relevant window yet -- expected right after a fresh decision.";
     if (status === "not_verifiable") return "This source (PagerDuty / human) has no machine-checkable record here to re-query.";
+    if (status === "entity_mismatch") return "The telemetry belongs to a different entity than the memory, so the outcome is refused.";
+    if (status === "entity_unbound") return "The memory has no entity to bind to the telemetry, so it cannot reach verified.";
     return "";
   }
 
@@ -607,13 +608,8 @@
     });
   });
 
-  // Only reasoning_source "fallback_memory" lets this dashboard name the exact memory
-  // that decided the action: backend/agent.py::_fallback_action writes "Chosen from
-  // memory <id> (trust_tier=<tier>)" verbatim into the rationale it returns, specifically
-  // so that fact is recoverable here without reimplementing its action-matching
-  // heuristic (the allow-list of actions, the attribute_value-then-content matching) a
-  // second time in this file. Every other reasoning_source is left alone rather than
-  // guessed at -- a wrong guess here would be worse than showing nothing.
+  // Older deployments did not return cited_memory_ids, so keep a rationale parser only as a
+  // compatibility fallback. Current deployments return the cited ids structurally.
   function chosenMemoryIdFromRationale(rationale) {
     if (!rationale) return null;
     var m = /Chosen from memory (\S+) \(trust_tier=/.exec(rationale);
@@ -673,7 +669,10 @@
         return da - db;
       });
 
-      var chosenId = data.reasoning_source === "fallback_memory" ? chosenMemoryIdFromRationale(data.rationale) : null;
+      var cited = Array.isArray(data.cited_memory_ids) ? data.cited_memory_ids : [];
+      var chosenId = data.reasoning_source === "fallback_memory"
+        ? (cited[0] || chosenMemoryIdFromRationale(data.rationale))
+        : null;
       var chosen = chosenId ? ranked.filter(function (m) { return m.memory_id === chosenId; })[0] || null : null;
       var nearest = ranked[0] || null;
 
@@ -697,8 +696,11 @@
                 "Memory " + shortId(nearest.memory_id) + " (distance " + fmtNum(nearest.distance) + ", " +
                 trustTierLabel(nearest.trust_tier) + ") was the closer vector match, but memory " +
                 shortId(chosen.memory_id) + " (distance " + fmtNum(chosen.distance) + ", " +
-                trustTierLabel(chosen.trust_tier) + ") decided the action instead, because it has trust " +
-                "standing the closer memory does not. No model was consulted."
+                trustTierLabel(chosen.trust_tier) + ") supplied the recommendation instead, because it has " +
+                "standing the closer memory does not. " +
+                (data.status === "held_for_approval"
+                  ? "Because that standing is attested rather than verified, the recommendation is held for human approval."
+                  : "No model was consulted.")
               ),
             ]),
           ])

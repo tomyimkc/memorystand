@@ -1,13 +1,13 @@
 # Deployment status
 
-Last updated 2026-08-07. Written to be accurate rather than encouraging — a project whose
+Last updated 2026-08-09. Written to be accurate rather than encouraging — a project whose
 argument is "check claims before trusting them" cannot have an aspirational status page.
 
 ## Working, verified against real AWS
 
 | Component | Evidence |
 |---|---|
-| CockroachDB Cloud cluster `memorystand` | BASIC, AWS, us-west-2, cluster id `3b37f0d1-33ca-4d3f-a7b5-29bb74dcc641`. Live `/health` reported CockroachDB CCL v26.2.5 on 2026-08-07. The last recorded inventory remains 50,131 rows: 40 synthetic tenants at exactly 1,250 rows each (`scripts/loadtest.py --rows 50000 --tenants 40`), plus a curated 131-row demo tenant `9c8f6e5a-9d1a-4a1c-8f2e-3b6d1c7a4e10` (117 with `verdict='accepted'`); rows were not re-counted during this health check. |
+| CockroachDB Cloud cluster `memorystand` | BASIC, AWS, us-west-2, cluster id `3b37f0d1-33ca-4d3f-a7b5-29bb74dcc641`. Live `/health` reported CockroachDB CCL v26.2.5 on 2026-08-09. The last recorded inventory remains 50,131 rows: 40 synthetic tenants at exactly 1,250 rows each (`scripts/loadtest.py --rows 50000 --tenants 40`), plus a curated 131-row demo tenant `9c8f6e5a-9d1a-4a1c-8f2e-3b6d1c7a4e10` (117 with `verdict='accepted'`); rows were not re-counted during this health check. |
 | Vector index on Cloud Basic | `vector search` + `prefix spans` on the real `recall()` query, confirmed by `EXPLAIN` on both a 1,250-row synthetic tenant and the 117-row demo tenant. The index engaged at 117 rows — the C-SPANN index here is prefix-scoped per tenant, so per-tenant row count does not gate index selection. An earlier hypothesis this session, that 131 rows was too few and the planner would fall back to a scan, was wrong; the 50k seed supplied realistic multi-tenant volume, not a working index — say that plainly rather than implying the seed is what made the index work |
 | Circuit breakers (`backend/breaker.py`) | shared by both Bedrock clients — 2 consecutive failures opens for 60 s, then one half-open probe. State exposed live at `GET /health` |
 | SSM SecureStrings | `/memorystand/{dsn,shared_secret,kill_switch}`, values never printed |
@@ -15,7 +15,7 @@ argument is "check claims before trusting them" cannot have an aspirational stat
 | CloudWatch log group | 14-day retention |
 | **Lambda `memorystand`** | `State: Active`, python3.13, 512 MB / 30 s |
 | **Lambda → CockroachDB Cloud** | direct invoke returns `200`, `database: reachable`, `gc_window_seconds: 4500` |
-| Graceful degradation | exercised in production: before the TLS fix the handler returned `200` with `database: unreachable` and the underlying error, rather than crashing |
+| Graceful degradation | exercised in production: before the TLS fix the handler returned `200` with `database: unreachable` rather than crashing. The winner-readiness build now exposes only the exception type on `/health`, not connection details |
 
 Two things measured alongside the seed that are worth recording precisely rather than rounding
 away:
@@ -93,8 +93,9 @@ after the second failure; the third and fourth return in under a second because 
 short-circuits straight to the deterministic fallback instead of dialing Bedrock at all. The
 local equivalent for `agent.propose()` shows the same shape: 12.35 s -> 8.66 s -> 0.00 s -> 0.00 s.
 
-Current isolated readiness run: 147 core tests passed and one artifact check skipped in the clean worktree; after supplying the separately verified local video render, all 148 passed; `tests/test_latency_budget.py` and
-`tests/test_security_invariants.py`.
+Current isolated winner-readiness run: **160 tests passed** with the refreshed verified video
+artifact present, including `tests/test_latency_budget.py`, `tests/test_security_invariants.py`,
+the diagram layout check, and the video claim/codec checks.
 
 ## Honest state: the deployed agent reasons through a disclosed router standby, not Bedrock
 
@@ -160,8 +161,9 @@ not on the Lambda's `Errors` metric, which cannot tell a broken sweep from a bad
 MEMORYSTAND_ANTHROPIC_BASE_URL=https://api.teamorouter.com bash infra/deploy.sh
 ```
 
-The router API key lives in the SSM SecureString `/memorystand/anthropic_api_key`, never in the
-repo, and **must be rotated after the contest.**
+The router API key lives in the SSM SecureString `/memorystand/anthropic_api_key`. Because it may
+have appeared in a development transcript, it must be treated as compromised and **rotated
+immediately**, then replaced in SSM. The deployment must not wait until after the contest.
 
 **Bedrock is the intended provider, and reclaims the path automatically.** A quota-increase
 request is open with AWS. The router is only a standby: Bedrock is tried first on every request,
@@ -211,15 +213,16 @@ what the demo calls.
 | `POST /confirm_outcome` | `outcome: success`, **`model_calls: 0`** |
 | `GET /timemachine` | memories reconstructed at decision time -- last counted at 99 against the earlier 101-row seed; not re-counted this session against the current 50,131-row cluster, so that figure is stale and should not be repeated as current |
 
-The central claim now holds **in production**: a memory's trust is granted by an external
-outcome, on a path that makes zero model calls -- with the caveat above that the *decision*
-itself is currently made by a deterministic fallback, not a model, because Bedrock quota is
-still zero.
+The central trust claim holds **in production**: a memory's standing is granted by an external
+outcome on a path that makes zero model calls. Decision reasoning is a separate path: Bedrock is
+preferred, the disclosed router is the current standby, and the deterministic fallback remains
+available when neither provider answers.
 
 ## Security holes found by adversarial review, and closed
 
-Four, all reachable from the public Function URL, none caught by the existing suite -- which
-tested that the system behaves well for a cooperative caller, not that it refuses a hostile one.
+The first four were reachable from the public Function URL and were not caught by the original
+cooperative-caller suite. The final readiness pass expanded the boundary to decision references,
+read isolation, and resource budgets.
 
 | Hole | Now |
 |---|---|
@@ -227,6 +230,10 @@ tested that the system behaves well for a cooperative caller, not that it refuse
 | `trust._apply` matched on `decision_id` with **no tenant predicate** on the path that promotes memories to `verified` | `tenant_id` is a required positional argument; another tenant's decision is reported identically to a nonexistent one. **Reopened and closed again:** the first fix scoped the decision lookup only, leaving the tier `UPDATE` unscoped, so a caller could promote another tenant's memories via their own decision. Both statements are now scoped |
 | `POST /confirm_outcome` was **not** behind the shared secret while `/ingest` and `/decide` were | gated; live check returns **401** without the secret |
 | The kill switch failed **open** -- any SSM read error defaulted to `"off"` | fails closed, and distinguishes "read failed" from "read the value off" |
+| A caller could persist arbitrary `produced_memory_ids` / `consulted_memory_ids` | every id must be a UUID naming an admitted memory owned by the same tenant before the decision is inserted |
+| Public read routes accepted any tenant UUID | unauthenticated reads are confined to the demo tenant; operator authentication is required for any other tenant |
+| Recall depth was caller-controlled and generic 500s returned exception text | `k` is capped server-side; unexpected responses are opaque and carry a request id |
+| A real metric could be attached to the wrong or missing entity | exact normalized CloudWatch dimension binding; wrong-entity outcomes are refused and entityless evidence cannot reach `verified` |
 
 The pattern worth naming: the routes that got gated were the ones that obviously write
 *content*. The route that writes *trust* was missed because it reads like a callback. A test now
@@ -247,22 +254,13 @@ property of the managed server, not a choice this project made. Reproduce it all
 `scripts/verify_mcp.py`. Its write probe is opt-in and has not been run, so whether a write
 would actually be refused is **untested**.
 
-## Pending: the attested/verified migration
+## Resolved: the attested/verified migrations
 
-`db/migrations/001_attested_trust_tier.sql` has **not** been applied to the live cluster, and
-the code that writes `attested` is therefore **committed but not deployed**. That ordering is
-deliberate: the live `CHECK` constraint still permits only three tiers, so a Lambda deployed
-ahead of the migration would fail every `/confirm_outcome` that lands on the attested path.
-
-    python db/migrate.py                 # idempotent; --status to see what is pending
-    REGION=us-west-2 ./infra/deploy.sh
-
-(An earlier version of this page said to run `cockroach sql --url ... -f ...`. That was wrong:
-it needs the CockroachDB CLI, which is not installed on a plain macOS machine, and neither is
-`psql`. `db/migrate.py` uses the psycopg2 driver the repo already depends on.)
-
-The migration rewrites one CHECK constraint. No rows are read, written or moved, every existing
-value stays valid, and re-running it is a no-op.
+Live `/health` on 2026-08-09 reported all three migrations applied:
+`001_attested_trust_tier.sql`, `002_reverification.sql`, and
+`003_retrieval_receipt.sql`. The deployed source receipt at that check was `61cc6a35b0`; the
+winner-readiness deployment will replace it, and `/health.deployment.source_sha` remains the
+source of truth.
 
 ## Outcome verification is live, and it refuses things
 

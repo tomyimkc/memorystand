@@ -48,6 +48,7 @@ from typing import Any
 # between the claimed delta and the observed one.
 WINDOW_MINUTES = int(os.environ.get("MEMORYSTAND_EVIDENCE_WINDOW_MINUTES", "15"))
 TOLERANCE = float(os.environ.get("MEMORYSTAND_EVIDENCE_TOLERANCE", "0.5"))
+MIN_DATAPOINTS = int(os.environ.get("MEMORYSTAND_EVIDENCE_MIN_DATAPOINTS", "3"))
 # Deliberately AWS_REGION, NOT MEMORYSTAND_BEDROCK_REGION. CloudWatch metrics exist only in
 # the region that emitted them, so pointing the evidence checker at the model's region would
 # return "no datapoints" for every query and silently downgrade every outcome to `attested` --
@@ -69,6 +70,7 @@ NOT_VERIFIABLE = "not_verifiable"
 # it reached `verified` every time and then outranked honest memories. Verifying that a number
 # moved is not the same as verifying it moved for the subject of the claim.
 ENTITY_MISMATCH = "entity_mismatch"
+ENTITY_UNBOUND = "entity_unbound"
 
 _client: Any = None
 
@@ -128,20 +130,19 @@ def _parse_dims(raw: str | None) -> list[dict[str, str]]:
 def _entity_matches(entity: str | None, external_ref: str) -> bool:
     """Is this metric plausibly ABOUT the entity the memory concerns?
 
-    Deliberately a containment check over the reference string rather than a lookup: metric
-    dimensions carry the service identity in practice (FunctionName=payments-service,
-    ServiceName=checkout-api), and requiring a curated entity->metric map would make the check
-    unusable for anyone who has not built one. Comparison is case- and separator-insensitive
-    because "payments-service" and "payments_service" are the same service.
-
-    Returns True when no entity is supplied -- callers that do not know the subject cannot have
-    this checked for them, and silently failing them closed would break every legitimate
-    caller that predates this argument.
+    Identity must be carried by an exact CloudWatch dimension value. A containment check over the
+    whole reference let `payments` claim a metric for `payments-canary`, and an entityless claim
+    could be promoted without binding the evidence to any subject at all. Comparison remains
+    case- and separator-insensitive so `payments-service` and `Payments_Service` are equivalent.
     """
     if not entity:
-        return True
+        return False
+    match = _METRIC_REF.match(external_ref.strip())
+    if not match:
+        return False
     norm = lambda t: t.lower().replace("-", "").replace("_", "").replace(" ", "")
-    return norm(entity) in norm(external_ref)
+    expected = norm(entity)
+    return any(norm(dim["Value"]) == expected for dim in _parse_dims(match.group("dims")))
 
 
 def entity_matches(entity: str | None, external_ref: str) -> bool:
@@ -186,6 +187,14 @@ def verify(
     if claimed_delta is None:
         return Verification(NOT_VERIFIABLE, "source='metric' with no metric_delta to check")
 
+    if not entity:
+        return Verification(
+            ENTITY_UNBOUND,
+            "the produced memory has no entity, so this metric cannot be bound to the subject "
+            "of the claim. The outcome may be attested, but it cannot grant verified standing.",
+            claimed=claimed_delta,
+        )
+
     # Check the SUBJECT before checking the number. A real improvement attached to the wrong
     # service is the most dangerous input this function sees: every downstream check passes,
     # the memory reaches `verified`, and it then outranks honest memories about the service it
@@ -212,7 +221,7 @@ def verify(
     except Exception as exc:  # noqa: BLE001 - an unreachable CloudWatch must not grant OR deny
         return Verification(
             UNAVAILABLE,
-            f"could not reach CloudWatch to check {external_ref!r}: {type(exc).__name__}: {exc}. "
+            f"could not reach CloudWatch to check {external_ref!r}: {type(exc).__name__}. "
             "The outcome is recorded as attested; no memory is promoted to verified on an "
             "unchecked claim.",
         )
@@ -220,9 +229,9 @@ def verify(
     if before is None or after is None:
         return Verification(
             UNAVAILABLE,
-            f"CloudWatch returned no datapoints for {external_ref!r} in the "
-            f"{WINDOW_MINUTES}-minute windows either side of the decision, so the claimed "
-            "change cannot be confirmed or denied",
+            f"CloudWatch returned fewer than {MIN_DATAPOINTS} usable datapoints for "
+            f"{external_ref!r} in one or both {WINDOW_MINUTES}-minute windows around the "
+            "decision, so the claimed change cannot be confirmed or denied",
             claimed=claimed_delta,
         )
 
@@ -252,8 +261,9 @@ def verify(
 
     return Verification(
         CONFIRMED,
-        f"CloudWatch confirms {external_ref!r} moved {observed:+.4g} against a claimed "
-        f"{claimed_delta:+.4g}, within tolerance. Checked independently, with no model involved.",
+        f"CloudWatch independently corroborates that {external_ref!r} moved {observed:+.4g} "
+        f"against a claimed {claimed_delta:+.4g}, within tolerance. This is evidence of a "
+        "consistent monitored outcome, not proof that the action alone caused the change.",
         observed=observed,
         claimed=claimed_delta,
     )
@@ -270,6 +280,6 @@ def _average(client, namespace: str, metric: str, dims, start, end) -> float | N
         Statistics=["Average"],
     )
     points = resp.get("Datapoints") or []
-    if not points:
+    if len(points) < MIN_DATAPOINTS:
         return None
     return sum(p["Average"] for p in points) / len(points)

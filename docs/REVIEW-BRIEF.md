@@ -11,7 +11,7 @@ about the strategy, the framing, and the risks; tell it to mark anything it coul
 
 ## ROLE
 
-You are reviewing a hackathon submission that has not been submitted yet. There are 12 days left.
+You are reviewing a hackathon submission that has not been submitted yet. There are 9 days left.
 The person who built it wants to win outright, and has asked for a critical review rather than
 encouragement.
 
@@ -23,7 +23,7 @@ because the remaining time should go where it is weak.
 Three specific instructions:
 
 1. **Do not be agreeable.** If the core idea is wrong for this contest, say the core idea is
-   wrong for this contest. A pivot recommendation 12 days out is a legitimate answer and is more
+   wrong for this contest. A pivot recommendation 9 days out is a legitimate answer and is more
    useful than a list of polish items.
 2. **Verify before you critique, and mark what you could not verify.** The summary below was
    written by the builder's assistant and has already been caught overstating things twice. Check
@@ -70,14 +70,17 @@ Three specific instructions:
 
 **MemoryStand** — an agent memory store where a memory has to *earn* the right to be trusted.
 
-The thesis: every shipping agent-memory system (Mem0, Zep, AWS AgentCore) ultimately asks a
-language model whether its own memory is true. MemoryStand instead asks the system of record —
-Amazon CloudWatch — and refuses to promote a claim the metric contradicts.
+The thesis: agent-memory products commonly use recency, source authority, extraction confidence,
+or model-led reconciliation. MemoryStand adds a separate action-authority boundary: a memory may
+be stored and recalled without being allowed to steer an autonomous action. Machine-checkable
+outcomes are re-queried against Amazon CloudWatch, bound to the memory's entity, and refused when
+the metric contradicts the claim.
 
 **The trust ladder.** A memory is `unconfirmed` → `attested` → `verified`, and can be `disputed`.
-Promotion to `verified` requires re-querying CloudWatch and finding the claimed outcome actually
-happened. The promotion path (`backend/trust.py`) makes **zero model calls** by construction: it
-imports no model client, and a runtime guard fails if one becomes reachable even one import away.
+`unconfirmed` cannot steer an action; `attested` is advisory and always requires approval; only
+`verified` may steer autonomously. Promotion to `verified` requires re-querying CloudWatch,
+finding enough datapoints, matching the memory's exact entity, and corroborating direction and
+magnitude. The promotion path (`backend/trust.py`) makes **zero model calls** by construction.
 
 **CockroachDB usage** (3 of the 4 required tools):
 - `embedding VECTOR(512)` in the same relational table as the facts (`db/schema.sql:63`).
@@ -99,10 +102,13 @@ as observability**, SSM SecureStrings for secrets, Amplify for the frontend, Eve
 scheduled re-verification sweep, Bedrock (see weaknesses).
 
 **Measured results** (all in `benchmarks/`):
-- **Poisoning:** 540 poisoned claims across 5 attack classes + 60 honest controls = 600, run
-  against three defences. Trust-the-caller admits 100% of attacks. LLM-as-judge admits 0% of
-  attacks *and* 0% of honest claims. Outcome-gated: 0% of attacks reach `verified`, 100% of
-  honest claims admitted.
+- **Poisoning:** 540 poisoned claims across 5 attack classes + 60 honest controls = 600.
+  The permissive trust-the-caller baseline gives 100% of attacks autonomous authority.
+  The outcome gate gives 0% of attacks autonomous authority: unverifiable reports may be
+  retained as `attested`, while wrong metrics, magnitudes, and entities are refused. All 60
+  honest, correctly attributed controls reach `verified` and may act autonomously. The optional
+  LLM plausibility arm is not part of the committed deterministic receipt and is not presented
+  as a reproduction of a named product.
 - **Verification:** 204 cases that should have been refused — 204 false promotions before the
   gate, 0 after; holds across 5 seeds.
 - **Scale:** 50,131 rows on the live CockroachDB Cloud cluster across 40 tenants; 250,000 rows
@@ -110,7 +116,8 @@ scheduled re-verification sweep, Bedrock (see weaknesses).
 - **Concurrency:** 10 concurrent writers, 0 lost updates under real contention.
 - **Failover:** reads keep succeeding through a node loss (3 nodes on one machine).
 
-~15,000 lines, 135 tests, 80 commits.
+~15,000 lines, **158 tests passing** in the current isolated readiness worktree, plus one
+video-artifact test skipped until the refreshed render is copied in.
 
 ## KNOWN WEAKNESSES — do not spend time rediscovering these
 
@@ -125,16 +132,15 @@ Listed so you can attack the *response* to them, and so you cannot be misled by 
    has no working read-only role for this server, so "read-only inspection" cannot be claimed.
 3. **The failover test is 3 nodes on one machine**, not multi-region. It shows replication
    surviving a process loss, nothing about datacentre resilience.
-4. **The LLM-judge benchmark arm was sampled at n=6 per class**, against n=60 for the other arms,
-   because 540 sequential model calls took ~30 minutes. The 0%/0% figures come from that smaller
-   sample.
-5. **The live demo tenant has ~20 duplicate rows.** A live recall currently returns five
+4. **The live demo tenant has ~20 duplicate rows.** A live recall currently returns five
    near-identical memories at *identical* distance 0.547 — which undercuts any on-screen
    demonstration of "the closer memory lost to the more trusted one."
-6. **The demo video is mid-rework and blocked** on exhausted Grok Build credits (5 of 17 clips
-   ungenerated). The presenter is a synthetic likeness of the author.
-7. **Not yet done:** repo is not confirmed public; the Devpost project has not been created; an
-   API key exposed in a working transcript still needs rotation; the local AWS session is expired.
+5. **The embeddings in the deployed demo are lexical stubs**, so the public demo proves the
+   database, policy, transaction, and evidence paths but not semantic retrieval quality.
+6. **Not yet done:** the refreshed evidence-first video still needs its final render and public
+   YouTube/Vimeo upload; an API key exposed in a development transcript still needs rotation;
+   the local AWS session is expired; and the created Devpost draft still needs owner attestations
+   before final submission.
 
 ## WHAT I WANT FROM YOU
 
@@ -147,7 +153,7 @@ where does this land — 1st, top 3, top 10, or nowhere? Say what you are assumi
 
 ### 2. The single biggest threat to winning
 Not a list. One thing. What is the one weakness most likely to cost first place, and what is the
-cheapest intervention that removes it inside 12 days?
+cheapest intervention that removes it inside 9 days?
 
 ### 3. Criterion-by-criterion
 For each of the five criteria: score /10, the *specific* evidence a judge would find, and the
@@ -165,7 +171,7 @@ new one-sentence pitch.
 Consider this seriously rather than dismissing it. Options include: (a) stay the course and
 polish; (b) keep the engine, re-aim the demo at a different use case with more obvious impact;
 (c) add one substantial capability that lands squarely on a weak criterion; (d) something else.
-If a pivot is right, say what to **stop** doing — 12 days is a real budget, and anything added
+If a pivot is right, say what to **stop** doing — 9 days is a real budget, and anything added
 comes out of something else.
 
 ### 6. What is missing that a winner would have
@@ -202,11 +208,11 @@ suggestion, because a caught overclaim in a project about honesty is fatal rathe
 ## Overclaims found
 <file:line, the claim, why the evidence does not support it — or "none found", and say what you checked>
 
-## 12-day plan
+## 9-day plan
 <ordered, each item with rough hours and the criterion it moves>
 ```
 
 ## FINAL INSTRUCTION
 
 End with the one sentence you would say to the builder if you only got one sentence, knowing they
-want to win and have 12 days. Make it the true thing, not the kind thing.
+want to win and have 9 days. Make it the true thing, not the kind thing.

@@ -1,6 +1,6 @@
 # Devpost submission — MemoryStand
 
-Ready-to-paste copy for `cockroachdb-ai.devpost.com`, rewritten 2026-08-04 for the current build:
+Ready-to-paste copy for `cockroachdb-ai.devpost.com`, updated 2026-08-09 for the current build:
 region `us-west-2`. Live reasoning runs through a disclosed third-party router standby because
 Bedrock quota on this account is 0 (Field 6 and [DISCLOSURES.md](../DISCLOSURES.md)); the intended
 Bedrock model is `amazon.nova-lite-v1:0`, not Claude ([docs/BEDROCK_QUOTA.md](BEDROCK_QUOTA.md)).
@@ -9,8 +9,8 @@ field-for-field.
 
 ## Deadline
 
-**Submissions close 2026-08-18 17:00 ET (2026-08-18 21:00 UTC).** Today is 2026-08-04 — **14 days
-out.** Judging is five equally-weighted criteria; ties break toward **Agentic Memory Design**,
+**Submissions close 2026-08-18 17:00 ET (2026-08-18 21:00 UTC).** Judging is five
+equally-weighted criteria; ties break toward **Agentic Memory Design**,
 then **Technical Implementation**. Prizes: 1st $5,000, 2nd $2,500, 3rd $1,250.
 
 ---
@@ -23,34 +23,33 @@ then **Technical Implementation**. Prizes: 1st $5,000, 2nd $2,500, 3rd $1,250.
 
 ### Tagline (one line, ≤ ~70 chars for Devpost's card view)
 
-> Memory that asks CloudWatch, not a model, whether it's true.
+> Agent memory that earns authority from externally corroborated outcomes.
 
 Longer form, for the description field where the character budget allows it:
 
-> The major shipping agent-memory systems we checked (Mem0, Zep, AWS AgentCore) ask a model whether their own memory is true.
-> MemoryStand asks CloudWatch — and refuses the promotion when CloudWatch disagrees.
+> MemoryStand separates “stored” from “allowed to act”: only an outcome independently
+> corroborated against an external system of record becomes action-authoritative.
 
 **Why this framing and not "we invented outcome-gated trust".** The idea is decades old
 (Doyle's JTMS, 1979; CHEF, 1986; NELL's promoted beliefs, 2010; EigenTrust, 2003), and a judge
 who knows the field would puncture a novelty claim in one search. What is defensible and
-checkable is the *enforcement*: the shipping systems we checked delegate "is this memory true?" to a
-model, and this one structurally cannot. Lead with the comparison, concede the idea.
+checkable is the *enforcement*: the path that grants action authority structurally cannot call a
+model. Lead with that behavior, not an unbounded market claim.
 
 ### Opening three paragraphs (long description)
 
-> Every agent-memory product on the market decides what to trust using one of three signals:
-> **recency** (the newest write wins), **source authority** (the runbook outranks Slack), or
-> **model self-consistency** (ask the model whether it still believes itself). All three are the
-> agent grading its own homework. MemoryStand uses a fourth signal that none of them use: **did it
-> actually work?**
+> Agent-memory systems commonly use recency, source authority, extraction confidence, or
+> model-led reconciliation. MemoryStand adds a separate authority boundary: **did the outcome
+> stand up when checked outside the agent?** A memory can remain inspectable without being
+> allowed to steer an autonomous action.
 >
-> A memory is promoted from `unconfirmed` to `verified` only when a real, external, non-model
-> event confirms that the decision it produced was correct — PagerDuty resolving the incident, a
-> monitored metric recovering, a named on-call engineer signing off. That promotion path,
-> `backend/trust.py`, makes **zero model calls**: it imports no model client, and
+> `unconfirmed` and `disputed` memories never steer an action. `attested` memories are advisory
+> and always held for human approval. A memory reaches `verified` only when a machine-checkable,
+> entity-bound outcome is independently corroborated — in this deployment, by re-querying
+> Amazon CloudWatch. That promotion path, `backend/trust.py`, makes **zero model calls**:
+> it imports no model client, and
 > `assert_no_model_calls()` runs on the live path every time `grant_standing()` is called, not
-> just in a docstring. Tests cover it. If a model could influence which memories get trusted, the
-> whole claim collapses into the self-consistency bucket everyone else is already in.
+> just in a docstring. Tests cover it.
 >
 > CockroachDB is not incidental to this — it is why the mechanism is cheap to build correctly.
 > `AS OF SYSTEM TIME` lets `cross-examine` re-run the agent's own ranked recall query — same
@@ -64,9 +63,10 @@ model, and this one structurally cannot. Lead with the comparison, concede the i
 > versus **23.61 ms** brute-force on the same data, because the index partition *is* "this
 > tenant's admitted memories," not the whole platform's. Time-travel and write-time contradiction
 > checking are prior art (Zep/Graphiti, Mem0, MemTX, TOKI); MemoryStand says so in its own README
-> rather than waiting for a judge to find it. The one thing being claimed as new is the outcome
-> gate — and it is scoped to the on-call domain, where "did it actually work" has an unambiguous,
-> externally-checkable answer within minutes.
+> rather than waiting for a judge to find it. The contribution being evaluated is the
+> **enforcement boundary**: independently corroborated, entity-bound outcome evidence is what
+> grants a stored memory autonomous authority. It is scoped to the on-call domain, where "did it
+> actually work" has a concrete, externally-checkable operational signal within minutes.
 
 ---
 
@@ -74,7 +74,7 @@ model, and this one structurally cannot. Lead with the comparison, concede the i
 
 | # | Field | Id | Required | Status |
 |---|---|---|---|---|
-| 1 | Demo app URL | 27812 | Yes | **OWNER ONLY** — deploy is live; paste `https://main.d19xad9aeccy3e.amplifyapp.com` (the Amplify dashboard), not the raw Lambda Function URL, which has no root route and 404s on `GET /` |
+| 1 | Demo app URL | 27812 | Yes | Ready: `https://main.d19xad9aeccy3e.amplifyapp.com` (the Amplify dashboard), not the raw Lambda Function URL |
 | 2 | Testing credentials/instructions | 28078 | No | Drafted below |
 | 3 | Public repo URL | 27813 | Yes | Ready: `https://github.com/tomyimkc/memorystand` is public (verified 2026-08-07) |
 | 4 | OSS license file URL | 27814 | Yes | Ready: `https://github.com/tomyimkc/memorystand/blob/main/LICENSE`; GitHub identifies Apache-2.0 |
@@ -83,7 +83,7 @@ model, and this one structurally cannot. Lead with the comparison, concede the i
 | 7 | How meaningfully integrated | 27817 | Yes | Drafted below |
 | 8 | Project start date | 27818 | Yes | `08-03-26` |
 | 9 | Pre-existing code disclosure | 27819 | Yes | Drafted below |
-| 10 | Architecture diagram | 27820 | No | `docs/architecture.png` is already exported at 1920×1080; **OWNER ONLY** to upload it to Devpost |
+| 10 | Architecture diagram | 27820 | No | `docs/architecture.png` is exported at 1920×1080 and can be uploaded through the connected Devpost draft |
 | 11 | Feedback on CockroachDB AI tools | 27821 | No | Drafted below |
 | 12 | Submitter type | 27822 | Yes | **OWNER ONLY** |
 | 13 | Country of residence | 27823 | Yes | **OWNER ONLY** |
@@ -110,6 +110,8 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > (`backend/handler.py::_scope_tenant`, with a regression test proven to fail without the
 > enforcement). The operator secret is separate, is never served by `/health`, and is covered by
 > its own test asserting it cannot appear there.
+> Unauthenticated `recall`, `timemachine`, and `diff` requests are also confined to the same
+> demo tenant. An operator credential is required to read any other tenant.
 >
 > No account and no credentials are needed to evaluate this project locally either.
 >
@@ -124,7 +126,8 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > → cross-examine loop with no AWS account and no CockroachDB Cloud account. Embeddings fall back
 > to a deterministic local stub (`MEMORYSTAND_EMBED_STUB=1`, set automatically by the script and
 > announced on screen — a stub result is never presented as a real embedding). `pytest -q` runs
-> the test suite (147 core tests passed and one artifact check skipped in the clean worktree; all 148 passed when the separately verified local video artifacts were supplied). `python cli/memorystand.py recall --query "payments failover"` drives the CLI
+> the test suite (**160 tests passed** with the refreshed, independently verified local video
+> artifact present). `python cli/memorystand.py recall --query "payments failover"` drives the CLI
 > directly. A deployed demo also exists now — see Field 1's URL,
 > `https://main.d19xad9aeccy3e.amplifyapp.com`, no account or login needed — this local path
 > remains as a fallback for judges who prefer to run it themselves.
@@ -134,7 +137,8 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > **Cloud Managed MCP Server.** Wired to the live cluster and verified end to end with
 > `scripts/verify_mcp.py`: handshake to `cockroachdb-cloud` v1.0.0, a trust-ladder read
 > returning `{"unconfirmed":118,"verified":5}`, and an `explain_query` showing the `vector
-> search` node — all through the managed server, no custom proxy.
+> search` node — all through the managed server, no custom proxy. Read tools are the only tools
+> this project invokes through MCP.
 >
 > **State this plainly rather than let a judge find it.** The hackathon page describes the MCP
 > server as "safe by default: read-only mode". In practice there is **no read-only role that
@@ -172,22 +176,6 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > statement of the (already-open, psycopg2-managed) transaction, not `BEGIN AS OF SYSTEM TIME`.
 > Every SQL statement and `EXPLAIN` plan in the skill was copy-pasted from a real session against
 > this project's own cluster, not written from documentation alone.
->
-> **Cloud Managed MCP Server.** Wired as a `memorystand-mcp-readonly` service-account connection,
-> used from Claude Code as the judge- and operator-facing inspection surface for the running
-> cluster — deliberately never in this project's own write path. Verified live, twice: the
-> handshake to `https://cockroachlabs.cloud/mcp` returns `serverInfo {name: "cockroachdb-cloud",
-> version: "1.0.0"}`; `select_query` returns real rows
-> (`{"rows":[{"trust_tier":"unconfirmed","memories":118},{"trust_tier":"verified","memories":5}]}`);
-> `explain_query` confirms `vector search: True` on the live cluster. One honest correction from an
-> earlier draft: **there is no read-only role for this server.** Cockroach Labs' own docs require
-> "the Cluster Admin role or the Cluster Operator role," so the service account holds
-> `CLUSTER_DEVELOPER` **and** `CLUSTER_OPERATOR_WRITER` — it is write-capable, not read-only, and
-> the tool list (`create_database`, `create_table`, `insert_rows`) is offered to every identity
-> regardless of role; tool availability is not permission. `scripts/verify_mcp.py` automates the
-> handshake and query checks; its write probe is opt-in behind `--probe-writes` and has not been
-> run, so whether a write would actually be rejected server-side is untested, not verified either
-> way.
 >
 > **ccloud CLI.** `infra/provision.sh` provisions the CockroachDB Basic cluster on `--cloud AWS`,
 > creates the scoped SQL user, and prints the connection string non-interactively (`-o json`), so
@@ -229,7 +217,8 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > that makes the headline literally true rather than rhetorical. When an outcome arrives with
 > `source='metric'`, `backend/evidence.py` re-queries CloudWatch for what the metric actually
 > did in the windows either side of the decision and compares it against what was claimed —
-> direction first, magnitude second. Confirmed → the memory reaches `verified`. Contradicted →
+> exact normalized entity binding first, then direction and magnitude, with a minimum datapoint
+> budget. Confirmed → the memory reaches `verified`. Contradicted or bound to the wrong entity →
 > **the outcome is refused outright**, not quietly downgraded. Unavailable → `attested`, because
 > an outage in the checker is not evidence in either direction.
 >
@@ -280,7 +269,7 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > checkpoint cadence in `backend/snapshots.py`. **Remove Amplify Hosting** and there is no
 > judge-facing dashboard, only an API judges would have to `curl` by hand.
 >
-> Production hardening, not just feature-building: this session found and fixed four real
+> Production hardening, not just feature-building: the build found and fixed four real
 > security issues, each backed by a regression test. `GET /diff?instant=` — unauthenticated —
 > interpolated its `AS OF SYSTEM TIME` value raw, because that clause can't be parameterised; it's
 > now an allow-list (HLC decimal, negative interval, ISO-8601), and a hostile `instant` now returns
@@ -295,6 +284,14 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > the secret returns `401`. And the kill switch failed **open** on any SSM read error; it now
 > fails closed. A test asserts every `POST` route is secret-gated, so none of these four can
 > regress silently.
+>
+> A final winner-readiness pass tightened the full operation around those fixes. Decisions now
+> reject malformed, cross-tenant, or non-admitted memory references before insertion; every
+> tier-moving `UPDATE` carries a tenant predicate; unauthenticated reads are confined to the
+> public demo tenant; recall depth is capped server-side; and unexpected exceptions return an
+> opaque request id instead of internal connection details. The action policy is equally
+> explicit: only `verified` memory can autonomously steer a response, `attested` memory is
+> advisory and held for approval, and `unconfirmed`/`disputed` memories cannot steer it.
 
 ### Field 9 — Pre-existing code disclosure
 
@@ -348,16 +345,18 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 
 ### Field 15 — Which AI tools leveraged
 
-> **Authoring.** Claude Code (Anthropic) was used throughout for architecture discussion, SQL and
-> Python authoring, and documentation — disclosed in full in `DISCLOSURES.md`.
+> **Authoring.** Claude Code (Anthropic) and OpenAI Codex were used for architecture discussion,
+> adversarial review, SQL/Python/JavaScript authoring, tests, and documentation. The repository
+> history and `DISCLOSURES.md` preserve that provenance; the human owner remains responsible for
+> the submission and its claims.
 >
-> **The demo video.** The presenter is a synthetic likeness of me, generated from my own
-> photograph with xAI's Grok (`image_edit` for the frames, `image_to_video` for the lip-synced
-> takes). The words are mine: every line was written by hand, and each generated clip is
-> transcribed with faster-whisper and compared against the line it was given, because the model
-> invents dialogue when a prompt contains no words. The pass/fail record for all sixteen shots is
-> committed at `docs/demo/presenter-verification.json`, and the pipeline is in
-> `scripts/presenter/`. The on-screen data panels are rendered from live API captures, not mocked.
+> **The submitted demo video.** It has no synthetic presenter. Frames are composed
+> programmatically with Pillow from the live dashboard screenshot, live API receipts, and
+> committed benchmark transcripts; narration uses macOS text-to-speech; ffmpeg assembles and
+> captions the 1920×1080 H.264/AAC render. `scripts/video/verify_video.py` verifies its technical
+> envelope and `scripts/video/verify_claims.py` checks every spoken claim against the receipt
+> corpus. An earlier Grok-generated presenter experiment exists under `scripts/presenter/`, but
+> it is not the video being submitted.
 >
 > **Runtime, not authoring.** Amazon Bedrock is a component of the submitted agent itself and is
 > covered under AWS services — see Field 6. Honest caveat: on-demand Bedrock quota on this account
@@ -371,7 +370,9 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 
 ## Fields only the owner can answer
 
-Rows 1, 10, 12, 13, 14, 16, 17, 18, 19, 20 above. Field 1 is ready to paste now that the live Amplify dashboard has been independently fetched; use that URL, not the raw Lambda Function URL. Field 3 is no longer blocked: the repository is public. Field 10 has an exported `docs/architecture.png` ready for owner upload. Fields 12–14 and 16–20 are personal/eligibility answers no one else can supply.
+Rows 12, 13, 14, 16, 17, 18, 19, and 20 above. Rows 1 and 10 can be completed through the
+connected Devpost draft. Fields 12–14 and 16–20 are personal or eligibility answers no agent
+should infer.
 
 ---
 
@@ -386,11 +387,13 @@ Rows 1, 10, 12, 13, 14, 16, 17, 18, 19, 20 above. Field 1 is ready to paste now 
       a private→public flip is not cleanly reversible once anyone has cloned it.
 - [ ] `README.md`'s Status table reflects reality — no checkmark for anything that wasn't actually
       run against real infrastructure.
-- [ ] Demo video recorded, edited, uploaded, set to **Public** — watch the public link once,
+- [ ] Demo video rendered and locally verified (**done**); upload it, set it to **Public**, and
+      watch the public link once,
       logged out, start to finish.
 - [x] Demo app URL fetched through an external web reader on 2026-08-07; it returned the MemoryStand dashboard. Re-check immediately before submission.
 - [ ] Every field above except the owner-only rows is filled in on the live Devpost draft.
-- [ ] Architecture diagram is exported at `docs/architecture.png` (1920×1080); owner must upload it in field 10.
+- [x] Architecture diagram is exported at `docs/architecture.png` (1920×1080).
+- [ ] Architecture diagram is attached to the Devpost draft.
 
 ## Day of (2026-08-18)
 

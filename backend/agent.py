@@ -87,14 +87,18 @@ _PROPOSE_ACTION_TOOL = {
 
 SYSTEM_PROMPT = (
     "You are an on-call response agent for a production service. You are given an "
-    "alert and a list of memories recalled from prior incidents for this tenant. "
+    "alert and the highest-authority usable memory tier recalled for this tenant. Every supplied "
+    "memory is either VERIFIED or ATTESTED and includes its trust_tier. VERIFIED memory may "
+    "support an autonomous action. ATTESTED memory is advisory only and the caller will hold "
+    "the result for human approval. "
     "Call propose_action exactly once with exactly one action chosen from: "
     + ", ".join(ALLOWED_ACTIONS)
     + ". Ground your rationale ONLY in the supplied memories -- do not invent facts "
     "about the system. List the memory_id of every memory your rationale relies on "
     "in cited_memory_ids; if none of the recalled memories are relevant, say so in "
     "the rationale and return an empty cited_memory_ids list rather than fabricating "
-    "a reason to cite one."
+    "a reason to cite one. Unconfirmed and disputed memories are deliberately not supplied "
+    "because they may not steer even an advisory recommendation."
 )
 
 # Deterministic fallback rule table, checked in order against the lower-cased alert
@@ -114,12 +118,13 @@ _FALLBACK_RULES: tuple[tuple[str, str], ...] = (
 _FALLBACK_DEFAULT_ACTION = "open_incident"
 
 
-# How much a memory's trust tier counts when two memories disagree. Deliberately ordered, not
-# scored: a memory an external system of record confirmed outranks one somebody merely reported,
-# which outranks one nothing has ever backed. `disputed` is absent on purpose -- a memory whose
-# outcome was a rollback or a false positive must never steer an action, so it is filtered out
-# rather than given a low weight it could still win with.
-_TIER_RANK = {"verified": 3, "attested": 2, "unconfirmed": 1}
+# Which memories may influence an action, and with what authority.
+#
+# `unconfirmed` is intentionally absent. It is retained and returned by recall for inspection,
+# contradiction detection, and later corroboration, but it may not steer a recommendation.
+# `attested` can produce an advisory recommendation, but the result is always held for approval.
+# Only `verified` memory can autonomously outrank the baseline policy.
+_TIER_RANK = {"verified": 2, "attested": 1}
 
 
 def _action_from_memory(row: dict[str, Any]) -> str | None:
@@ -142,25 +147,16 @@ def _action_from_memory(row: dict[str, Any]) -> str | None:
     return None
 
 
-def _fallback_action(alert_text: str, recalled: list[dict] | None = None) -> tuple[str, str]:
-    """Choose an action deterministically, letting MEMORY outrank the keyword table.
+def _fallback_decision(
+    alert_text: str, recalled: list[dict] | None = None
+) -> tuple[str, str, bool, list[str]]:
+    """Choose deterministically while enforcing the trust ladder as an action policy.
 
-    Why this exists. The previous version took only ``alert_text`` and never looked at the
-    recalled memories at all -- so on a deployment with no model quota, which is this one,
-    memory was retrieved, displayed, and then ignored. Every action came from matching a word
-    in the alert. A project whose entire argument is "memory is the thing that makes an agent
-    useful" cannot have a live decision path that memory does not touch.
+    `verified` memory may drive a recommendation. `attested` memory may produce an advisory
+    recommendation, but it is held for human approval because the reported outcome was not
+    independently corroborated. `unconfirmed` and `disputed` memories never steer an action.
 
-    So the rule is now: if a memory that has survived contact with reality names an action,
-    take it, and say which memory and which tier decided. Only if nothing recalled names an
-    action does the keyword table apply.
-
-    This is still zero model calls and still fully auditable -- the returned reason names the
-    exact memory_id -- but it makes ``trust_tier`` load-bearing rather than decorative. A
-    verified memory now changes what the agent does, which is the claim, and it is
-    demonstrable without any model at all.
-
-    Returns (action, reason) so the caller can explain itself honestly.
+    Returns ``(action, reason, memory_requires_approval, cited_memory_ids)``.
     """
     usable = [
         r for r in (recalled or [])
@@ -171,11 +167,18 @@ def _fallback_action(alert_text: str, recalled: list[dict] | None = None) -> tup
         # recall() already returned them in.
         best = max(usable, key=lambda r: _TIER_RANK[r["trust_tier"]])
         action = _action_from_memory(best)
+        if best["trust_tier"] == "verified":
+            return action, (
+                f"Chosen from memory {best['memory_id']} (trust_tier=verified), which "
+                f"records {action!r} for this situation. No model was consulted; this memory "
+                "may outrank the keyword table because an external system of record "
+                "corroborated its outcome."
+            ), False, [str(best["memory_id"])]
         return action, (
-            f"Chosen from memory {best['memory_id']} (trust_tier={best['trust_tier']}), which "
-            f"records {action!r} for this situation. No model was consulted; the memory "
-            "outranked the keyword table because reality has backed it."
-        )
+            f"Advisory recommendation from memory {best['memory_id']} (trust_tier=attested), "
+            f"which records {action!r}. No model was consulted. The outcome was reported but "
+            "not independently corroborated, so this recommendation is held for human approval."
+        ), True, [str(best["memory_id"])]
 
     lowered = alert_text.lower()
     for keyword, action in _FALLBACK_RULES:
@@ -183,11 +186,17 @@ def _fallback_action(alert_text: str, recalled: list[dict] | None = None) -> tup
             return action, (
                 f"No recalled memory named an action, so this fell through to the keyword "
                 f"table: {keyword!r} implies {action!r}. Nothing in memory informed this."
-            )
+            ), False, []
     return _FALLBACK_DEFAULT_ACTION, (
         "No recalled memory named an action and no keyword matched, so this is the default "
         f"action ({_FALLBACK_DEFAULT_ACTION!r}). Nothing in memory informed this."
-    )
+    ), False, []
+
+
+def _fallback_action(alert_text: str, recalled: list[dict] | None = None) -> tuple[str, str]:
+    """Backward-compatible action/reason view used by the CLI and benchmark harness."""
+    action, reason, _requires_approval, _cited = _fallback_decision(alert_text, recalled)
+    return action, reason
 
 
 def _alert_text(alert: dict[str, Any]) -> str:
@@ -297,29 +306,53 @@ def propose(situation: str, recalled: list[dict[str, Any]]) -> dict[str, Any]:
     proposal = None
     source = ""
     last_error: Exception | None = None
+    # Use one authority tier per reasoning pass. VERIFIED outranks ATTESTED, so it is the only
+    # tier supplied when present. If there is no verified context, attested memory may support an
+    # advisory recommendation, but the result is held for approval even if the model omits its
+    # required citation -- anything shown to the model may have influenced it.
+    verified_context = [r for r in recalled if r.get("trust_tier") == "verified"]
+    attested_context = [r for r in recalled if r.get("trust_tier") == "attested"]
+    model_context = verified_context or attested_context
+    model_context_ids = {str(r["memory_id"]) for r in model_context}
+    model_context_is_advisory = bool(attested_context and not verified_context)
     for name, client in _providers():
         try:
-            proposal = _ask_model(situation, recalled, client)
+            proposal = _ask_model(situation, model_context, client)
             source = name
             break
         except bedrock_client.ModelUnavailable as exc:
             last_error = exc
 
+    memory_requires_approval = False
+    cited_memory_ids: list[str] = []
     if proposal is not None:
         action = str(proposal["action"])
         rationale = str(proposal["rationale"])
+        cited_memory_ids = [
+            str(mid)
+            for mid in proposal.get("cited_memory_ids", [])
+            if str(mid) in model_context_ids
+        ]
+        memory_requires_approval = model_context_is_advisory
     else:
-        action, why = _fallback_action(situation, recalled)
+        action, why, memory_requires_approval, cited_memory_ids = _fallback_decision(
+            situation, recalled
+        )
         rationale = (
             f"Deterministic fallback: no reasoning model was available ({last_error}). {why}"
         )
-        source = "fallback_memory" if "Chosen from memory" in why else "fallback_heuristic"
+        source = (
+            "fallback_memory"
+            if cited_memory_ids
+            else "fallback_heuristic"
+        )
 
     return {
         "action": action,
         "rationale": rationale,
-        "requires_approval": action in HIGH_RISK_ACTIONS,
+        "requires_approval": memory_requires_approval or action in HIGH_RISK_ACTIONS,
         "reasoning_source": source,
+        "cited_memory_ids": cited_memory_ids,
         "model_calls": (bedrock_client.call_count() + anthropic_client.call_count())
         - calls_before,
     }
@@ -348,8 +381,8 @@ def handle_alert(tenant_id: str, agent_id: str, alert: dict[str, Any]) -> dict[s
     proposed = propose(alert_text, recalled)
     action = proposed["action"]
     rationale = proposed["rationale"]
-    used_model = proposed["reasoning_source"].startswith("bedrock:")
-    cited_memory_ids = list(recalled_ids)
+    used_model = not proposed["reasoning_source"].startswith("fallback_")
+    cited_memory_ids = proposed["cited_memory_ids"]
     model_calls_this_call = proposed["model_calls"]
     requires_approval = proposed["requires_approval"]
 

@@ -1,58 +1,25 @@
 # MemoryStand — memory that has to stand up
 
-> **The major shipping agent-memory systems we checked — Mem0, Zep, AWS AgentCore — ask a model
-> whether their own memory is true.**
-> MemoryStand asks CloudWatch — and refuses the promotion when CloudWatch disagrees.
+> **A memory can be stored without being allowed to steer an autonomous action.**
+> MemoryStand makes that distinction structural: only an outcome independently corroborated
+> against an external system of record becomes action-authoritative.
 
-**The agent reasons over its own memory, and the trust ladder is what it reasons over.** A real
-`/decide` against the deployed API, quoted verbatim:
+The policy is deliberately stricter than a confidence score:
 
-```
-reasoning_source: api.teamorouter.com:claude-haiku-4-5    model_calls: 1
-action: open_incident
-
-rationale: The recalled memories show a consistent pattern: every prior incident
-involving checkout-api circuit breaker timeouts during payments gateway latency
-spikes has been resolved by temporarily raising the timeout to 1200ms. However,
-this is a repeated issue across multiple incidents (at least 5 documented cases)
-... opening an incident allows escalation to address the root cause.
-```
-
-Amazon Bedrock is tried first and stays the preferred provider — this account has 0 Bedrock
-inference quota in every region, and the moment that changes it takes over with no code change.
-Until then the standby is a third-party Anthropic-compatible router, and `reasoning_source` names
-it rather than pretending otherwise: the label is derived from the endpoint, not hand-written, so
-it always names the provider that actually answered. Full context in
-[`DISCLOSURES.md`](DISCLOSURES.md).
-
-**And when no model is available at all, memory still decides — with zero model calls.** Live:
-
-```
-top recalled:  22207f6e  distance 0.414  unconfirmed  restart_service
-               fb3b7ec0  distance 0.565  verified     scale_up      <- chosen
-
-action: scale_up   reasoning_source: fallback_memory   model_calls: 0
-```
-
-Proximity said one thing; trust said another; trust won.
-
-### Measured against an LLM judge, not just cited
-
-`benchmarks/poisoning.md` — 540 adversarial claims plus 60 honest controls (600 total), three defences, the
-judge arm running live against a real model:
-
-| | attacks reaching `verified` | honest claims admitted |
+| Tier | Stored? | May steer an autonomous action? |
 |---|---:|---:|
-| trust the caller | **100%** | 100% |
-| LLM-as-judge *(what Mem0/Zep/AgentCore do)* | 0% | **0%** |
-| outcome-gated | **0%** | **100%** |
+| `unconfirmed` | yes | **no** |
+| `attested` | yes | advisory only — **human approval required** |
+| `verified` | yes | **yes** |
+| `disputed` | yes, for audit | **no** |
 
-The LLM judge does not block attacks by discriminating — it blocks *everything*, including
-every honest claim. A defence that refuses all evidence stops all poisoning and is useless.
-Only the outcome gate separates the two, and it does so with **zero model calls**.
+The deployed agent can use a reasoning model, but the path that grants memory authority cannot.
+`backend/trust.py` makes zero model calls and checks that invariant at runtime. For metric
+evidence it re-queries Amazon CloudWatch, binds the metric to the memory's entity, checks
+direction and magnitude, and refuses contradicted or wrong-entity claims.
 
-**Memory changes what the agent does, and it does so with zero model calls.** Live, on the
-deployed API — a query recalls two candidate remediations, and the *further* one wins:
+When no reasoning provider is available, verified memory still affects the deterministic path
+with zero model calls. A recorded live example:
 
 ```
 top recalled:  22207f6e  distance 0.414  unconfirmed  restart_service
@@ -60,18 +27,31 @@ top recalled:  22207f6e  distance 0.414  unconfirmed  restart_service
 
 action: scale_up   reasoning_source: fallback_memory   model_calls: 0
 rationale: Chosen from memory fb3b7ec0 (trust_tier=verified) ... the memory
-           outranked the keyword table because reality has backed it.
+           outranked the keyword table because an external system of record
+           corroborated its outcome.
 ```
 
-Proximity said one thing; trust said another; trust won. No model was consulted.
+Proximity said one thing; verified standing said another; verified standing won. An attested
+memory can recommend, but the API marks the decision `held_for_approval`.
 
-A memory layer for on-call AI agents that will not call a belief `verified` until something
-outside the model corroborates it: a recovered metric, re-queried and checked; a resolved
-incident; a human's sign-off. The promotion path makes **zero model calls**, and that is
-enforced by a runtime guard, not by a convention.
+### Adversarial evidence, with authority measured separately from storage
 
-Measured, not asserted — [benchmarks/verification.md](benchmarks/verification.md), 500 labelled
-outcome reports:
+[`benchmarks/poisoning.md`](benchmarks/poisoning.md) runs 540 adversarial claims plus 60 honest
+controls. It reports both whether a claim is stored and whether it can autonomously drive an
+action:
+
+| Outcome-gated class | Reached `verified` | Autonomously drove action |
+|---|---:|---:|
+| Fabricated incident / repeated attestation | 0% | **0%** |
+| Metric lie / inflated magnitude / wrong entity | 0% | **0%** |
+| Honest, correctly attributed metric outcome | **100%** | **100%** |
+
+The permissive “trust the caller” baseline gives every class `verified` authority. The optional
+LLM plausibility baseline is implemented but omitted from the committed deterministic receipt;
+it is not presented as a reproduction of any named third-party product.
+
+[`benchmarks/verification.md`](benchmarks/verification.md) separately measures 500
+honest-but-noisy outcome reports:
 
 | | trust the caller | outcome-gated |
 |---|---:|---:|
@@ -83,7 +63,7 @@ outcome reports:
 Regenerated under five independent seeds the baseline lets through 197–229 unconfirmed
 memories at 54–61% precision; the gate lets through **zero every time**, at 98.0–99.3% recall.
 
-The 1.1% of recall given up is the honest price, and it is a knob
+The small recall loss is the honest price, and it is a knob
 (`MEMORYSTAND_EVIDENCE_TOLERANCE`) with a published trade-off curve rather than a hidden
 default. The failure being caught is not fraud — it is an engineer who restarts a service at
 02:00, sees the page clear, and reports in good faith that the restart fixed it when the metric
@@ -94,7 +74,8 @@ never moved. That is how a memory store fills up with true-sounding operational 
 **Try the write paths yourself — no credential needed from us.** The dashboard fills in a public
 demo credential served by `GET /health`. It is safe to publish because the server scopes it to one
 tenant: used against any other it returns `401`. Ingest a memory, run `/decide`, confirm an outcome,
-and watch a tier move.
+and watch a tier move. Public `recall`, `timemachine`, and `diff` reads are also restricted to that
+isolated demo tenant; the operator credential is required for any other tenant.
 
 **Live demo (click this): <https://main.d19xad9aeccy3e.amplifyapp.com>** — the dashboard, deployed
 on AWS Amplify Hosting. The API it talks to is
@@ -109,8 +90,8 @@ route (`GET /` returns 404 by design — it is not a page to open in a browser).
 > **Built 2026-08-03 onward.** Deployed and verified against real AWS and CockroachDB Cloud —
 > see [docs/DEPLOY_STATUS.md](docs/DEPLOY_STATUS.md), which records the failures found along the
 > way (an SQL injection, a cross-tenant trust escalation, an ungated trust-granting route, a
-> fail-open kill switch) alongside the fixes. Two things are pending and named there: a schema
-> migration and a CloudWatch IAM grant, without which `verified` is unreachable in production.
+> fail-open kill switch) alongside the fixes. The live health receipt reports CockroachDB CCL
+> v26.2.5 and all three schema migrations applied.
 > [SPIKE-RESULTS.md](SPIKE-RESULTS.md) has the earlier spike record, including what failed.
 
 ---
@@ -124,23 +105,22 @@ against what else is known, and then against what actually happened. Most of wha
 MemoryStand makes a memory stand up twice before an agent is allowed to rely on it: once when it
 is written, against everything already believed, and once afterwards, against reality.
 
-The agent-memory systems we surveyed decide what to trust using one of three signals:
-**recency** (newest fact wins), **source authority** (trust the runbook over Slack), or
-**self-consistency** (ask the model whether it believes itself). All three are the agent grading
-its own homework.
+Agent-memory systems commonly use recency, source authority, extraction confidence, or model-led
+reconciliation. MemoryStand adds a separate question: **did the recorded outcome stand up when
+checked outside the agent?**
 
-MemoryStand uses a fourth signal that none of them use: **did it actually work?**
-
-A memory is promoted to `verified` only when a real external event confirms the decision it
-produced was right — PagerDuty resolving the incident, a latency metric recovering, an on-call
-engineer signing off. The promotion path makes **zero model calls**. That is the whole thesis.
+A PagerDuty resolution or human sign-off can establish that an outcome was *reported*, so the
+memory may reach `attested`. A machine-checkable metric can reach `verified` only after the
+system re-queries CloudWatch and confirms that the right entity's metric moved in the claimed
+direction and magnitude. The promotion path makes **zero model calls**.
 
 ## How it works
 
-**1. Earning standing (the part that's new).** A memory enters `unconfirmed`. When the agent acts
-on it, that decision is recorded. Later, when the outside world reports back, `grant_standing()`
-promotes the memories that decision *produced* to `verified` — or demotes them to `disputed` if
-the action was rolled back. No LLM is in that path, by design.
+**1. Earning standing.** A memory enters `unconfirmed`. When the agent acts, the decision and
+memory references are recorded. Later, `grant_standing()` moves produced memories to `attested`
+when success is reported but not independently checkable, to `verified` when a bound
+machine-checkable outcome is corroborated, or to `disputed` when the action was rolled back or
+reported as a false positive. No LLM is in that path.
 
 **2. Admission control.** Before a memory is recallable at all, it is checked against what the
 agent already believes: a deterministic attribute-conflict check plus a vector-neighbour
@@ -215,17 +195,18 @@ Stated as a list, because these are the specific concessions:
   its own memory, re-checks the external signal before it counts, and fails a runtime guard if a
   model client becomes reachable even one import away.
 
-### So what is actually different: who is allowed to decide a memory is true
+### So what is actually different: who is allowed to grant action authority
 
-The shipping agent-memory systems we checked (Mem0, Zep, AWS AgentCore) answer "is this memory
-still true?" by asking a model.
+This comparison is deliberately mechanism-level, not a claim that one row completely describes
+each product. The relevant question is whether the cited mechanism exposes independently
+corroborated outcome evidence as a per-memory authority gate.
 
 | System | Who decides truth | Evidence |
 |---|---|---|
 | [Mem0](https://arxiv.org/html/2504.19413v1) | An LLM chooses `ADD`/`UPDATE`/`DELETE` per fact. There is **no per-memory confidence score at all**. The 2026 rewrite dropped the reconciliation pass, so contradictory memories now accumulate | [mem0#5867](https://github.com/mem0ai/mem0/issues/5867) — "ADD-only memory extraction can create conflicting memories" |
 | [Zep / Graphiti](https://arxiv.org/pdf/2501.13956) | An LLM sets `valid_at` / `invalid_at`. Zep's own guidance is to treat these as **model-inferred, not authoritative** | [graphiti#1666](https://github.com/getzep/graphiti/issues/1666) — on a non-reasoning model, contradiction detection scored 1 of 9, so "temporal invalidation silently underperforms and stale facts survive their own contradiction" |
 | [AWS Bedrock AgentCore Memory](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/built-in-strategies.html) | Extraction, consolidation and reflection are each **an LLM system prompt**. No verification or confidence API is exposed | AWS docs |
-| **MemoryStand** | A non-model signal, re-checked against the system of record. `backend/trust.py` imports no model client and asserts that on every call | `tests/test_evidence_verification.py` |
+| **MemoryStand** | A non-model outcome signal; machine-checkable evidence is re-queried and bound to the memory's entity before authority is granted | `backend/evidence.py`, `tests/test_evidence_verification.py` |
 
 The narrow claim, stated so it can be checked rather than admired:
 
@@ -234,24 +215,22 @@ The narrow claim, stated so it can be checked rather than admired:
 > the signal is machine-checkable, it is re-checked before it counts.
 
 That is a claim about **enforcement**, not about having had the idea first. Doyle had the idea.
-What is unusual is a 2026 memory system that refuses to let a model grade its own memory, and
-that makes the refusal structural instead of a convention — including a guard that fails if a
-model client becomes reachable even one import away
+The implementation choice being evaluated is structural rather than rhetorical: a guard fails if
+a model client becomes reachable even one import away from the authority-granting path
 ([`assert_no_model_calls`](backend/trust.py)).
 
 ### Four rungs, because "someone said so" is not "we checked"
 
-| `trust_tier` | Meaning |
-|---|---|
-| `unconfirmed` | No outcome reported yet |
-| `attested` | An external outcome was reported, but this deployment could not independently re-check it — no PagerDuty token; a human sign-off has no system of record |
-| `verified` | Re-queried against the external system of record, which agreed ([`backend/evidence.py`](backend/evidence.py)) |
-| `disputed` | The outcome was a rollback or a false positive |
+| `trust_tier` | Meaning | Action authority |
+|---|---|---|
+| `unconfirmed` | No outcome reported yet | none |
+| `attested` | An outcome was reported, but not independently corroborated | advisory; human approval required |
+| `verified` | Re-queried against the external system of record, entity-bound, and confirmed ([`backend/evidence.py`](backend/evidence.py)) | may steer an autonomous action |
+| `disputed` | The outcome was a rollback or a false positive | none |
 
-A claim the system of record **contradicts** is refused outright, not quietly downgraded: a memory
-must gain nothing from a disproved claim. A claim that could not be checked because CloudWatch was
-unreachable is recorded as `attested` — an outage in the checker is not evidence in either
-direction, which is why there are four verification states and not a boolean.
+A claim the system of record **contradicts**, or a real metric attached to the **wrong entity**,
+is refused outright. A claim that could not be checked because CloudWatch was unreachable is
+recorded as `attested`; an outage in the checker is not evidence in either direction.
 
 ## Why CockroachDB, specifically
 
@@ -270,7 +249,7 @@ Everything marked ✅ was run against a real CockroachDB v26.2.5 cluster, not ju
 |---|---|
 | Schema, admission control, outcome gate, cross-examination | ✅ end to end |
 | Incident fixtures (101 records, 2 designed conflicts) | ✅ 99 admitted, 2 held |
-| Test suite (`pytest`) | ✅ **147 core tests passing; 148 with the verified local video artifacts present** on the isolated readiness branch (2026-08-07) |
+| Test suite (`pytest`) | ✅ **160 tests passing** with the refreshed video artifact present on the isolated winner-readiness branch (2026-08-09) |
 | Concurrency + TOCTOU proof (`scripts/race_demo.py`) | ✅ real `40001` captured |
 | Benchmark harness (`scripts/loadtest.py`) | ✅ 10k rows, numbers below |
 | Lambda handler, 7 routes, kill switch, degraded mode | ✅ exercised over HTTP |
@@ -283,9 +262,9 @@ Everything marked ✅ was run against a real CockroachDB v26.2.5 cluster, not ju
 | ccloud provisioning (`infra/provision.sh`) | ✅ flags verified against `ccloud 0.8.23`, and run for real — see cloud cluster row below |
 | AWS deploy scripts (`infra/provision.sh`, `infra/ssm_setup.sh`, `infra/deploy.sh`, `infra/deploy_frontend.sh`, IAM, SSM, keep-warm) | ✅ **all run against a real AWS account.** Lambda is Active, dashboard is live on Amplify. See [docs/DEPLOY.md](docs/DEPLOY.md) for the URL shape. |
 | Reasoning provider | ⚠️ Bedrock is tried first but this account's Bedrock quota is ~0, so it never answers. Live `/decide` reasons through a third-party Anthropic-compatible router (`reasoning_source: api.teamorouter.com:claude-haiku-4-5`, `model_calls: 1`) — a deliberate, disclosed standby, see [`DISCLOSURES.md`](DISCLOSURES.md). The promotion path stays model-free regardless. |
-| Cloud cluster | ✅ CockroachDB Cloud BASIC, AWS us-west-2. Live `/health` reported CCL v26.2.5 on 2026-08-07. The last recorded row inventory remains 50,131 rows: 40 synthetic tenants at 1,250 rows each, plus the curated demo tenant (131 rows, 117 accepted); that inventory was not re-counted during the 2026-08-07 health check. |
+| Cloud cluster | ✅ CockroachDB Cloud BASIC, AWS us-west-2. Live `/health` reported CCL v26.2.5 on 2026-08-09. The last recorded row inventory remains 50,131 rows: 40 synthetic tenants at 1,250 rows each, plus the curated demo tenant (131 rows, 117 accepted); that inventory was not re-counted during the 2026-08-09 health check. |
 | MCP server wiring | ✅ working end to end (see [CockroachDB tools used](#cockroachdb-tools-used) for the honest access-level finding) |
-| Video | ✅ local 1920×1080 H.264/AAC render verified at 172.0 s (SHA-256 `4a92925e95ea6fea8a281af32de7c70cfcb78857bc3046a4f7c35c29ed48c077`); public YouTube/Vimeo upload remains pending |
+| Video | ✅ refreshed local 1920×1080 H.264/AAC render verified at 172.0 s (SHA-256 `3ce6696e747fc599dace4093ac82e5f75064cd6ad58e6e46fdb9fab3dd96c63c`); public YouTube/Vimeo upload remains pending |
 
 ## Measured results
 
@@ -422,7 +401,7 @@ git clone <this-repo> && cd memorystand
 Then:
 
 ```bash
-.venv/bin/python -m pytest -q                                   # 147 passed + 1 artifact check skipped; 148 with a local render
+.venv/bin/python -m pytest -q                                   # 160 passed with the refreshed local render present
 .venv/bin/python cli/memorystand.py recall --query "payments failover"
 .venv/bin/python scripts/loadtest.py --rows 10000 --tenants 50  # reproduce the numbers below
 ```

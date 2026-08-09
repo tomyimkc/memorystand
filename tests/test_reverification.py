@@ -29,13 +29,18 @@ def _averages(before: float, after: float):
     return _avg
 
 
-METRIC_REF = "AWS/Lambda|Duration|FunctionName=memorystand"
+METRIC_REF = "AWS/Lambda|Duration|FunctionName=checkout-api"
 
 
 def _verified_memory(tenant_id, agent_id, monkeypatch, *, before=100.0, after=60.0):
     """Create a memory and take it all the way to `verified` through the real path."""
     monkeypatch.setattr(evidence, "_average", _averages(before, after))
-    mem = memory.remember(tenant_id, agent_id, "scaling checkout-api cleared the latency spike")
+    mem = memory.remember(
+        tenant_id,
+        agent_id,
+        "scaling checkout-api cleared the latency spike",
+        entity="checkout-api",
+    )
     decision = decisions.decide(
         tenant_id, agent_id, action="scale_up", rationale="r",
         consulted_memory_ids=[mem["memory_id"]], produced_memory_ids=[mem["memory_id"]],
@@ -135,8 +140,9 @@ def test_dry_run_changes_nothing(tenant_id, agent_id, monkeypatch):
 def test_a_decayed_memory_stops_winning_the_decision(tenant_id, agent_id, monkeypatch):
     """The point of the tier. Decay is meaningless if it does not change behaviour.
 
-    Before the sweep, the verified memory outranks a closer unconfirmed one. After reality
-    stops agreeing, it must stop outranking it -- otherwise trust decay is bookkeeping.
+    Before the sweep, the verified memory outranks both a closer unconfirmed memory and the
+    baseline rule. After reality stops agreeing, neither the disputed nor unconfirmed memory
+    may steer the action, so the explicit baseline policy takes over.
     """
     mid = _verified_memory(tenant_id, agent_id, monkeypatch)
 
@@ -148,7 +154,7 @@ def test_a_decayed_memory_stops_winning_the_decision(tenant_id, agent_id, monkey
              "attribute_value": "scale_up", "content": "scale_up"},
         ]
 
-    before, _ = agent._fallback_action("checkout-api latency", recalled("verified"))
+    before, _ = agent._fallback_action("checkout-api 5xx spike", recalled("verified"))
     assert before == "scale_up", "verified memory should outrank the closer unconfirmed one"
 
     _make_stale(tenant_id, mid)
@@ -156,9 +162,9 @@ def test_a_decayed_memory_stops_winning_the_decision(tenant_id, agent_id, monkey
     reverify.sweep(tenant_id)
     new_tier = memory.get(tenant_id, mid)["trust_tier"]
 
-    after, _ = agent._fallback_action("checkout-api latency", recalled(new_tier))
+    after, _ = agent._fallback_action("checkout-api 5xx spike", recalled(new_tier))
     assert new_tier == trust.DISPUTED
-    assert after == "restart_service", "a disputed memory must no longer steer the action"
+    assert after == "page_oncall", "the baseline must take over after standing decays"
     assert after != before, "decay has to change behaviour or it is just bookkeeping"
 
 
@@ -201,4 +207,3 @@ def test_standing_granted_before_the_evidence_columns_existed_is_left_alone(
     out = reverify.sweep(tenant_id)
     assert out["checked"] == 0, "a memory with no recorded evidence must not be swept"
     assert memory.get(tenant_id, mid)["trust_tier"] == trust.VERIFIED
-
