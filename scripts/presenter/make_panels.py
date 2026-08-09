@@ -64,11 +64,11 @@ def panel_box(side: str, top: int = BAND_TOP, bottom: int = BAND_BOTTOM) -> tupl
 
 def draw_quote(draw, box, data):
     x0, y0, x1, y1 = box
-    y = y0 + 34
+    y = y0 + 44
     for line in data["lines"]:
-        y = bf.text(draw, (x0 + 34, y), f"•  {line}", size=27, color=bf.INK,
-                    max_width=x1 - x0 - 68, spacing=6) + 26
-    return y - 26
+        y = bf.text(draw, (x0 + 42, y), line, size=48, color=bf.INK, bold=True,
+                    max_width=x1 - x0 - 84, spacing=8) + 34
+    return y - 34
 
 
 def draw_story(draw, box, data):
@@ -149,12 +149,12 @@ def draw_hero(draw, box, data):
     of the first ten seconds.
     """
     x0, y0, x1, y1 = box
-    y = bf.text(draw, (x0 + 34, y0 + 38), data["headline"], size=46, color=bf.INK, bold=True,
-                max_width=x1 - x0 - 68) + 40
+    y = bf.text(draw, (x0 + 42, y0 + 42), data["headline"], size=72, color=bf.INK, bold=True,
+                max_width=x1 - x0 - 84, spacing=10) + 46
     for bullet in data["bullets"]:
-        y = bf.text(draw, (x0 + 34, y), bullet, size=27, color=bf.MUTED,
-                    max_width=x1 - x0 - 68, spacing=6) + 26
-    return y - 26
+        y = bf.text(draw, (x0 + 42, y), f"•  {bullet}", size=42, color=bf.MUTED,
+                    max_width=x1 - x0 - 84, spacing=8) + 32
+    return y - 32
 
 
 def draw_schema(draw, box, data):
@@ -245,9 +245,9 @@ def draw_outro(spec):
     y = bf.text(draw, (PANEL_MARGIN + 60, 285), spec["title"],
                 size=96, color=bf.INK, bold=True)
     y = bf.text(draw, (PANEL_MARGIN + 60, y + 34), tagline,
-                size=42, color=bf.MUTED, max_width=W - 2 * PANEL_MARGIN - 120, spacing=10)
+                size=52, color=bf.MUTED, max_width=W - 2 * PANEL_MARGIN - 120, spacing=12)
     y = bf.text(draw, (PANEL_MARGIN + 60, y + 54), repository,
-                size=34, color=bf.GREEN, mono=True)
+                size=40, color=bf.GREEN, mono=True)
     if outro.get("status"):
         y = bf.text(draw, (PANEL_MARGIN + 60, y + 42), outro["status"],
                     size=24, color=bf.MUTED, max_width=W - 2 * PANEL_MARGIN - 120)

@@ -354,14 +354,17 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > history and `DISCLOSURES.md` preserve that provenance; the human owner remains responsible for
 > the submission and its claims.
 >
-> **The current submission-candidate video.** It uses a synthetic presenter generated from the
-> creator's own reference photo with xAI Grok (`image_edit` through Grok CLI for consistent base
-> frames, then the same Grok video model for the exact spoken lines). Because Zero Data Retention
-> is enabled on the xAI team, the CLI video tool cannot supply the required `output.upload_url`;
-> `scripts/presenter/xai_video.py` therefore calls the xAI endpoint directly and receives each
-> MP4 through a short-lived, token-protected upload bridge. Every clip is transcribed locally and
-> must pass the committed similarity receipt before `compose.py` will include it. Pillow renders
-> the evidence panels; ffmpeg assembles and burns English subtitles into the 1920×1080 H.264/AAC
+> **The current submission-candidate video.** It is a hybrid of deployed-product evidence and a
+> synthetic presenter generated from the creator's own reference photo with xAI Grok
+> (`image_edit` through Grok CLI for consistent base frames, then the same Grok video model for
+> the exact spoken lines). Because Zero Data Retention is enabled on the xAI team, the CLI video
+> tool cannot supply the required `output.upload_url`; `scripts/presenter/xai_video.py` therefore
+> calls the xAI endpoint directly and receives each MP4 through a short-lived, token-protected
+> upload bridge. Every narration clip is transcribed locally and must pass the committed
+> similarity receipt before `compose.py` will include it. Selected shots replace the presenter
+> with muted footage from the reviewed deployed demo, visibly showing the live application,
+> CockroachDB memory history, and AWS outcome gate. Pillow renders one large headline and fresh
+> subtitle bands; ffmpeg assembles and burns English subtitles into the 1920×1080 H.264/AAC
 > render while also writing a matching `.srt`. The end card discloses the synthetic presenter.
 > The complete reproducible workflow is documented in
 > `docs/demo/PRESENTER_VIDEO_PLAN.md` and implemented under `scripts/presenter/`.

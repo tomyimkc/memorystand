@@ -8,7 +8,9 @@
     "GENERAL-PUBLIC CUT. The story is understandable without prior knowledge of AI agents, vector databases, or cloud operations.",
     "Editorial rule: explain the safety boundary with one analogy — a memory must show its receipt before it gets the keys.",
     "Seven beats and twelve short Grok presenter shots keep the public cut close to 1:45. Each line is 17-24 words.",
-    "Technical proof remains on screen for judges, while the spoken narration uses ordinary language.",
+    "Panels use one headline and no more than two short keypoints. Paragraphs belong in documentation, not in the film.",
+    "Selected shots replace the synthetic presenter with muted footage from the deployed evidence cut while retaining the verified narration.",
+    "The live-evidence shots prove that the project functions and visibly show the CockroachDB memory layer and AWS outcome gate.",
     "Current limitation is explicit: search matches words rather than meaning, and /decide used a fixed fallback because paid model quota was unavailable.",
     "That runtime limitation never changes the authority path: promotion is deterministic, externally checked, and uses zero model calls.",
     "Every generated shot must pass transcript comparison before compose.py will include it.",
@@ -20,13 +22,20 @@
       "presenterSide": "LEFT",
       "panelData": {
         "kind": "hero",
-        "headline": "Receipt first. Keys second.",
+        "headline": "NO RECEIPT.\nNO AUTONOMOUS ACTION.",
         "bullets": [
-          "Stored memory is not permission to act",
-          "A receipt is outside evidence that the claim held up",
-          "No receipt means no autonomous keys"
+          "Stored does not mean trusted",
+          "Outside evidence unlocks action"
         ],
         "footnote": "github.com/tomyimkc/memorystand"
+      },
+      "broll": {
+        "0": {
+          "source": "artifacts/video/memorystand-evidence-source.mp4",
+          "startSeconds": 0,
+          "label": "LIVE DEPLOYED APP",
+          "headline": "MEMORY MUST EARN THE KEYS"
+        }
       },
       "shots": [
         "AI assistants remember past fixes. MemoryStand stops those memories from acting alone until outside evidence proves they actually worked.",
@@ -37,10 +46,13 @@
       "id": "02-dangerous-coincidence",
       "presenterSide": "RIGHT",
       "panelData": {
-        "kind": "story",
-        "headline": "A coincidence can become a dangerous memory.",
-        "body": "The restart happened before the alert stopped, but the service never improved. An assistant could still repeat that story during the next outage.",
-        "footnote": "The problem is not dishonesty. It is treating timing as proof."
+        "kind": "hero",
+        "headline": "A COINCIDENCE\nCAN BECOME A FALSE MEMORY.",
+        "bullets": [
+          "Restart happened",
+          "Service never improved"
+        ],
+        "footnote": "Timing is not proof."
       },
       "shots": [
         "An engineer restarts a service, the alert stops, and everyone remembers the restart as the fix forever.",
@@ -52,13 +64,20 @@
       "presenterSide": "LEFT",
       "panelData": {
         "kind": "hero",
-        "headline": "CockroachDB is the memory ledger.",
+        "headline": "COCKROACHDB\nKEEPS THE AUDIT TRAIL.",
         "bullets": [
-          "Claim, source, trust, and decision history stay together",
-          "Vector search retrieves related memories",
-          "Time-travel reads replay what was known"
+          "Claim + source + trust",
+          "Every decision stays traceable"
         ],
         "footnote": "CockroachDB Cloud · VECTOR(512) · C-SPANN · AS OF SYSTEM TIME"
+      },
+      "broll": {
+        "0": {
+          "source": "artifacts/video/memorystand-evidence-source.mp4",
+          "startSeconds": 30,
+          "label": "LIVE COCKROACHDB RECEIPT",
+          "headline": "EVERY CHANGE STAYS AUDITABLE"
+        }
       },
       "shots": [
         "MemoryStand keeps the claim, source, trust level, and decision history together in CockroachDB, so every action remains auditable."
@@ -70,9 +89,9 @@
       "panelData": {
         "kind": "quote",
         "lines": [
-          "KEEP BOTH — no silent overwrite",
-          "STRONGER EVIDENCE — may guide",
-          "WEAKER EVIDENCE — waits for review"
+          "KEEP BOTH",
+          "STRONGER EVIDENCE MAY GUIDE",
+          "WEAKER EVIDENCE WAITS"
         ],
         "footnote": "Every change remains linked to its source."
       },
@@ -84,24 +103,27 @@
       "id": "05-cloudwatch-receipt",
       "presenterSide": "LEFT",
       "panelData": {
-        "kind": "oracle",
-        "rows": [
-          {
-            "claimed": "large drop",
-            "observed": "large drop",
-            "verdict": "confirmed",
-            "status": "200"
-          },
-          {
-            "claimed": "small drop",
-            "observed": "large drop",
-            "verdict": "refused",
-            "status": "400"
-          }
+        "kind": "hero",
+        "headline": "CLOUDWATCH\nIS THE RECEIPT.",
+        "bullets": [
+          "Same service + metric",
+          "Same direction + size"
         ],
-        "note": "Same service, same metric, matching direction, and matching magnitude are all required.",
-        "footnote": "Live AWS CloudWatch outcome receipts · promotion path model_calls: 0",
-        "title": "CloudWatch acts as the outside receipt"
+        "footnote": "Live AWS outcome receipts · promotion path model_calls: 0"
+      },
+      "broll": {
+        "0": {
+          "source": "artifacts/video/memorystand-evidence-source.mp4",
+          "startSeconds": 78,
+          "label": "LIVE AWS RECEIPT",
+          "headline": "OUTSIDE EVIDENCE DECIDES"
+        },
+        "1": {
+          "source": "artifacts/video/memorystand-evidence-source.mp4",
+          "startSeconds": 90,
+          "label": "LIVE OUTCOME GATE",
+          "headline": "MATCH = VERIFIED · MISMATCH = REFUSED"
+        }
       },
       "shots": [
         "To earn the keys, a memory must match AWS CloudWatch data for the same service, metric, direction, and size.",
@@ -112,26 +134,13 @@
       "id": "07-attack-test",
       "presenterSide": "LEFT",
       "panelData": {
-        "kind": "table",
-        "columns": [
-          "",
-          "attacks got keys",
-          "honest kept"
+        "kind": "hero",
+        "headline": "0% OF ATTACKS\nGOT THE KEYS.",
+        "bullets": [
+          "540 attacks blocked",
+          "60 honest cases preserved"
         ],
-        "rows": [
-          [
-            "trust the caller",
-            "100%",
-            "100%"
-          ],
-          [
-            "outcome gate",
-            "0%",
-            "100%"
-          ]
-        ],
-        "footnote": "540 attack cases + 60 honest controls · deterministic authority benchmark",
-        "title": "600 fixed cases, with storage and action authority scored separately"
+        "footnote": "600 fixed cases · autonomous authority scored separately"
       },
       "shots": [
         "We tested five hundred forty attack cases and sixty honest controls, measuring whether each memory received autonomous authority.",
@@ -143,11 +152,10 @@
       "presenterSide": "RIGHT",
       "panelData": {
         "kind": "hero",
-        "headline": "Honest status today.",
+        "headline": "HONEST STATUS.",
         "bullets": [
-          "Search is basic rather than meaning-aware",
-          "Decisions currently use a fixed fallback",
-          "The safety gate still requires outside evidence"
+          "Basic search + fixed fallback",
+          "Evidence gate still enforced"
         ],
         "footnote": "Model route HTTP 402 · authority gate model_calls: 0 · hackathon candidate"
       },

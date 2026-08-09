@@ -11,8 +11,10 @@ An AI memory must show an outside receipt before it gets the keys to act alone.
 
 That sentence is the editorial test for every beat. The narration assumes the viewer has
 never used an AI agent, CockroachDB, AWS, vector search, or an incident-management tool.
-Technical implementation details remain visible in the panels so a technical judge can
-inspect them without forcing the general viewer to decode them in the voiceover.
+The film uses one large headline and at most two short keypoints per panel. Four shots cut to
+the reviewed deployed-demo footage so judges can see the project functioning, the CockroachDB
+memory history, and the AWS outcome gate without forcing the general viewer to decode those
+details in the voiceover.
 
 ## Seven-beat arc
 
@@ -31,8 +33,8 @@ inspect them without forcing the general viewer to decode them in the voiceover.
 The voiceover and main panel copy deliberately omit the Lambda/Amplify inventory, the numeric
 timeout walkthrough, the four-level taxonomy, HTTP 402, and Bedrock quota mechanics. The exact
 technical facts remain in the submission documentation; only a compact footnote survives where
-needed for judge verification. Speaking or foregrounding them made the public story denser
-without changing its central promise.
+needed for judge verification. Paragraphs were removed from the film because they made the
+public story denser without changing its central promise.
 
 The exact words, panels, claim flags, outro, and disclosure live in
 [`presenter-script.json`](./presenter-script.json). Run the fail-closed pacing and claim check:
@@ -60,7 +62,12 @@ python scripts/presenter/make_clips.py
 python scripts/presenter/xai_video.py
 python scripts/presenter/make_clips.py --verify-only
 
-# Draw public-friendly data panels and compose the verified clips.
+# Put the reviewed deployed-demo evidence cut at the path referenced by presenter-script.json.
+# It remains gitignored because it is a generated delivery artifact.
+cp /absolute/path/to/reviewed-deployed-demo.mp4 \
+  artifacts/video/memorystand-evidence-source.mp4
+
+# Draw large public-friendly panels and compose verified narration over panels or live evidence.
 python scripts/presenter/make_panels.py
 python scripts/presenter/compose.py --check
 ```
@@ -72,7 +79,9 @@ Outputs are gitignored:
 
 The transcript receipt is committed as
 [`presenter-verification.json`](./presenter-verification.json). `compose.py` refuses to use a
-clip that does not have a current passing receipt.
+clip that does not have a current passing receipt. It also refuses a live-evidence time range
+that exceeds the reviewed source file. Evidence footage is muted; the already-verified narration
+remains the only audio, so the film keeps one subtitle and timing source of truth.
 
 ## Claim boundaries
 
