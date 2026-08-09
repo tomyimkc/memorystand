@@ -1,13 +1,13 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "title": "MemoryStand",
-  "targetDurationSeconds": 145,
+  "targetDurationSeconds": 105,
   "candidateOnly": true,
   "canClaimAGI": false,
   "_notes": [
     "GENERAL-PUBLIC CUT. The story is understandable without prior knowledge of AI agents, vector databases, or cloud operations.",
     "Editorial rule: explain the safety boundary with one analogy — a memory must show its receipt before it gets the keys.",
-    "Each beat has exactly two 10-second Grok presenter shots. Each line is 17-24 words so delivery stays natural.",
+    "Seven beats and twelve short Grok presenter shots keep the public cut close to 1:45. Each line is 17-24 words.",
     "Technical proof remains on screen for judges, while the spoken narration uses ordinary language.",
     "Current limitation is explicit: search matches words rather than meaning, and /decide used a fixed fallback because paid model quota was unavailable.",
     "That runtime limitation never changes the authority path: promotion is deterministic, externally checked, and uses zero model calls.",
@@ -29,8 +29,8 @@
         "footnote": "github.com/tomyimkc/memorystand"
       },
       "shots": [
-        "MemoryStand is a safer memory system for AI assistants that help engineers during urgent service incidents at night.",
-        "Here is the rule in plain English: a memory must show its receipt before it gets the keys."
+        "AI assistants remember past fixes. MemoryStand stops those memories from acting alone until outside evidence proves they actually worked.",
+        "Think of it this way: every memory must show a receipt before it gets the keys to act."
       ]
     },
     {
@@ -43,8 +43,8 @@
         "footnote": "The problem is not dishonesty. It is treating timing as proof."
       },
       "shots": [
-        "AI can remember that a restart seemed to fix an outage, then confidently suggest that same restart again.",
-        "But timing is not proof. The alert may stop while the real performance numbers never improve at all."
+        "An engineer restarts a service, the alert stops, and everyone remembers the restart as the fix forever.",
+        "But the service's real performance never improved. The story sounds true, yet repeating it could make the next outage worse."
       ]
     },
     {
@@ -52,48 +52,32 @@
       "presenterSide": "LEFT",
       "panelData": {
         "kind": "hero",
-        "headline": "One memory record. One audit trail.",
+        "headline": "CockroachDB is the memory ledger.",
         "bullets": [
-          "CockroachDB stores the claim, source, trust level, and search vector together",
-          "Its vector index finds related memories without a separate search database",
-          "Time-travel reads replay exactly what the assistant knew when it decided"
+          "Claim, source, trust, and decision history stay together",
+          "Vector search retrieves related memories",
+          "Time-travel reads replay what was known"
         ],
         "footnote": "CockroachDB Cloud · VECTOR(512) · C-SPANN · AS OF SYSTEM TIME"
       },
       "shots": [
-        "MemoryStand stores each memory in CockroachDB with its source, trust level, searchable words, and decision receipts all together.",
-        "The public demo runs on AWS: Lambda serves requests, CloudWatch checks outcomes, and Amplify hosts the dashboard."
+        "MemoryStand keeps the claim, source, trust level, and decision history together in CockroachDB, so every action remains auditable."
       ]
     },
     {
       "id": "04-held-for-review",
       "presenterSide": "RIGHT",
       "panelData": {
-        "kind": "admission",
-        "rows": [
-          {
-            "source": "runbook",
-            "value": "800 ms",
-            "verdict": "accepted"
-          },
-          {
-            "source": "Slack message",
-            "value": "300 ms",
-            "verdict": "held"
-          },
-          {
-            "source": "on-call lead",
-            "value": "500 ms",
-            "verdict": "accepted"
-          }
+        "kind": "quote",
+        "lines": [
+          "KEEP BOTH — no silent overwrite",
+          "STRONGER EVIDENCE — may guide",
+          "WEAKER EVIDENCE — waits for review"
         ],
-        "reason": "The weaker disagreement waits for a person; the stronger correction remains linked to the earlier claim.",
-        "footnote": "Live ingest receipts · one service · one timeout setting",
-        "title": "Contradicting claims do not silently overwrite each other"
+        "footnote": "Every change remains linked to its source."
       },
       "shots": [
-        "New claims do not automatically become trusted. A stronger source can win, while weaker disagreements wait for human review.",
-        "In the live example, a runbook said eight hundred milliseconds, Slack said three hundred, and the on-call lead corrected both to five hundred."
+        "When two memories disagree, MemoryStand does not quietly overwrite either one. Weaker evidence waits for a person to review."
       ]
     },
     {
@@ -103,14 +87,14 @@
         "kind": "oracle",
         "rows": [
           {
-            "claimed": "−14,200",
-            "observed": "−14,204.91",
+            "claimed": "large drop",
+            "observed": "large drop",
             "verdict": "confirmed",
             "status": "200"
           },
           {
-            "claimed": "−10",
-            "observed": "−14,200",
+            "claimed": "small drop",
+            "observed": "large drop",
             "verdict": "refused",
             "status": "400"
           }
@@ -120,26 +104,8 @@
         "title": "CloudWatch acts as the outside receipt"
       },
       "shots": [
-        "To earn autonomous authority, the memory must match outside evidence from AWS CloudWatch for the same service and metric.",
-        "A matching outcome earns verified status. A wrong size, direction, or service is refused before the memory can steer action."
-      ]
-    },
-    {
-      "id": "06-four-trust-levels",
-      "presenterSide": "RIGHT",
-      "panelData": {
-        "kind": "quote",
-        "lines": [
-          "VERIFIED — may guide an automatic action",
-          "ATTESTED — may advise, but a person approves",
-          "UNCONFIRMED — inspection only",
-          "DISPUTED — inspection only"
-        ],
-        "footnote": "Similarity affects retrieval order. It never grants authority."
-      },
-      "shots": [
-        "Verified memory may guide an automatic action. Attested memory may advise, but still needs a person to approve.",
-        "Unconfirmed or disputed memory stays visible for inspection, yet cannot quietly gain the keys through similarity alone."
+        "To earn the keys, a memory must match AWS CloudWatch data for the same service, metric, direction, and size.",
+        "If the evidence matches, the memory becomes verified. If anything important disagrees, MemoryStand refuses autonomous use for safety."
       ]
     },
     {
@@ -168,8 +134,8 @@
         "title": "600 fixed cases, with storage and action authority scored separately"
       },
       "shots": [
-        "We tested six hundred fixed cases: five hundred forty attacks designed to fool memory, plus sixty honest controls.",
-        "A system that trusted callers gave every attack the keys. MemoryStand gave attacks none and preserved every honest case."
+        "We tested five hundred forty attack cases and sixty honest controls, measuring whether each memory received autonomous authority.",
+        "Trusting the caller gave every attack the keys. MemoryStand blocked every attack from autonomous control and preserved every honest case."
       ]
     },
     {
@@ -179,15 +145,15 @@
         "kind": "hero",
         "headline": "Honest status today.",
         "bullets": [
-          "Search matches words, not meaning, while Bedrock quota is unavailable",
-          "/decide used a fixed fallback after the configured model route returned HTTP 402",
-          "The evidence gate still used zero model calls and cannot be bypassed"
+          "Search is basic rather than meaning-aware",
+          "Decisions currently use a fixed fallback",
+          "The safety gate still requires outside evidence"
         ],
-        "footnote": "Hackathon candidate · public code and receipts · no general-intelligence claim"
+        "footnote": "Model route HTTP 402 · authority gate model_calls: 0 · hackathon candidate"
       },
       "shots": [
-        "Today, search matches words rather than meaning, and decisions use a fixed fallback because paid model quota is unavailable.",
-        "That limitation never bypasses the gate. Promotion uses zero model calls, so memories still need receipts before getting autonomous keys."
+        "Today, search is basic rather than meaning-aware. Decisions use a fixed fallback, while the safety gate still demands outside evidence.",
+        "That gate uses zero model calls. MemoryStand gives autonomous keys only to memories that prove what really happened."
       ]
     }
   ],

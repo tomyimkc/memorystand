@@ -1,6 +1,6 @@
 # MemoryStand — general-public Grok presenter cut
 
-**Target runtime:** about 2:25, always below the contest's 3:00 ceiling.
+**Target runtime:** about 1:45, always below the contest's 3:00 ceiling.
 
 **Delivery:** 1920×1080 H.264/AAC, burned English subtitles, plus a matching
 selectable English `.srt`.
@@ -14,21 +14,25 @@ never used an AI agent, CockroachDB, AWS, vector search, or an incident-manageme
 Technical implementation details remain visible in the panels so a technical judge can
 inspect them without forcing the general viewer to decode them in the voiceover.
 
-## Eight-beat arc
+## Seven-beat arc
 
 1. **Receipt first, keys second** — define the product and its safety rule.
 2. **A dangerous coincidence** — show how an honest report can still become a false memory.
-3. **CockroachDB + AWS** — explain where the memory, audit trail, API, dashboard, and outside
-   evidence live.
-4. **Held for review** — show three contradicting timeout claims and why weaker evidence waits
-   for a person.
+3. **CockroachDB ledger** — explain why the memory and its audit trail stay together.
+4. **Held for review** — show why contradicting memories are preserved instead of silently
+   overwritten.
 5. **CloudWatch receipt** — show that the same service and metric must agree before a memory
    becomes autonomous.
-6. **Four trust levels** — explain which memories may act, advise, or only be inspected.
-7. **Attack test** — report 540 attacks and 60 honest controls, scoring autonomous authority
+6. **Attack test** — report 540 attacks and 60 honest controls, scoring autonomous authority
    separately from storage.
-8. **Honest status** — disclose word-matching search, the fixed decision fallback, and the
+7. **Honest status** — disclose basic search, the fixed decision fallback, and the
    model-free authority gate before repeating the central rule.
+
+The voiceover and main panel copy deliberately omit the Lambda/Amplify inventory, the numeric
+timeout walkthrough, the four-level taxonomy, HTTP 402, and Bedrock quota mechanics. The exact
+technical facts remain in the submission documentation; only a compact footnote survives where
+needed for judge verification. Speaking or foregrounding them made the public story denser
+without changing its central promise.
 
 The exact words, panels, claim flags, outro, and disclosure live in
 [`presenter-script.json`](./presenter-script.json). Run the fail-closed pacing and claim check:

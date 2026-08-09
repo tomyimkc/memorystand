@@ -11,8 +11,8 @@ reports 0.0ms. That is a true statement about the wrong thing: it proves the com
 clip's audio exactly where the cut intends, and says nothing about whether the clip's own lips
 match the clip's own voice. grok generates picture and sound together but not perfectly aligned,
 so a film assembled with flawless 0.0ms placement can still be visibly out of sync everywhere.
-Measured across sixteen clips, the sound arrives AFTER the lips by 0-167ms, median 42ms; five
-clips exceed the ~45ms at which audio/vision offset becomes perceptible.
+Across the current twelve clips, the sound arrives AFTER the lips by 42-125ms, median 42ms; five
+clips are more than one 24fps frame late. Every clip therefore receives a measured correction.
 
 HOW IT IS MEASURED. Frame-to-frame absolute difference restricted to a band over the mouth gives
 a "visual speech activity" signal; per-frame audio RMS gives the acoustic one. Speech makes both
@@ -36,6 +36,7 @@ looking like a fix.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import subprocess
 import sys
@@ -129,17 +130,36 @@ def measure(clip: Path) -> tuple[float, float]:
     return -best_k * 1000.0 / FPS, best_corr
 
 
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def offsets(clips: list[Path], cache_path: Path = CACHE) -> dict[str, float]:
-    """Measured correction per clip, in seconds of picture delay. Cached; this never moves."""
+    """Measured correction per clip, in seconds of picture delay.
+
+    A clip name is stable across regeneration, so the cache is keyed by both the stem and the
+    source SHA-256. Reusing an offset from an older Grok render can introduce the exact lip-sync
+    defect this cache exists to remove.
+    """
     cache = json.loads(cache_path.read_text()) if cache_path.is_file() else {}
     changed = False
     for clip in clips:
-        if clip.stem in cache:
+        source_sha256 = _sha256(clip)
+        cached = cache.get(clip.stem, {})
+        if cached.get("sourceSha256") == source_sha256:
             continue
         lag_ms, corr = measure(clip)
         shift = lag_ms if abs(lag_ms) >= AUDIBLE_MS else 0.0
-        cache[clip.stem] = {"lagMs": round(lag_ms, 1), "correlation": round(corr, 3),
-                            "delayPictureS": round(max(shift, 0.0) / 1000.0, 4)}
+        cache[clip.stem] = {
+            "sourceSha256": source_sha256,
+            "lagMs": round(lag_ms, 1),
+            "correlation": round(corr, 3),
+            "delayPictureS": round(max(shift, 0.0) / 1000.0, 4),
+        }
         changed = True
     if changed:
         cache_path.write_text(json.dumps(dict(sorted(cache.items())), indent=2) + "\n")

@@ -15,11 +15,10 @@ THREE THINGS THIS DOES THAT A NAIVE OVERLAY DOES NOT:
    when left unsupervised, so "the file exists" is exactly the kind of evidence this project
    spends its README arguing against. Same rule as the trust ladder, applied to its own video.
 
-2. IT TRIMS TO MEASURED SPEECH, NOT TO CLIP LENGTH. grok returns a fixed 6.04s regardless of
-   how long the line takes. Measured across the fourteen shots that is 18.3s of a man standing
-   silently -- and two shots are more than half dead air ("The failure isn't fraud." is 2.0s of
-   speech in a 6.04s clip). Word-level timestamps give the real end, and each shot holds for
-   HOLD_S past it so the cut lands on a beat instead of clipping the last consonant.
+2. IT TRIMS TO MEASURED SPEECH, NOT TO CLIP LENGTH. Grok returns a fixed 10s clip regardless of
+   how long the line takes. The current twelve-shot cut removes roughly 13s of unused tails.
+   Word-level timestamps give the real end, and each shot holds for HOLD_S past it so the cut
+   lands on a beat instead of clipping the last consonant.
 
 3. IT FEATHERS THE PRESENTER INTO THE FRAME. The clip is a 496x608 portrait with its own
    near-black office background; dropped in as a rectangle it reads as a sticker. A gradient
@@ -75,10 +74,10 @@ WORDS = REPO_ROOT / "artifacts" / "presenter" / "word-timings.json"
 # short enough that it does not read as a pause.
 #
 # This is a CEILING as well as a target: the hold is clamped to the clip's own length. Without
-# that clamp three shots were asked for 6.2-7.4s from a 6.04s source, which loops the still
-# panel while the presenter and his audio run out -- he freezes mid-gesture and the segment's
-# video and audio tracks end at different times, which the concat demuxer then accumulates as
-# drift. Reading time at the end belongs on a card that was always still, not on a frozen man.
+# that clamp, a requested hold can exceed a source clip and loop the still panel while the
+# presenter and audio run out -- he freezes mid-gesture and the segment's tracks end at different
+# times, which the concat demuxer then accumulates as drift. Extra reading time belongs on a card
+# that was always still, not on a frozen person.
 HOLD_S = 0.45
 
 # The end card, which is a still by design and can therefore hold as long as it likes.
@@ -103,8 +102,7 @@ def snap(seconds: float) -> float:
     This is the difference between a film that stays in sync and one that does not. ``-r 24``
     emits whole frames, so a 5.77s request becomes 5.875s of video against exactly 5.770s of
     audio -- video 0.105s long. The concat demuxer joins the two tracks independently, so that
-    gap does not cancel out, it ACCUMULATES: measured at 0.04-0.11s across fifteen segments, the
-    audio finished 1.3s ahead of the picture by the end card. On a lip-synced talking head that
+    gap does not cancel out, it ACCUMULATES across segments. On a lip-synced talking head that
     is the one defect a viewer cannot help noticing. Snapping to the frame grid and padding the
     audio to match makes every segment's two tracks exactly equal, so there is nothing to add up.
     """
@@ -131,9 +129,11 @@ def _clip_size(clip: Path) -> tuple[int, int]:
 
 
 def speech_end(clip: Path, cache: dict) -> float:
-    """Seconds at which the last word finishes. Cached -- whisper is slow and this never moves."""
-    if clip.stem in cache:
-        return float(cache[clip.stem][1])
+    """Seconds at which the last word finishes, cached against the exact source render."""
+    source_sha256 = lipsync._sha256(clip)
+    cached = cache.get(clip.stem, {})
+    if isinstance(cached, dict) and cached.get("sourceSha256") == source_sha256:
+        return float(cached["end"])
 
     wav = Path(tempfile.gettempdir()) / f"compose_{clip.stem}.wav"
     run(["ffmpeg", "-v", "error", "-i", str(clip), "-ac", "1", "-ar", "16000", "-y", str(wav)])
@@ -145,8 +145,12 @@ def speech_end(clip: Path, cache: dict) -> float:
     words = [w for s in segs for w in (s.words or [])]
     if not words:
         raise SystemExit(f"{clip.name}: no speech found -- refusing to guess its length")
-    cache[clip.stem] = [round(words[0].start, 2), round(words[-1].end, 2)]
-    return float(cache[clip.stem][1])
+    cache[clip.stem] = {
+        "sourceSha256": source_sha256,
+        "start": round(words[0].start, 2),
+        "end": round(words[-1].end, 2),
+    }
+    return float(cache[clip.stem]["end"])
 
 
 # Captions live in the band the panel no longer occupies (see BAND_BOTTOM in make_panels).
@@ -279,9 +283,11 @@ def align_to_script(scripted: str, heard: list[tuple[str, float, float]]) -> lis
 
 
 def clip_words(clip: Path, cache: dict) -> list[tuple[str, float, float]]:
-    """Per-word timings for a clip, cached. Whisper is slow and these never move."""
-    if clip.stem in cache:
-        return [tuple(w) for w in cache[clip.stem]]
+    """Per-word timings, cached only while the exact source render is unchanged."""
+    source_sha256 = lipsync._sha256(clip)
+    cached = cache.get(clip.stem, {})
+    if isinstance(cached, dict) and cached.get("sourceSha256") == source_sha256:
+        return [tuple(w) for w in cached["words"]]
 
     wav = Path(tempfile.gettempdir()) / f"words_{clip.stem}.wav"
     run(["ffmpeg", "-v", "error", "-i", str(clip), "-ac", "1", "-ar", "16000", "-y", str(wav)])
@@ -290,11 +296,25 @@ def clip_words(clip: Path, cache: dict) -> list[tuple[str, float, float]]:
     segs, _ = WhisperModel("tiny", device="cpu", compute_type="int8").transcribe(
         str(wav), word_timestamps=True
     )
-    cache[clip.stem] = [
-        [w.word.strip(), round(w.start, 3), round(w.end, 3)]
-        for seg in segs for w in (seg.words or [])
-    ]
-    return [tuple(w) for w in cache[clip.stem]]
+    cache[clip.stem] = {
+        "sourceSha256": source_sha256,
+        "words": [
+            [w.word.strip(), round(w.start, 3), round(w.end, 3)]
+            for seg in segs for w in (seg.words or [])
+        ],
+    }
+    return [tuple(w) for w in cache[clip.stem]["words"]]
+
+
+def rebalance_caption_lines(lines: list[str]) -> list[str]:
+    """Move words off an overfull first line so the visual wrap has no tiny orphan."""
+    if len(lines) != 2:
+        return lines
+    first = lines[0].split()
+    second = lines[1].split()
+    while len(second) <= CAPTION_ORPHAN_MAX_WORDS and len(first) > 4:
+        second.insert(0, first.pop())
+    return [" ".join(first), " ".join(second)]
 
 
 def render_caption(text: str, path: Path) -> None:
@@ -326,6 +346,7 @@ def render_caption(text: str, path: Path) -> None:
             current = word
     if current:
         lines.append(current)
+    lines = rebalance_caption_lines(lines)
 
     line_h = CAPTION_FONT_SIZE + 16
     bottom = H - CAPTION_MARGIN_V
@@ -394,10 +415,9 @@ def make_mask(side: str, path: Path) -> None:
     mask.save(path)
 
 
-# Audio may lead the picture by no more than this before the shot is called out of sync.
-# ITU-R BT.1359 puts the detectability threshold for audio-ahead at about 45ms; anything past
-# that on a talking head is visible as bad dubbing.
-MAX_LAG_MS = 45.0
+# At 24 fps, the lip-motion measurement resolves in 41.7ms frame steps. A limit below half a
+# frame therefore accepts only a measured zero-frame residual; even one frame fails the build.
+MAX_LAG_MS = 20.0
 
 
 def check_sync(timeline: list[tuple[str, float]], picture_delays: dict[str, float]) -> bool:
@@ -662,7 +682,7 @@ def main() -> int:
 
     # WHY PICTURE AND SOUND ARE JOINED SEPARATELY AND THE AUDIO IS ENCODED EXACTLY ONCE.
     #
-    # The obvious build -- encode fifteen complete mp4 segments and concat them -- produces a
+    # The obvious build -- encode every complete MP4 segment and concat them -- produces a
     # file whose total duration is correct to 21ms and whose lip sync is destroyed. Every AAC
     # stream carries an encoder priming delay at its head, and the concat demuxer sums those
     # delays instead of absorbing them. Cross-correlating each source clip against the finished
@@ -705,7 +725,6 @@ def main() -> int:
     if not args.keep_segments:
         shutil.rmtree(work)
     return 1 if failed else 0
-    return 0
 
 
 if __name__ == "__main__":
