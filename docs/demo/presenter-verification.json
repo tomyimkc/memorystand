@@ -1,88 +1,116 @@
 {
   "minSimilarity": 0.72,
   "shots": {
-    "01-what-it-is-0": {
-      "clip": "01-what-it-is-0.mp4",
-      "asked": "I built MemoryStand \u2014 a memory for AI agents that refuses to trust a claim nobody ever checked.",
-      "heard": "I built memory stand, a memory for AI agents that refuses to trust a claim nobody ever checked.",
-      "similarity": 0.914,
+    "01-receipt-first-0": {
+      "clip": "01-receipt-first-0.mp4",
+      "asked": "MemoryStand is a safer memory system for AI assistants that help engineers during urgent service incidents at night.",
+      "heard": "Memory stand is a safer memory system for AI assistance that help engineers during urgent service incidents at night.",
+      "similarity": 0.865,
       "passed": true
     },
-    "01-what-it-is-1": {
-      "clip": "01-what-it-is-1.mp4",
-      "asked": "It's for on-call engineers, when an AI assistant suggests a fix because it remembers that fix working before.",
-      "heard": "It's for on-call engineers, when an AI assistant suggests a fix because it remembers that fix working before.",
+    "01-receipt-first-1": {
+      "clip": "01-receipt-first-1.mp4",
+      "asked": "Here is the rule in plain English: a memory must show its receipt before it gets the keys.",
+      "heard": "Here is the rule in plain English, a memory must show its receipt before it gets the keys.",
       "similarity": 1.0,
       "passed": true
     },
-    "02-the-problem-0": {
-      "clip": "02-the-problem-0.mp4",
-      "asked": "Every other agent memory today just asks an AI whether its own memory is right. That's marking your own homework.",
-      "heard": "Every other agent memory today, just asks an AI  whether it's own memory is right.  That's marking your own homework.",
-      "similarity": 0.93,
+    "02-dangerous-coincidence-0": {
+      "clip": "02-dangerous-coincidence-0.mp4",
+      "asked": "AI can remember that a restart seemed to fix an outage, then confidently suggest that same restart again.",
+      "heard": "Say I can remember that a restart seemed to fix an outage, then confidently suggest  that same restart again.",
+      "similarity": 0.919,
       "passed": true
     },
-    "02-the-problem-1": {
-      "clip": "02-the-problem-1.mp4",
-      "asked": "Mem0 does it. Zep does it. So does Amazon's own AgentCore. None of them check against anything real.",
-      "heard": "Mem zero does it.  Zepp does it.  So does Amazon's own agent core.  None of them check against anything real.",
-      "similarity": 0.8,
-      "passed": true
-    },
-    "03-the-failure-0": {
-      "clip": "03-the-failure-0.mp4",
-      "asked": "Here is how a memory goes wrong. An engineer restarts a service at two in the morning and the alert stops.",
-      "heard": "Here is how a memory goes wrong.  An engineer restarts a service at 2 in the morning and the alert stops.",
+    "02-dangerous-coincidence-1": {
+      "clip": "02-dangerous-coincidence-1.mp4",
+      "asked": "But timing is not proof. The alert may stop while the real performance numbers never improve at all.",
+      "heard": "but timing is not proof. The alert may stop while the real performance numbers never improve at all.",
       "similarity": 1.0,
       "passed": true
     },
-    "03-the-failure-1": {
-      "clip": "03-the-failure-1.mp4",
-      "asked": "They report the restart fixed it. But the latency CloudWatch recorded never actually dropped. Nobody lied. It's still wrong.",
-      "heard": "They report the restart fixed it, but the latency cloud watch recorded never actually dropped.  Nobody lied. It's still wrong.",
-      "similarity": 0.927,
+    "03-cockroachdb-aws-0": {
+      "clip": "03-cockroachdb-aws-0.mp4",
+      "asked": "MemoryStand stores each memory in CockroachDB with its source, trust level, searchable words, and decision receipts all together.",
+      "heard": "Memory stands stores each memory in Cockroach DB with its source, trust level,  searchable words, and decision receipts all together.",
+      "similarity": 0.842,
       "passed": true
     },
-    "04-where-it-lives-0": {
-      "clip": "04-where-it-lives-0.mp4",
-      "asked": "Every memory lives in one CockroachDB table: the text, its source, how trusted it is, and a search vector.",
-      "heard": "Every memory lives in one cockroach DB table.  The text, its source, how trusted it is, and a search vector.",
+    "03-cockroachdb-aws-1": {
+      "clip": "03-cockroachdb-aws-1.mp4",
+      "asked": "The public demo runs on AWS: Lambda serves requests, CloudWatch checks outcomes, and Amplify hosts the dashboard.",
+      "heard": "The Public Demo runs on AWS.  Lambda serves requests, cloudwatch checks outcomes,  and amplify hosts the dashboard.",
+      "similarity": 1.0,
+      "passed": true
+    },
+    "04-held-for-review-0": {
+      "clip": "04-held-for-review-0.mp4",
+      "asked": "New claims do not automatically become trusted. A stronger source can win, while weaker disagreements wait for human review.",
+      "heard": "New claims do not automatically become trusted.  A stronger source can win  while weaker disagreements wait for human review.",
+      "similarity": 1.0,
+      "passed": true
+    },
+    "04-held-for-review-1": {
+      "clip": "04-held-for-review-1.mp4",
+      "asked": "In the live example, a runbook said eight hundred milliseconds, Slack said three hundred, and the on-call lead corrected both to five hundred.",
+      "heard": "In the live example, a runbook said 800 milliseconds, slacks said 300, slacks said 300,  and the on-call lead corrected both to 500.",
+      "similarity": 0.864,
+      "passed": true
+    },
+    "05-cloudwatch-receipt-0": {
+      "clip": "05-cloudwatch-receipt-0.mp4",
+      "asked": "To earn autonomous authority, the memory must match outside evidence from AWS CloudWatch for the same service and metric.",
+      "heard": "To earn autonomous authority, the memory must match outside evidence from AWS Cloud Watch for the same service and metric.",
       "similarity": 0.923,
       "passed": true
     },
-    "05-admission-0": {
-      "clip": "05-admission-0.mp4",
-      "asked": "A claim is one fact about one service \u2014 a timeout setting, an owner, or what fixed the last incident.",
-      "heard": "The claim is one fact about one service, a timeout setting, an owner, or what fix the last incident.",
-      "similarity": 0.895,
+    "05-cloudwatch-receipt-1": {
+      "clip": "05-cloudwatch-receipt-1.mp4",
+      "asked": "A matching outcome earns verified status. A wrong size, direction, or service is refused before the memory can steer action.",
+      "heard": "The matching outcome earns verified status.  A wrong size, direction, or service is refused before the memory can steer action.",
+      "similarity": 0.95,
       "passed": true
     },
-    "06-measured-0": {
-      "clip": "06-measured-0.mp4",
-      "asked": "We ran six hundred claims through three different defences: five hundred forty deliberate fakes, plus sixty honest ones as a control.",
-      "heard": "We ran 600 claims through 3 different defenses, 540 deliberate fakes, plus 60 honest ones as a control.",
-      "similarity": 0.944,
+    "06-four-trust-levels-0": {
+      "clip": "06-four-trust-levels-0.mp4",
+      "asked": "Verified memory may guide an automatic action. Attested memory may advise, but still needs a person to approve.",
+      "heard": "Verified memory may guide an automatic action.  A tested memory may advise, but still needs a person to approve.",
+      "similarity": 0.919,
       "passed": true
     },
-    "07-the-oracle-1": {
-      "clip": "07-the-oracle-1.mp4",
-      "asked": "A claimed drop of fourteen thousand milliseconds matched CloudWatch within five. A claimed drop of ten did not, and was refused.",
-      "heard": "A claimed drop of 14,000 milliseconds matched cloud watch within five.  A claimed drop of 10 did not, and was refused.",
-      "similarity": 0.927,
-      "passed": true
-    },
-    "08-close-0": {
-      "clip": "08-close-0.mp4",
-      "asked": "In a recorded run, the closer memory was unchecked and the further one was confirmed. It chose the confirmed one.",
-      "heard": "In a recorded run, the closer memory was unchecked, and the further one was confirmed, it chose the confirmed one.",
+    "06-four-trust-levels-1": {
+      "clip": "06-four-trust-levels-1.mp4",
+      "asked": "Unconfirmed or disputed memory stays visible for inspection, yet cannot quietly gain the keys through similarity alone.",
+      "heard": "Unconfirmed or disputed memory stays visible for inspection, yet cannot quietly gain the keys through similarity alone.",
       "similarity": 1.0,
       "passed": true
     },
-    "08-close-1": {
-      "clip": "08-close-1.mp4",
-      "asked": "Being closer didn't win. Being checked did. The idea is old; actually enforcing it is the new part.",
-      "heard": "Being closer didn't win, being checkeded.  The idea is old, actually enforcing it is the new part.",
-      "similarity": 0.919,
+    "07-attack-test-0": {
+      "clip": "07-attack-test-0.mp4",
+      "asked": "We tested six hundred fixed cases: five hundred forty attacks designed to fool memory, plus sixty honest controls.",
+      "heard": "We tested 600 fixed cases, 540 attacks designed to fool memory, plus 60 honest controls.",
+      "similarity": 1.0,
+      "passed": true
+    },
+    "07-attack-test-1": {
+      "clip": "07-attack-test-1.mp4",
+      "asked": "A system that trusted callers gave every attack the keys. MemoryStand gave attacks none and preserved every honest case.",
+      "heard": "A system that trusted callers gave every attack the keys.  Memory stand gave attacks none and preserved every honest case.",
+      "similarity": 0.923,
+      "passed": true
+    },
+    "08-honest-status-0": {
+      "clip": "08-honest-status-0.mp4",
+      "asked": "Today, search matches words rather than meaning, and decisions use a fixed fallback because paid model quota is unavailable.",
+      "heard": "Today, search matches words rather than meaning, and decisions use a fixed fallback because  the paid model quota is unavailable.",
+      "similarity": 0.974,
+      "passed": true
+    },
+    "08-honest-status-1": {
+      "clip": "08-honest-status-1.mp4",
+      "asked": "That limitation never bypasses the gate. Promotion uses zero model calls, so memories still need receipts before getting autonomous keys.",
+      "heard": "That limitation never bypasses the gate.  Promotion uses zero model calls, so memory still need receipts before getting autonomous keys.",
+      "similarity": 0.95,
       "passed": true
     }
   }

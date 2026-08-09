@@ -354,13 +354,17 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > history and `DISCLOSURES.md` preserve that provenance; the human owner remains responsible for
 > the submission and its claims.
 >
-> **The submitted demo video.** It has no synthetic presenter. Frames are composed
-> programmatically with Pillow from the live dashboard screenshot, live API receipts, and
-> committed benchmark transcripts; narration uses macOS text-to-speech; ffmpeg assembles and
-> captions the 1920×1080 H.264/AAC render. `scripts/video/verify_video.py` verifies its technical
-> envelope and `scripts/video/verify_claims.py` checks every spoken claim against the receipt
-> corpus. An earlier Grok-generated presenter experiment exists under `scripts/presenter/`, but
-> it is not the video being submitted.
+> **The current submission-candidate video.** It uses a synthetic presenter generated from the
+> creator's own reference photo with xAI Grok (`image_edit` through Grok CLI for consistent base
+> frames, then the same Grok video model for the exact spoken lines). Because Zero Data Retention
+> is enabled on the xAI team, the CLI video tool cannot supply the required `output.upload_url`;
+> `scripts/presenter/xai_video.py` therefore calls the xAI endpoint directly and receives each
+> MP4 through a short-lived, token-protected upload bridge. Every clip is transcribed locally and
+> must pass the committed similarity receipt before `compose.py` will include it. Pillow renders
+> the evidence panels; ffmpeg assembles and burns English subtitles into the 1920×1080 H.264/AAC
+> render while also writing a matching `.srt`. The end card discloses the synthetic presenter.
+> The complete reproducible workflow is documented in
+> `docs/demo/PRESENTER_VIDEO_PLAN.md` and implemented under `scripts/presenter/`.
 >
 > **Runtime, not authoring.** Amazon Bedrock is a component of the submitted agent itself and is
 > covered under AWS services — see Field 6. Honest caveat: on-demand Bedrock quota on this account

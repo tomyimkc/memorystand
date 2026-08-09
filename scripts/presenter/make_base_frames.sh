@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
 #
-# Step 1 of the presenter pipeline: turn one reference portrait into six per-beat base frames.
+# Step 1 of the presenter pipeline: turn one reference portrait into per-beat base frames.
 #
 # MEASURED, NOT ASSUMED: image_edit IGNORES aspect_ratio. Asking for 16:9 against a 912x1136
 # reference returns 912x1136 -- it preserves the source aspect and crops nothing. The request
@@ -19,7 +19,7 @@
 # WHY image_edit AND NOT image_gen. Grok's own `imagine` guidance is explicit: never use pure
 # image_gen for a real person -- always image_edit against a real reference. That is both the
 # policy and the practical answer, because a generated-from-scratch face drifts between beats
-# and the six clips stop looking like the same human. One reference in, six variations out.
+# and the clips stop looking like the same human. One reference in, one variation per beat.
 #
 # WHY THE FRAMING LANGUAGE IS STILL THERE. Even though the output is portrait, asking for the
 # subject on a third and for negative space opposite changes where the head sits inside the

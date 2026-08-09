@@ -227,7 +227,7 @@ DRAW = {
 def draw_outro(spec):
     """The end card. Full width, no presenter -- the one frame a judge might pause on.
 
-    It exists because the final shot cannot simply be held: a presenter clip is a fixed 6.04s
+    It exists because the final shot cannot simply be held: a presenter clip is fixed-duration
     and freezing a person mid-blink to buy reading time looks like a stall. A card that was
     always meant to be still does not have that problem, and it keeps the repository URL on
     screen for longer than anyone needs to write it down.
@@ -235,12 +235,25 @@ def draw_outro(spec):
     image = bf.background()
     draw = ImageDraw.Draw(image)
 
-    y = bf.text(draw, (PANEL_MARGIN + 60, 350), "MemoryStand", size=96, color=bf.INK, bold=True)
-    y = bf.text(draw, (PANEL_MARGIN + 60, y + 34),
-                "A memory for AI agents that will not trust a claim nobody ever checked.",
-                size=38, color=bf.MUTED, max_width=W - 2 * PANEL_MARGIN - 120, spacing=10)
-    bf.text(draw, (PANEL_MARGIN + 60, y + 56), "github.com/tomyimkc/memorystand",
-            size=34, color=bf.GREEN, mono=True)
+    outro = spec.get("outro", {})
+    tagline = outro.get(
+        "tagline",
+        "A memory for AI agents that will not trust a claim nobody ever checked.",
+    )
+    repository = outro.get("repository", "github.com/tomyimkc/memorystand")
+
+    y = bf.text(draw, (PANEL_MARGIN + 60, 285), spec["title"],
+                size=96, color=bf.INK, bold=True)
+    y = bf.text(draw, (PANEL_MARGIN + 60, y + 34), tagline,
+                size=42, color=bf.MUTED, max_width=W - 2 * PANEL_MARGIN - 120, spacing=10)
+    y = bf.text(draw, (PANEL_MARGIN + 60, y + 54), repository,
+                size=34, color=bf.GREEN, mono=True)
+    if outro.get("status"):
+        y = bf.text(draw, (PANEL_MARGIN + 60, y + 42), outro["status"],
+                    size=24, color=bf.MUTED, max_width=W - 2 * PANEL_MARGIN - 120)
+    if outro.get("disclosure"):
+        bf.text(draw, (PANEL_MARGIN + 60, y + 24), outro["disclosure"],
+                size=20, color=bf.FAINT, max_width=W - 2 * PANEL_MARGIN - 120)
     return image
 
 

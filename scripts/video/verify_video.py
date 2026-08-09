@@ -3,10 +3,10 @@
 """Verify the MemoryStand demo video's technical envelope.
 
 Checks (via ffprobe/ffmpeg -- not by trusting the render step):
-  - duration is inside the accepted 2:35-2:55 window, and strictly under the
-    hackathon's hard 3:00 cutoff (judges are not required to watch past it,
+  - duration is inside the selected cut's accepted window, and strictly under
+    the hackathon's hard 3:00 cutoff (judges are not required to watch past it,
     so going over is a worse failure than finishing a little early)
-  - 1920x1080, ~30fps, H.264 video stream, AAC audio stream
+  - 1920x1080, the selected cut's expected frame rate, H.264 video, AAC audio
   - the audio track actually has signal. A silent narration track passes a
     naive ffprobe stream check (the stream exists) but is a real, classic,
     humiliating failure mode -- this runs ffmpeg's ``volumedetect`` filter
@@ -19,7 +19,7 @@ summary, a UTC timestamp) whether it passes or fails, and exits non-zero
 naming every check that failed.
 
 Usage:
-    python3 scripts/video/verify_video.py [video.mp4] [--srt captions.srt]
+    python3 scripts/video/verify_video.py [video.mp4] [--profile auto|evidence|presenter]
 
 With no arguments, verifies the newest ``artifacts/video/*.mp4``.
 """
@@ -39,15 +39,27 @@ import video_common  # noqa: E402
 
 REPO_ROOT = video_common.REPO_ROOT
 
-MIN_DURATION_S = 155.0  # 2:35
-MAX_DURATION_S = 175.0  # 2:55
 HARD_MAX_DURATION_S = 180.0  # 3:00 -- hard fail; judges may stop watching here
 EXPECTED_WIDTH = 1920
 EXPECTED_HEIGHT = 1080
-EXPECTED_FPS = 30.0
 FPS_TOLERANCE = 0.5
 MIN_MEAN_VOLUME_DB = -50.0  # below this floor, treat the track as effectively silent
 SRT_END_TOLERANCE_S = 0.5
+
+PROFILES = {
+    "evidence": {
+        "minDurationSeconds": 155.0,
+        "maxDurationSeconds": 175.0,
+        "expectedFps": 30.0,
+        "windowLabel": "2:35-2:55",
+    },
+    "presenter": {
+        "minDurationSeconds": 130.0,
+        "maxDurationSeconds": 155.0,
+        "expectedFps": 24.0,
+        "windowLabel": "2:10-2:35",
+    },
+}
 
 
 def _frame_rate_to_float(value: str | None) -> float:
@@ -77,6 +89,15 @@ def main() -> int:
         help="path to the rendered .mp4; defaults to the newest artifacts/video/*.mp4",
     )
     parser.add_argument("--srt", type=Path, default=None, help="defaults to <video> with a .srt suffix")
+    parser.add_argument(
+        "--profile",
+        choices=("auto", *PROFILES),
+        default="auto",
+        help=(
+            "technical envelope to apply; auto selects presenter for filenames containing "
+            "'presenter', otherwise evidence"
+        ),
+    )
     args = parser.parse_args()
 
     video = args.video or _find_default_video()
@@ -86,6 +107,18 @@ def main() -> int:
     video = video.resolve()
     if not video.is_file():
         parser.error(f"video does not exist: {video}")
+
+    profile_name = (
+        "presenter"
+        if args.profile == "auto" and "presenter" in video.stem.lower()
+        else "evidence"
+        if args.profile == "auto"
+        else args.profile
+    )
+    profile = PROFILES[profile_name]
+    min_duration = float(profile["minDurationSeconds"])
+    max_duration = float(profile["maxDurationSeconds"])
+    expected_fps = float(profile["expectedFps"])
 
     try:
         probe = video_common.ffprobe(video)
@@ -110,15 +143,18 @@ def main() -> int:
             f"HARD FAIL: duration {duration:.2f}s is at or past the 3:00 (180s) cutoff -- "
             "judges are not required to watch past this"
         )
-    if not (MIN_DURATION_S <= duration <= MAX_DURATION_S):
+    if not (min_duration <= duration <= max_duration):
         errors.append(
-            f"duration {duration:.2f}s is outside the accepted 2:35-2:55 window "
-            f"({MIN_DURATION_S:.0f}-{MAX_DURATION_S:.0f}s)"
+            f"duration {duration:.2f}s is outside the {profile_name} cut's accepted "
+            f"{profile['windowLabel']} window ({min_duration:.0f}-{max_duration:.0f}s)"
         )
     if (width, height) != (EXPECTED_WIDTH, EXPECTED_HEIGHT):
         errors.append(f"expected {EXPECTED_WIDTH}x{EXPECTED_HEIGHT}; got {width}x{height}")
-    if abs(fps - EXPECTED_FPS) > FPS_TOLERANCE:
-        errors.append(f"expected ~{EXPECTED_FPS:.0f}fps; got {fps:.3f}fps ({video_stream.get('avg_frame_rate')!r})")
+    if abs(fps - expected_fps) > FPS_TOLERANCE:
+        errors.append(
+            f"{profile_name} cut expects ~{expected_fps:.0f}fps; got "
+            f"{fps:.3f}fps ({video_stream.get('avg_frame_rate')!r})"
+        )
     if codec != "h264":
         errors.append(f"expected H.264 video; got {codec!r}")
 
@@ -161,6 +197,10 @@ def main() -> int:
     receipt: dict[str, Any] = {
         "status": "PASS" if not errors else "FAIL",
         "checkedAtUtc": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+        "profile": {
+            "name": profile_name,
+            **profile,
+        },
         "video": {
             "path": video_common.display_path(video),
             "bytes": video.stat().st_size,
