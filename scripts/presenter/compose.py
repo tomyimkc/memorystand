@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Step 4: cut the verified shots and the data panels into one 1920x1080 film.
+"""Step 4: cut verified narration over large panels or live evidence into one 1920x1080 film.
 
-    panel png (1920x1080)   <- make_panels.py
-      + presenter clip      <- make_clips.py, transcript-verified
+    large panel OR deployed evidence footage
+      + presenter narration <- make_clips.py, transcript-verified
         -> one segment per shot, trimmed to where the speech actually stops
           -> concat -> artifacts/video/memorystand-presenter.mp4
 
@@ -35,6 +35,10 @@ THREE THINGS THIS DOES THAT A NAIVE OVERLAY DOES NOT:
    finished film to prove the corrected shot landed on the intended timeline. Measuring mouth
    motion after shrinking the presenter beside a large static panel produced false failures, so
    the two temporal guarantees are tested separately at the stage where each signal is reliable.
+
+6. IT SHOWS THE PRODUCT WORKING. Selected shots replace the talking head with muted footage from
+   the deployed evidence cut. The verified presenter audio remains on the exact same frame grid,
+   while a large headline and fresh subtitles replace the evidence cut's dense explanatory text.
 
     python scripts/presenter/compose.py --check
     python scripts/presenter/compose.py --keep-segments   # leave the per-shot files for review
@@ -359,6 +363,34 @@ def render_caption(text: str, path: Path) -> None:
     image.save(path)
 
 
+def render_broll_overlay(visual: dict, path: Path) -> None:
+    """Cover dense legacy text with one large claim and a clean subtitle band.
+
+    The evidence source is intentionally allowed to remain technical: judges can still inspect
+    the live API and database receipts. The editorial layer is not technical. It states one idea
+    in large type, labels the footage as live evidence, and covers the old paragraph subtitle so
+    viewers never have to choose between two competing blocks of copy.
+    """
+    from PIL import Image, ImageDraw
+
+    image = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((0, 0, W, 198), fill=(6, 10, 18, 232))
+    draw.rectangle((0, CAPTION_TOP - 24, W, H), fill=(6, 10, 18, 242))
+    bf.text(draw, (60, 28), visual["label"], size=24, color=bf.GREEN, bold=True)
+    bf.text(
+        draw,
+        (60, 72),
+        visual["headline"],
+        size=68,
+        color=bf.INK,
+        bold=True,
+        max_width=W - 120,
+        spacing=8,
+    )
+    image.save(path)
+
+
 def write_srt(path: Path, cues: list[tuple[float, float, str]]) -> None:
     blocks = []
     for i, (start, end, text) in enumerate(cues, 1):
@@ -533,7 +565,12 @@ def main() -> int:
         make_mask(side, path)
 
     shots = [
-        (beat["id"], i, beat["presenterSide"])
+        (
+            beat["id"],
+            i,
+            beat["presenterSide"],
+            beat.get("broll", {}).get(str(i)),
+        )
         for beat in spec["beats"]
         for i in range(len(beat["shots"]))
     ]
@@ -549,7 +586,7 @@ def main() -> int:
     audio: list[Path] = []
     timeline: list[tuple[str, float]] = []
     total = 0.0
-    for n, (beat_id, i, side) in enumerate(shots):
+    for n, (beat_id, i, side, visual) in enumerate(shots):
         tag = f"{beat_id}-{i}"
         if tag not in passed:
             raise SystemExit(
@@ -559,7 +596,10 @@ def main() -> int:
 
         clip = CLIP_DIR / f"{tag}.mp4"
         panel = PANEL_DIR / f"{beat_id}.png"
-        for needed in (clip, panel):
+        needed_files = [clip]
+        if visual is None:
+            needed_files.append(panel)
+        for needed in needed_files:
             if not needed.is_file():
                 raise SystemExit(f"missing {needed}")
 
@@ -575,14 +615,18 @@ def main() -> int:
         delay = lip_delay.get(tag, 0.0)
         lip = f"tpad=start_duration={delay:.4f}:start_mode=clone," if delay > 0 else ""
 
-        # The clip is portrait; scaled to 1080 tall it is wider than the 660px presenter column,
-        # so something has to be cropped. Rather than assume which side, find the speaker and put
-        # him where he belongs in his own column.
-        probe_w, probe_h = _clip_size(clip)
-        scaled_w = round(probe_w * H / probe_h / 2) * 2
-        crop_x = int(round(subject_centre(clip) * scaled_w - SUBJECT_TARGET[side] * PRESENTER_W))
-        crop_x = max(0, min(crop_x, scaled_w - PRESENTER_W))
-        overlay_x = 0 if side == "LEFT" else W - PRESENTER_W
+        crop_x = None
+        if visual is None:
+            # The clip is portrait; scaled to 1080 tall it is wider than the 660px presenter
+            # column, so something has to be cropped. Rather than assume which side, find the
+            # speaker and put him where he belongs in his own column.
+            probe_w, probe_h = _clip_size(clip)
+            scaled_w = round(probe_w * H / probe_h / 2) * 2
+            crop_x = int(
+                round(subject_centre(clip) * scaled_w - SUBJECT_TARGET[side] * PRESENTER_W)
+            )
+            crop_x = max(0, min(crop_x, scaled_w - PRESENTER_W))
+            overlay_x = 0 if side == "LEFT" else W - PRESENTER_W
 
         # Only the opening touches black; the closing fade lives on the end card. Everything
         # between is a straight cut, which is what a person talking should look like.
@@ -616,18 +660,53 @@ def main() -> int:
         subs = ""
 
         seg = work / f"{n:02d}-{tag}.mp4"
+        if visual is not None:
+            source = REPO_ROOT / visual["source"]
+            if not source.is_file():
+                raise SystemExit(
+                    f"missing live-evidence source {source}. Copy the reviewed deployed-demo "
+                    "render there before composing the hybrid cut."
+                )
+            start = float(visual["startSeconds"])
+            source_len = float(_probe(source, "format=duration"))
+            if start + duration > source_len + 0.05:
+                raise SystemExit(
+                    f"{tag}: evidence range {start:.2f}-{start + duration:.2f}s exceeds "
+                    f"{source.name} ({source_len:.2f}s)"
+                )
+            evidence_overlay = work / f"{n:02d}-{tag}-evidence-overlay.png"
+            render_broll_overlay(visual, evidence_overlay)
+            video_inputs = [
+                "-ss", f"{start:.6f}", "-t", f"{duration:.6f}", "-i", str(source),
+                "-t", f"{duration:.6f}", "-i", str(clip),
+                "-loop", "1", "-t", f"{duration:.6f}", "-i", str(evidence_overlay),
+            ]
+            base_filter = (
+                f"[0:v]scale={W}:{H}:force_original_aspect_ratio=increase,"
+                f"crop={W}:{H},setsar=1[bg];"
+                f"[2:v]format=rgba[evidence];"
+                f"[bg][evidence]overlay=0:0:format=auto[base];"
+            )
+        else:
+            video_inputs = [
+                "-loop", "1", "-t", f"{duration:.6f}", "-i", str(panel),
+                "-t", f"{duration:.6f}", "-i", str(clip),
+                "-loop", "1", "-t", f"{duration:.6f}", "-i", str(masks[side]),
+            ]
+            base_filter = (
+                f"[1:v]{lip}scale={scaled_w}:{H},"
+                f"crop={PRESENTER_W}:{H}:{crop_x}:0,setsar=1,format=yuva420p[p];"
+                f"[2:v]format=gray[m];"
+                f"[p][m]alphamerge[pa];"
+                f"[0:v]setsar=1[bg];"
+                f"[bg][pa]overlay={overlay_x}:0:format=auto[base];"
+            )
         run([
             "ffmpeg", "-y", "-v", "error",
-            "-loop", "1", "-t", f"{duration:.6f}", "-i", str(panel),
-            "-t", f"{duration:.6f}", "-i", str(clip),
-            "-loop", "1", "-t", f"{duration:.6f}", "-i", str(masks[side]),
+            *video_inputs,
             *cue_inputs,
             "-filter_complex",
-            f"[1:v]{lip}scale={scaled_w}:{H},crop={PRESENTER_W}:{H}:{crop_x}:0,setsar=1,format=yuva420p[p];"
-            f"[2:v]format=gray[m];"
-            f"[p][m]alphamerge[pa];"
-            f"[0:v]setsar=1[bg];"
-            f"[bg][pa]overlay={overlay_x}:0:format=auto[base];"
+            base_filter
             + cue_filters
             + f"{stage}format=yuv420p{vfade}[v]",
             "-map", "[v]", "-an",
@@ -649,7 +728,12 @@ def main() -> int:
         ])
         segments.append(seg)
         audio.append(wav)
-        print(f"  {tag:30s} {side:5s}  {duration:5.2f}s  crop x={crop_x}")
+        visual_label = (
+            f"evidence @{float(visual['startSeconds']):.0f}s"
+            if visual is not None
+            else f"presenter crop x={crop_x}"
+        )
+        print(f"  {tag:30s} {side:5s}  {duration:5.2f}s  {visual_label}")
 
     SPANS.write_text(json.dumps(spans, indent=2) + "\n")
     WORDS.write_text(json.dumps(words_cache, indent=1) + "\n")

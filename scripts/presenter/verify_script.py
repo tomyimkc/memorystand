@@ -94,6 +94,38 @@ def validate(spec: dict) -> list[str]:
         if beat.get("presenterSide") not in {"LEFT", "RIGHT"}:
             errors.append(f"{beat_id}: presenterSide must be LEFT or RIGHT")
 
+        broll = beat.get("broll", {})
+        if not isinstance(broll, dict):
+            errors.append(f"{beat_id}: broll must be an object keyed by shot index")
+            continue
+        for raw_index, visual in broll.items():
+            try:
+                shot_index = int(raw_index)
+            except (TypeError, ValueError):
+                errors.append(f"{beat_id}: invalid broll shot index {raw_index!r}")
+                continue
+            if str(shot_index) != str(raw_index) or not 0 <= shot_index < len(shots):
+                errors.append(f"{beat_id}: broll shot index {raw_index!r} is out of range")
+            if not isinstance(visual, dict):
+                errors.append(f"{beat_id}-{raw_index}: broll entry must be an object")
+                continue
+            source = visual.get("source", "")
+            if not isinstance(source, str) or not source.startswith("artifacts/video/"):
+                errors.append(
+                    f"{beat_id}-{raw_index}: broll source must live under artifacts/video/"
+                )
+            try:
+                if float(visual.get("startSeconds", -1)) < 0:
+                    raise ValueError
+            except (TypeError, ValueError):
+                errors.append(f"{beat_id}-{raw_index}: broll startSeconds must be non-negative")
+            label = visual.get("label", "")
+            headline = visual.get("headline", "")
+            if not isinstance(label, str) or not 1 <= len(label) <= 32:
+                errors.append(f"{beat_id}-{raw_index}: broll label must be 1-32 characters")
+            if not isinstance(headline, str) or not 1 <= len(headline) <= 56:
+                errors.append(f"{beat_id}-{raw_index}: broll headline must be 1-56 characters")
+
     spoken = " ".join(all_spoken).lower()
     if len(all_spoken) != EXPECTED_TOTAL_SHOTS:
         errors.append(

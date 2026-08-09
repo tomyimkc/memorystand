@@ -8,6 +8,17 @@ from scripts.presenter.verify_script import SCRIPT_JSON, validate
 def test_general_public_presenter_script_contract():
     spec = json.loads(SCRIPT_JSON.read_text())
     assert validate(spec) == []
+    assert sum(len(beat.get("broll", {})) for beat in spec["beats"]) >= 4
+    assert all(
+        len(beat["panelData"].get("bullets", [])) <= 2
+        for beat in spec["beats"]
+    )
+
+
+def test_presenter_script_rejects_broll_outside_generated_artifacts():
+    spec = json.loads(SCRIPT_JSON.read_text())
+    spec["beats"][0]["broll"]["0"]["source"] = "/tmp/unreviewed.mp4"
+    assert any("broll source" in error for error in validate(spec))
 
 
 def test_caption_cues_do_not_leave_a_one_word_orphan():
