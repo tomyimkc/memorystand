@@ -220,6 +220,11 @@ class UploadBridge:
             match = pattern.search(line)
             if match:
                 self.base_url = match.group(0)
+                # cloudflared prints the hostname before the public edge necessarily resolves it.
+                # Submitting immediately made the first Grok job fail with
+                # ``cannot resolve Image URL`` while every later shot succeeded. A short settle
+                # plus the one retry in main prevents that warm-up race without exposing a route.
+                time.sleep(5)
                 print("  ZDR upload bridge: ready (short-lived, token-protected)")
                 return
 
@@ -408,7 +413,15 @@ def main() -> int:
                 print(f"  {tag}: missing source frame {source}")
                 continue
             print(f"==> {tag}: generating from {source.name}")
-            if generate(tag, line, source, clip, bridge, key):
+            generated = False
+            for attempt in range(2):
+                if attempt:
+                    print("    retrying once after the tunnel warm-up race")
+                    time.sleep(5)
+                if generate(tag, line, source, clip, bridge, key):
+                    generated = True
+                    break
+            if generated:
                 completed += 1
                 print(f"    wrote {clip.name} ({clip.stat().st_size // 1000} kB)")
             else:

@@ -13,8 +13,10 @@ SCRIPT_JSON = REPO_ROOT / "docs" / "demo" / "presenter-script.json"
 
 WORDS_MIN = 17
 WORDS_MAX = 24
-EXPECTED_BEATS = 8
-EXPECTED_SHOTS_PER_BEAT = 2
+EXPECTED_BEATS = 7
+EXPECTED_TOTAL_SHOTS = 12
+MIN_SHOTS_PER_BEAT = 1
+MAX_SHOTS_PER_BEAT = 2
 SUPPORTED_PANEL_KINDS = {
     "admission",
     "callout",
@@ -33,7 +35,7 @@ REQUIRED_SPOKEN_PHRASES = (
     "cockroachdb",
     "aws",
     "cloudwatch",
-    "five hundred forty attacks",
+    "five hundred forty attack",
     "sixty honest controls",
     "zero model calls",
     "fixed fallback",
@@ -73,9 +75,10 @@ def validate(spec: dict) -> list[str]:
         ids.add(beat_id)
 
         shots = beat.get("shots", [])
-        if len(shots) != EXPECTED_SHOTS_PER_BEAT:
+        if not MIN_SHOTS_PER_BEAT <= len(shots) <= MAX_SHOTS_PER_BEAT:
             errors.append(
-                f"{beat_id}: expected {EXPECTED_SHOTS_PER_BEAT} shots, found {len(shots)}"
+                f"{beat_id}: expected {MIN_SHOTS_PER_BEAT}-{MAX_SHOTS_PER_BEAT} "
+                f"shots, found {len(shots)}"
             )
         for index, line in enumerate(shots):
             words = len(line.split())
@@ -92,6 +95,10 @@ def validate(spec: dict) -> list[str]:
             errors.append(f"{beat_id}: presenterSide must be LEFT or RIGHT")
 
     spoken = " ".join(all_spoken).lower()
+    if len(all_spoken) != EXPECTED_TOTAL_SHOTS:
+        errors.append(
+            f"expected {EXPECTED_TOTAL_SHOTS} total shots, found {len(all_spoken)}"
+        )
     for phrase in REQUIRED_SPOKEN_PHRASES:
         if phrase not in spoken:
             errors.append(f"required spoken phrase missing: {phrase!r}")
