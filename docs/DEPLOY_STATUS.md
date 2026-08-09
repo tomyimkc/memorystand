@@ -263,9 +263,12 @@ would actually be refused is **untested**.
 
 Live `/health` on 2026-08-09 reported all three migrations applied:
 `001_attested_trust_tier.sql`, `002_reverification.sql`, and
-`003_retrieval_receipt.sql`. The deployed source receipt at that check was `61cc6a35b0`; the
-winner-readiness deployment will replace it, and `/health.deployment.source_sha` remains the
-source of truth.
+`003_retrieval_receipt.sql`. The merged winner-readiness build was deployed on 2026-08-09:
+`/health.deployment.source_sha` reported `a3cca71b14`, matching merge commit
+`a3cca71b1487b311fe169a1cc81981217656a1ec`, with CockroachDB reachable and the kill switch
+off. Live adversarial probes also confirmed that cross-tenant public reads and demo writes
+return `401`, `k=21` returns `400`, and 21 `produced_memory_ids` return `400` before reference
+validation. `/health.deployment.source_sha` remains the source of truth for later deployments.
 
 ## Outcome verification is live, and it refuses things
 
