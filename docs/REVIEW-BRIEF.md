@@ -116,18 +116,18 @@ scheduled re-verification sweep, Bedrock (see weaknesses).
 - **Concurrency:** 10 concurrent writers, 0 lost updates under real contention.
 - **Failover:** reads keep succeeding through a node loss (3 nodes on one machine).
 
-~15,000 lines, **158 tests passing** in the current isolated readiness worktree, plus one
-video-artifact test skipped until the refreshed render is copied in.
+~15,000 lines, **160 tests passing** in the current isolated readiness worktree, including the
+refreshed video-artifact and diagram-layout checks.
 
 ## KNOWN WEAKNESSES — do not spend time rediscovering these
 
 Listed so you can attack the *response* to them, and so you cannot be misled by the summary above.
 
-1. **Bedrock on-demand quota on this AWS account is 0.** Consequences: embeddings are a
-   deterministic **lexical** stub (feature hashing), not semantic — so "closest memory" means
-   lexically closest; and `/decide` reasons through an Anthropic-shaped standby provider
-   (`anthropic:claude-haiku-4-5`), not Bedrock. A support case is open. The zero-model-calls
-   claim is unaffected because it concerns the *promotion* path.
+1. **Neither model provider currently answers.** Bedrock on-demand quota is 0, so embeddings are
+   a deterministic **lexical** stub (feature hashing), not semantic. The configured router standby
+   returned HTTP 402 `insufficient_balance` on 2026-08-09, so live `/decide` used
+   `fallback_heuristic`, `model_calls: 0`. A support case is open; restoring the router requires
+   owner funding plus key rotation. The zero-model-calls promotion claim is unaffected.
 2. **The MCP service account is write-capable** (`CLUSTER_OPERATOR_WRITER`). CockroachDB Cloud
    has no working read-only role for this server, so "read-only inspection" cannot be claimed.
 3. **The failover test is 3 nodes on one machine**, not multi-region. It shows replication
@@ -137,10 +137,11 @@ Listed so you can attack the *response* to them, and so you cannot be misled by 
    demonstration of "the closer memory lost to the more trusted one."
 5. **The embeddings in the deployed demo are lexical stubs**, so the public demo proves the
    database, policy, transaction, and evidence paths but not semantic retrieval quality.
-6. **Not yet done:** the refreshed evidence-first video still needs its final render and public
-   YouTube/Vimeo upload; an API key exposed in a development transcript still needs rotation;
-   the local AWS session is expired; and the created Devpost draft still needs owner attestations
-   before final submission.
+6. **Not yet done:** the refreshed evidence-first video is rendered and locally verified but still
+   needs a public YouTube/Vimeo upload; an API key exposed in a development transcript still needs
+   owner-side rotation/funding; and the Devpost draft still needs the owner-only eligibility and
+   self-assessment answers before final submission. The architecture, thumbnail, gallery, and
+   long-form project copy are already attached.
 
 ## WHAT I WANT FROM YOU
 

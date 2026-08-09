@@ -95,18 +95,18 @@ search would undermine the entire submission, which is itself about not trusting
 Standard open-source libraries only, used under their own licenses and declared in
 `requirements.txt`. No vendored third-party source.
 
-## The reasoning provider: a third-party router, used deliberately and named honestly
+## The reasoning provider: a disclosed router standby, currently unavailable
 
-The deployed agent reasons through **`https://api.teamorouter.com`**, a third-party
-Anthropic-compatible router serving `claude-haiku-4-5`. This is a deliberate, ongoing choice, and
-it is worth reading how it got here, because for two days it was the exact failure this project
-exists to condemn.
+The deployed provider chain is configured to try **`https://api.teamorouter.com`**, a third-party
+Anthropic-compatible router serving `claude-haiku-4-5`, after Bedrock. This is a deliberate,
+disclosed standby. It is worth reading how it got here, because for two days it was the exact
+failure this project exists to condemn — and because it is not currently serving the live demo.
 
 **Why a router at all.** Every Bedrock inference quota on this AWS account is 0
 (`docs/BEDROCK_QUOTA.md`), so Bedrock — the preferred provider at the head of the chain whenever
 its circuit breaker permits a probe — does not answer successfully. The router is a disclosed
-standby so the deployed agent can still exercise a real reasoning path; the deterministic
-fallback remains available when no provider answers.
+standby so the deployed agent can exercise a real reasoning path when that account has capacity;
+the deterministic fallback remains available when no provider answers.
 
 **The failure.** From 2026-08-04 to 2026-08-06 that endpoint was configured, but `/decide`
 reported `reasoning_source: anthropic:claude-haiku-4-5` — a label that reads as a direct Anthropic
@@ -116,19 +116,26 @@ the thing that produced it shipped a claim that did not. It was caught by an out
 review, not by us.
 
 **What changed.** The label is no longer hand-written. `anthropic_client.provider_label()` derives
-it from the endpoint in use, so live `/decide` now reports
+it from the endpoint in use, so when the router answers `/decide` reports
 `reasoning_source: api.teamorouter.com:claude-haiku-4-5` — it names the router, and a future
-redeploy against any other gateway relabels itself. The `/decide` captures quoted in `README.md`
-and under `docs/demo/` are real responses recorded against this router; their `model_calls: 1` and
-their latency are router figures.
+redeploy against any other gateway relabels itself. The `/decide` captures under `docs/demo/` are
+real historical responses recorded while the router had capacity; their `model_calls: 1` and
+latency are router figures.
+
+**Current live state (2026-08-09).** A fresh `/decide` reached the configured router, received
+HTTP 402 `insufficient_balance`, and then returned `reasoning_source: fallback_heuristic` with
+`model_calls: 0`. The live demo therefore does **not** currently claim model reasoning. Restoring
+the router arm requires an owner-funded balance and a replacement credential; Bedrock can also
+reclaim the path automatically if AWS grants quota.
 
 **What you are trusting.** Prompts and the SSM-held API key traverse `teamorouter.com`. That is a
 real third party in the request path, stated plainly so a judge does not have to discover it. The
 **promotion path is unaffected** — `backend/trust.py` imports no model client and a runtime guard
 fails if one becomes reachable, so no third party is ever in the path that grants trust. The API
 key may have appeared in a development transcript. Treat it as compromised: **rotate it
-immediately, not after the contest**, then replace `/memorystand/anthropic_api_key` in SSM. The
-live deployment must not rely on the historical credential.
+immediately, not after the contest**, then replace `/memorystand/anthropic_api_key` in SSM before
+funding or re-enabling that provider. The live deployment must not rely on the historical
+credential.
 
 ## AI tools used
 

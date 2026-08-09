@@ -97,14 +97,15 @@ Current isolated winner-readiness run: **160 tests passed** with the refreshed v
 artifact present, including `tests/test_latency_budget.py`, `tests/test_security_invariants.py`,
 the diagram layout check, and the video claim/codec checks.
 
-## Honest state: the deployed agent reasons through a disclosed router standby, not Bedrock
+## Honest state: both model providers are currently unavailable; fallback is live
 
 `GET /health`'s Bedrock `circuit_breakers` field spends much of its time `"open"`, for a mundane
 reason: Bedrock quota on this account is effectively zero, so the Bedrock attempt always fails and
-the chain falls through to the standby. Live `POST /decide` reasons through a third-party
-Anthropic-compatible router and returns `reasoning_source: "api.teamorouter.com:claude-haiku-4-5"`
-with `model_calls: 1` — the label is derived from the endpoint, see `../DISCLOSURES.md`. This is a
-deliberate, disclosed standby, and the deployed agent **does** reason with a model.
+the chain falls through to the configured standby. On 2026-08-09 that third-party
+Anthropic-compatible router returned HTTP 402 `insufficient_balance`; live `POST /decide` then
+returned `reasoning_source: "fallback_heuristic"` with `model_calls: 0`. The router label is still
+derived from its endpoint whenever it answers, see `../DISCLOSURES.md`, but the deployed demo does
+**not** currently claim model reasoning.
 
 That is a different zero from the `confirm_outcome` / trust-promotion path's **zero model calls**
 (`backend/trust.py`): the promotion path imports no model client and a runtime guard enforces it,
@@ -127,9 +128,12 @@ refuses to narrate proximity when distances tie rather than papering over it.
 - **Refused elsewhere.** The published credential against tenant `00000000-…` returns **401** on
   all three write routes (`/ingest`, `/decide`, `/confirm_outcome`) with
   "this credential is scoped to the public demo tenant".
-- **Works on its own tenant.** A full journey ran end to end: `/ingest` → `201 accepted`;
-  `/decide` → `201`, `action=scale_up`, `reasoning_source=api.teamorouter.com:claude-haiku-4-5`,
-  5 memories consulted; `/confirm_outcome` → `200`, `trust_tier=attested`, `model_calls=0`.
+- **Works on its own tenant.** An earlier full journey ran end to end while the router had
+  capacity: `/ingest` → `201 accepted`; `/decide` → `201`, `action=scale_up`,
+  `reasoning_source=api.teamorouter.com:claude-haiku-4-5`, 5 memories consulted;
+  `/confirm_outcome` → `200`, `trust_tier=attested`, `model_calls=0`. A fresh 2026-08-09
+  `/decide` instead returned the same action through `fallback_heuristic`, `model_calls=0`,
+  because the router account returned HTTP 402.
 
 That `attested` is the point rather than a shortfall: the outcome was reported via PagerDuty,
 which has no machine-checkable system of record, so it cannot reach `verified`. Only a CloudWatch
@@ -163,7 +167,8 @@ MEMORYSTAND_ANTHROPIC_BASE_URL=https://api.teamorouter.com bash infra/deploy.sh
 
 The router API key lives in the SSM SecureString `/memorystand/anthropic_api_key`. Because it may
 have appeared in a development transcript, it must be treated as compromised and **rotated
-immediately**, then replaced in SSM. The deployment must not wait until after the contest.
+immediately**, then replaced in SSM before the router account is funded or re-enabled. The
+deployment must not wait until after the contest.
 
 **Bedrock is the intended provider, and reclaims the path automatically.** A quota-increase
 request is open with AWS. The router is only a standby: Bedrock is tried first on every request,
@@ -215,8 +220,8 @@ what the demo calls.
 
 The central trust claim holds **in production**: a memory's standing is granted by an external
 outcome on a path that makes zero model calls. Decision reasoning is a separate path: Bedrock is
-preferred, the disclosed router is the current standby, and the deterministic fallback remains
-available when neither provider answers.
+preferred, a disclosed router is configured as standby, and the deterministic fallback is the
+currently active path because neither provider answers successfully.
 
 ## Security holes found by adversarial review, and closed
 

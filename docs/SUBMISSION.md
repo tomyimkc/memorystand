@@ -1,9 +1,11 @@
 # Devpost submission — MemoryStand
 
 Ready-to-paste copy for `cockroachdb-ai.devpost.com`, updated 2026-08-09 for the current build:
-region `us-west-2`. Live reasoning runs through a disclosed third-party router standby because
-Bedrock quota on this account is 0 (Field 6 and [DISCLOSURES.md](../DISCLOSURES.md)); the intended
-Bedrock model is `amazon.nova-lite-v1:0`, not Claude ([docs/BEDROCK_QUOTA.md](BEDROCK_QUOTA.md)).
+region `us-west-2`. Bedrock quota on this account is 0 and the configured third-party router
+standby currently returns HTTP 402, so live `/decide` degrades honestly to
+`fallback_heuristic`, `model_calls: 0` (Field 6 and
+[DISCLOSURES.md](../DISCLOSURES.md)); the intended Bedrock model is
+`amazon.nova-lite-v1:0`, not Claude ([docs/BEDROCK_QUOTA.md](BEDROCK_QUOTA.md)).
 Field IDs are Devpost's own internal ids, included so this doc lines up with the live form
 field-for-field.
 
@@ -202,13 +204,15 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > claim must name what produced it. Bedrock is tried first and stays the preferred provider, but
 > it never answers on this account: Claude on Bedrock is geo-refused (`ValidationException: Access
 > to Anthropic models is not allowed from unsupported countries...`) and the AWS-native fallback
-> `amazon.nova-lite-v1:0` has ~0 on-demand quota on this brand-new account. So live `/decide`
-> reasons through a **third-party Anthropic-compatible router, `api.teamorouter.com`, serving
-> `claude-haiku-4-5`** — a deliberate, disclosed standby. `reasoning_source` names it
-> (`api.teamorouter.com:claude-haiku-4-5`, `model_calls: 1`), derived from the endpoint rather
-> than hand-written, and the moment Bedrock quota lands it takes over with no code change. Prompts
-> and the API key traverse that third party; the **promotion path does not** — `backend/trust.py`
-> imports no model client and a runtime guard enforces it. Full detail in
+> `amazon.nova-lite-v1:0` has ~0 on-demand quota on this brand-new account. A
+> **third-party Anthropic-compatible router, `api.teamorouter.com`, serving
+> `claude-haiku-4-5`** is configured as a deliberate, disclosed standby, and
+> `reasoning_source` derives its label from the endpoint rather than hand-writing it. On
+> 2026-08-09 that account returned HTTP 402 `insufficient_balance`, so live `/decide` degraded
+> to `fallback_heuristic`, `model_calls: 0`; it does not pretend a model answered. The moment
+> Bedrock quota lands it takes over with no code change. Prompts and the API key traverse the
+> third party when it is enabled; the **promotion path does not** — `backend/trust.py` imports
+> no model client and a runtime guard enforces it. Full detail in
 > [`../DISCLOSURES.md`](../DISCLOSURES.md) and `docs/BEDROCK_QUOTA.md`.
 
 ### Field 7 — How meaningfully integrated
@@ -360,11 +364,12 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 >
 > **Runtime, not authoring.** Amazon Bedrock is a component of the submitted agent itself and is
 > covered under AWS services — see Field 6. Honest caveat: on-demand Bedrock quota on this account
-> is 0, so embeddings fall back to a deterministic lexical stub, and `/decide` reasons through a
-> third-party Anthropic-compatible router (`api.teamorouter.com:claude-haiku-4-5`, `model_calls: 1`
-> live) whose label is derived from the endpoint so it cannot misname the route. The **promotion**
-> path is model-free by construction and stays that way: `backend/trust.py` imports no model
-> client, and a runtime guard fails if one becomes reachable.
+> is 0, so embeddings fall back to a deterministic lexical stub. A third-party
+> Anthropic-compatible router is configured for `/decide`, with a label derived from the endpoint
+> so it cannot misname the route, but its account returned HTTP 402 on 2026-08-09; the live call
+> therefore used `fallback_heuristic`, `model_calls: 0`. The **promotion** path is model-free by
+> construction and stays that way: `backend/trust.py` imports no model client, and a runtime guard
+> fails if one becomes reachable.
 
 ---
 
@@ -393,7 +398,7 @@ should infer.
 - [x] Demo app URL fetched through an external web reader on 2026-08-07; it returned the MemoryStand dashboard. Re-check immediately before submission.
 - [ ] Every field above except the owner-only rows is filled in on the live Devpost draft.
 - [x] Architecture diagram is exported at `docs/architecture.png` (1920×1080).
-- [ ] Architecture diagram is attached to the Devpost draft.
+- [x] Architecture diagram is attached to the Devpost draft (attachment id 8745).
 
 ## Day of (2026-08-18)
 
