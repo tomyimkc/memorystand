@@ -97,6 +97,7 @@ DEMO_TENANT_SSM_PARAM = os.environ.get("MEMORYSTAND_DEMO_TENANT_SSM_PARAM", "/me
 WRITE_PATHS = {"/ingest", "/decide", "/confirm_outcome"}
 SECRET_GATED_PATHS = {"/ingest", "/decide", "/confirm_outcome"}
 MAX_RECALL_K = int(os.environ.get("MEMORYSTAND_MAX_RECALL_K", "20"))
+MAX_PRODUCED_MEMORY_IDS = int(os.environ.get("MEMORYSTAND_MAX_PRODUCED_MEMORY_IDS", "20"))
 
 CHAT_MODEL_ID = os.environ.get("MEMORYSTAND_CHAT_MODEL", "amazon.nova-lite-v1:0")
 
@@ -202,6 +203,20 @@ def _bounded_int(
     if not minimum <= value <= maximum:
         raise _BadRequest(f"{key} must be between {minimum} and {maximum}")
     return value
+
+
+def _bounded_string_list(
+    params: dict[str, Any], key: str, *, maximum: int
+) -> list[str]:
+    """Parse a JSON array without letting a public caller create unbounded DB work."""
+    raw = params.get(key)
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise _BadRequest(f"{key} must be an array")
+    if len(raw) > maximum:
+        raise _BadRequest(f"{key} may contain at most {maximum} items")
+    return [str(value) for value in raw]
 
 
 def _get_header(headers: dict[str, str], name: str) -> str | None:
@@ -398,7 +413,13 @@ def _route_decide(body: dict[str, Any], headers: dict[str, str], request_id: str
         model_calls = proposed["model_calls"]
         cited_memory_ids = list(proposed["cited_memory_ids"])
 
-    produced = tuple(str(m) for m in (body.get("produced_memory_ids") or ()))
+    produced = tuple(
+        _bounded_string_list(
+            body,
+            "produced_memory_ids",
+            maximum=MAX_PRODUCED_MEMORY_IDS,
+        )
+    )
     result = decisions.decide(
         tenant_id,
         agent_id,

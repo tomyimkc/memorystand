@@ -93,7 +93,7 @@ after the second failure; the third and fourth return in under a second because 
 short-circuits straight to the deterministic fallback instead of dialing Bedrock at all. The
 local equivalent for `agent.propose()` shows the same shape: 12.35 s -> 8.66 s -> 0.00 s -> 0.00 s.
 
-Current isolated winner-readiness run: **160 tests passed** with the refreshed verified video
+Current isolated winner-readiness run: **162 tests passed** with the refreshed verified video
 artifact present, including `tests/test_latency_budget.py`, `tests/test_security_invariants.py`,
 the diagram layout check, and the video claim/codec checks.
 

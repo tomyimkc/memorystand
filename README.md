@@ -249,7 +249,7 @@ Everything marked ✅ was run against a real CockroachDB v26.2.5 cluster, not ju
 |---|---|
 | Schema, admission control, outcome gate, cross-examination | ✅ end to end |
 | Incident fixtures (101 records, 2 designed conflicts) | ✅ 99 admitted, 2 held |
-| Test suite (`pytest`) | ✅ **160 tests passing** with the refreshed video artifact present on the isolated winner-readiness branch (2026-08-09) |
+| Test suite (`pytest`) | ✅ **162 tests passing** with the refreshed video artifact present on the isolated winner-readiness branch (2026-08-09) |
 | Concurrency + TOCTOU proof (`scripts/race_demo.py`) | ✅ real `40001` captured |
 | Benchmark harness (`scripts/loadtest.py`) | ✅ 10k rows, numbers below |
 | Lambda handler, 7 routes, kill switch, degraded mode | ✅ exercised over HTTP |
@@ -401,7 +401,7 @@ git clone <this-repo> && cd memorystand
 Then:
 
 ```bash
-.venv/bin/python -m pytest -q                                   # 160 passed with the refreshed local render present
+.venv/bin/python -m pytest -q                                   # 162 passed with the refreshed local render present
 .venv/bin/python cli/memorystand.py recall --query "payments failover"
 .venv/bin/python scripts/loadtest.py --rows 10000 --tenants 50  # reproduce the numbers below
 ```

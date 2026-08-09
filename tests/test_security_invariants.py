@@ -582,3 +582,46 @@ def test_unhandled_errors_do_not_leak_internal_details(monkeypatch):
         "detail": "the request could not be completed",
         "request_id": "r",
     }
+
+
+@pytest.mark.parametrize(
+    ("produced_memory_ids", "detail"),
+    [
+        ("not-an-array", "must be an array"),
+        ([str(uuid.uuid4()) for _ in range(handler.MAX_PRODUCED_MEMORY_IDS + 1)], "at most"),
+    ],
+)
+def test_public_decide_bounds_produced_memory_references(
+    monkeypatch, agent_id, produced_memory_ids, detail
+):
+    """The public demo credential must not turn reference validation into unbounded DB work."""
+    demo_tenant = str(uuid.uuid4())
+    monkeypatch.setenv(handler.SHARED_SECRET_ENV, "operator-secret")
+    monkeypatch.setenv("MEMORYSTAND_DEMO_TENANT", demo_tenant)
+    monkeypatch.setenv("MEMORYSTAND_DEMO_SECRET", "demo-secret")
+    monkeypatch.setenv(handler.KILL_SWITCH_ENV, "off")
+    monkeypatch.setattr(memory, "recall", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        decisions,
+        "decide",
+        lambda *args, **kwargs: pytest.fail("invalid reference arrays must fail before DB work"),
+    )
+
+    resp = handler.lambda_handler(
+        _http(
+            "/decide",
+            {
+                "tenant_id": demo_tenant,
+                "agent_id": agent_id,
+                "query": "payments latency",
+                "action": "scale_up",
+                "rationale": "caller supplied",
+                "produced_memory_ids": produced_memory_ids,
+            },
+            "demo-secret",
+        ),
+        None,
+    )
+
+    assert resp["statusCode"] == 400
+    assert detail in resp["body"]

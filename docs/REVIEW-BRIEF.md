@@ -109,14 +109,15 @@ scheduled re-verification sweep, Bedrock (see weaknesses).
   honest, correctly attributed controls reach `verified` and may act autonomously. The optional
   LLM plausibility arm is not part of the committed deterministic receipt and is not presented
   as a reproduction of a named product.
-- **Verification:** 204 cases that should have been refused — 204 false promotions before the
-  gate, 0 after; holds across 5 seeds.
+- **Verification:** the committed 600-case poisoning receipt above is bitwise reproducible across
+  5 seeds. All 540 attacks receive 0% autonomous authority under the gate; all 60 correctly
+  attributed controls reach `verified`.
 - **Scale:** 50,131 rows on the live CockroachDB Cloud cluster across 40 tenants; 250,000 rows
   across 200 tenants on a local cluster.
 - **Concurrency:** 10 concurrent writers, 0 lost updates under real contention.
 - **Failover:** reads keep succeeding through a node loss (3 nodes on one machine).
 
-~15,000 lines, **160 tests passing** in the current isolated readiness worktree, including the
+~15,000 lines, **162 tests passing** in the current isolated readiness worktree, including the
 refreshed video-artifact and diagram-layout checks.
 
 ## KNOWN WEAKNESSES — do not spend time rediscovering these
