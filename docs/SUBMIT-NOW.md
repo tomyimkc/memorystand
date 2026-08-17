@@ -7,12 +7,14 @@ Do these in order. Do not improvise field values; they are already written in
 
 ## 1. Upload the video (this is the remaining hard blocker)
 
-Local files, both under 3:00, both already verified:
+Upload this cut — regenerated 2026-08-17 with the same Grok presenter pipeline
+as the earlier contest films (image_edit likeness → image_to_video lip-sync →
+whisper verify → compose). 12/12 shots passed, 0 ms lip-sync residual:
 
 | Cut | Path | Runtime | SHA-256 |
 |---|---|---|---|
-| Safer compliance | `~/Downloads/MemoryStand-demo-winner-readiness-2026-08-09.mp4` | 172.0 s | `3ce6696e747fc599dace4093ac82e5f75064cd6ad58e6e46fdb9fab3dd96c63c` |
-| Public keypoints | `~/Downloads/MemoryStand-hybrid-large-keypoints-2026-08-09.mp4` | 110.958 s | `d5424d5243a75634632209cd27cf04f535ee316eccfb098b93e7c1c188e7fa0c` |
+| **Use this** | `~/Downloads/MemoryStand-Grok-public-presenter-2026-08-17.mp4` | 110.708 s | `9af40b085a477f1dc3385a2e19dba19a0b7486100834068cb69b7cbff99d383e` |
+| Sidecar SRT | `~/Downloads/MemoryStand-Grok-public-presenter-2026-08-17.srt` | 35 cues | `ee1141c3254c092b229a54c08bae3c8862dcc5748ef3a4d9297ebf5529212c6f` |
 
 1. YouTube or Vimeo, **Public**, not Unlisted.
 2. Watch the public link logged out, start to finish.
