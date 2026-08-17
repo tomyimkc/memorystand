@@ -7,13 +7,15 @@ Do these in order. Do not improvise field values; they are already written in
 
 ## 1. Upload the video (this is the remaining hard blocker)
 
-Upload this cut — 2026-08-17 Remotion compose of seven Grok lip-synced
-shots. No repeated wording. Whisper 7/7.
+Upload this cut — 2026-08-17 Remotion compose of seven **16:9 medium-shot**
+Grok lip-synced takes (head + shoulders + chest; not a face-fill).
+No repeated wording. Whisper 7/7.
 
 | Cut | Path | Runtime | SHA-256 |
 |---|---|---|---|
-| **Use this** | `~/Downloads/MemoryStand-Remotion-presenter-first-2026-08-17.mp4` | 53.845 s | `8498c4512385dda5380d2c884cc83a847f22417d3b2bc5a543759d7c8ff780b6` |
-| Sidecar SRT | `~/Downloads/MemoryStand-Remotion-presenter-first-2026-08-17.srt` | 15 cues | same timings as the tight cut |
+| **Use this** | `~/Downloads/MemoryStand-Remotion-medium-shot-2026-08-17.mp4` | 52.843 s | `dec5b7fcb4edf4f3a3b024485c4c2a0f96ee30c98f0718e04050170bd2cf384c` |
+| Sidecar SRT | `~/Downloads/MemoryStand-Remotion-medium-shot-2026-08-17.srt` | 15 cues | same timings as the tight cut |
+| Do not use | `~/Downloads/MemoryStand-Remotion-presenter-first-2026-08-17.mp4` | 53.845 s | portrait cover-crop; face too close |
 
 1. YouTube or Vimeo, **Public**, not Unlisted.
 2. Watch the public link logged out, start to finish.
