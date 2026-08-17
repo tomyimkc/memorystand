@@ -12,8 +12,8 @@ shots. No repeated wording. Whisper 7/7.
 
 | Cut | Path | Runtime | SHA-256 |
 |---|---|---|---|
-| **Use this** | `~/Downloads/MemoryStand-Remotion-public-2026-08-17.mp4` | 53.845 s | `5ce9a39e6d3cfce17b3dbdbd11f39be83f4f6f7a891558d2ec38b5dcb8e9bd24` |
-| Sidecar SRT | `~/Downloads/MemoryStand-Remotion-public-2026-08-17.srt` | 15 cues | `93f7048dead04ef5c56cdbd608d7662b37894045e489373d106ad73b8bdec424` |
+| **Use this** | `~/Downloads/MemoryStand-Remotion-presenter-first-2026-08-17.mp4` | 53.845 s | `8498c4512385dda5380d2c884cc83a847f22417d3b2bc5a543759d7c8ff780b6` |
+| Sidecar SRT | `~/Downloads/MemoryStand-Remotion-presenter-first-2026-08-17.srt` | 15 cues | same timings as the tight cut |
 
 1. YouTube or Vimeo, **Public**, not Unlisted.
 2. Watch the public link logged out, start to finish.
