@@ -4,36 +4,36 @@
     "01-receipt-first-0": {
       "clip": "01-receipt-first-0.mp4",
       "asked": "AI assistants remember past fixes. MemoryStand stops those memories from acting alone until outside evidence proves they actually worked.",
-      "heard": "AI assistance remember past fixes.  Memory stands stops those memories from acting alone until outside evidence proves  they actually worked.",
+      "heard": "AI assistance remember past fixes.  Memory stands stops those memories from acting alone until outside evidence proves they actually worked.",
       "similarity": 0.872,
       "passed": true
     },
     "01-receipt-first-1": {
       "clip": "01-receipt-first-1.mp4",
       "asked": "Think of it this way: every memory must show a receipt before it gets the keys to act.",
-      "heard": "Think of it this way.  Every memory must show a receipt before it gets the keys to act.",
+      "heard": "Think of it this way. Every memory must show a receipt before it gets the keys to act.",
       "similarity": 1.0,
       "passed": true
     },
     "02-dangerous-coincidence-0": {
       "clip": "02-dangerous-coincidence-0.mp4",
       "asked": "An engineer restarts a service, the alert stops, and everyone remembers the restart as the fix forever.",
-      "heard": "An engineer restarts a service, the alert stops,  and everyone remembers the restart as the fix forever.",
+      "heard": "An engineer restarts a service, the alert stops, and everyone remembers the restart as the fix forever.",
       "similarity": 1.0,
       "passed": true
     },
     "02-dangerous-coincidence-1": {
       "clip": "02-dangerous-coincidence-1.mp4",
       "asked": "But the service's real performance never improved. The story sounds true, yet repeating it could make the next outage worse.",
-      "heard": "But the service's real performance never improved.  The story sounds true, yet repeating it could make the next outage worse.",
-      "similarity": 1.0,
+      "heard": "but the service is real performance never improved.  The story sounds true, yet repeating it could make the next outage worse.",
+      "similarity": 0.952,
       "passed": true
     },
     "03-cockroachdb-aws-0": {
       "clip": "03-cockroachdb-aws-0.mp4",
       "asked": "MemoryStand keeps the claim, source, trust level, and decision history together in CockroachDB, so every action remains auditable.",
-      "heard": "This memory stand keeps the claim, source, trust level, and decision history together  in Cockroach DB.  So every action remains auditable.",
-      "similarity": 0.821,
+      "heard": "Memory stand keeps the claim, source, trust level, and decision history together in Cockroach DB.  So every action remains auditable.",
+      "similarity": 0.842,
       "passed": true
     },
     "04-held-for-review-0": {
@@ -46,8 +46,8 @@
     "05-cloudwatch-receipt-0": {
       "clip": "05-cloudwatch-receipt-0.mp4",
       "asked": "To earn the keys, a memory must match AWS CloudWatch data for the same service, metric, direction, and size.",
-      "heard": "To earn the keys, a memory must match EWS CloudWatch data for the same service,  metric, direction, and size.",
-      "similarity": 0.947,
+      "heard": "To earn the keys, a memory must match AWS CloudWatch data  for the same service, metric, direction, and size.",
+      "similarity": 1.0,
       "passed": true
     },
     "05-cloudwatch-receipt-1": {
@@ -60,14 +60,14 @@
     "07-attack-test-0": {
       "clip": "07-attack-test-0.mp4",
       "asked": "We tested five hundred forty attack cases and sixty honest controls, measuring whether each memory received autonomous authority.",
-      "heard": "We tested 540 attack cases and 60 honest controls, measuring whether each memory received autonomous authority.",
+      "heard": "We tested 540 attack cases and 60 honest controls,  measuring whether each memory received autonomous authority.",
       "similarity": 1.0,
       "passed": true
     },
     "07-attack-test-1": {
       "clip": "07-attack-test-1.mp4",
       "asked": "Trusting the caller gave every attack the keys. MemoryStand blocked every attack from autonomous control and preserved every honest case.",
-      "heard": "Trusting the caller gave every attack the keys.  Memory stand blocked every attack from autonomous control  and preserved every honest case.",
+      "heard": "Trusting the caller gave every attack the keys.  Memory stand blocked every attack from autonomous control and preserved every honest case.",
       "similarity": 0.927,
       "passed": true
     },
@@ -81,7 +81,7 @@
     "08-honest-status-1": {
       "clip": "08-honest-status-1.mp4",
       "asked": "That gate uses zero model calls. MemoryStand gives autonomous keys only to memories that prove what really happened.",
-      "heard": "That gate uses zero model calls. Memory stand gives autonomous keys only to memories that prove what really happened.",
+      "heard": "that gate uses zero model calls. Memory stand gives autonomous keys only to memories  that prove what really happened.",
       "similarity": 0.919,
       "passed": true
     }
