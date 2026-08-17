@@ -19,7 +19,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "presenter"))
 
-from compose import caption_cues  # noqa: E402
+from compose import align_to_script, caption_cues  # noqa: E402
 
 SCRIPT = REPO_ROOT / "docs" / "demo" / "presenter-script.json"
 RECEIPT = REPO_ROOT / "docs" / "demo" / "presenter-verification.json"
@@ -62,7 +62,7 @@ def main() -> int:
 
     story_shots = []
     for beat in spec["beats"]:
-        for index, _line in enumerate(beat["shots"]):
+        for index, line in enumerate(beat["shots"]):
             tag = f"{beat['id']}-{index}"
             rec = shots_receipt.get(tag) or {}
             if not rec.get("passed"):
@@ -74,7 +74,7 @@ def main() -> int:
                 return 2
             dest = public_clips / src.name
             shutil.copy2(src, dest)
-            words = _whisper_words(src)
+            words = align_to_script(line, _whisper_words(src))
             end = words[-1][2] if words else 8.0
             duration = min(10.0, end + HOLD_S)
             cues = [

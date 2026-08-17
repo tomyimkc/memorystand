@@ -66,17 +66,22 @@ const Captions: React.FC<{list: Cue[]}> = ({list}) => {
   );
 };
 
-const LowerThird: React.FC<{label: string}> = ({label}) => {
+const LowerThird: React.FC<{label: string; side: 'LEFT' | 'RIGHT'}> = ({
+  label,
+  side,
+}) => {
   if (!label) return null;
+  const emptySide = side === 'LEFT' ? {right: 48} : {left: 48};
   return (
     <div
       style={{
         position: 'absolute',
-        left: 48,
+        ...emptySide,
         bottom: 148,
         display: 'flex',
         flexDirection: 'column',
         gap: 6,
+        alignItems: side === 'LEFT' ? 'flex-end' : 'flex-start',
         pointerEvents: 'none',
       }}
     >
@@ -105,7 +110,7 @@ const LowerThird: React.FC<{label: string}> = ({label}) => {
 };
 
 const ShotView: React.FC<{shot: Shot}> = ({shot}) => {
-  const kicker = (shot.panel?.headline || '').split('\n')[0].replace(/\.$/, '');
+  const kicker = (shot.panel?.headline || '').replace(/\n/g, ' ').replace(/\.$/, '');
   return (
     <AbsoluteFill style={{backgroundColor: C.bg}}>
       <OffthreadVideo
@@ -114,16 +119,16 @@ const ShotView: React.FC<{shot: Shot}> = ({shot}) => {
           width: '100%',
           height: '100%',
           objectFit: 'cover',
-          objectPosition: 'center 42%',
+          objectPosition: 'center center',
         }}
       />
       <AbsoluteFill
         style={{
           background:
-            'linear-gradient(180deg, rgba(7,9,13,0.18) 0%, rgba(7,9,13,0) 28%, rgba(7,9,13,0.18) 62%, rgba(7,9,13,0.72) 100%)',
+            'linear-gradient(180deg, rgba(7,9,13,0.12) 0%, rgba(7,9,13,0) 22%, rgba(7,9,13,0.08) 70%, rgba(7,9,13,0.48) 100%)',
         }}
       />
-      <LowerThird label={kicker} />
+      <LowerThird label={kicker} side={shot.side} />
       <Captions list={shot.cues} />
     </AbsoluteFill>
   );

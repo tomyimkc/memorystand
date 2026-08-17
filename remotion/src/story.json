@@ -6,7 +6,7 @@
       "id": "01-receipt-first-0",
       "side": "LEFT",
       "clip": "clips/01-receipt-first-0.mp4",
-      "durationFrames": 156,
+      "durationFrames": 150,
       "panel": {
         "kind": "hero",
         "headline": "STORED\nIS NOT TRUSTED.",
@@ -25,12 +25,12 @@
       "cues": [
         {
           "s": 0.0,
-          "e": 2.18,
-          "t": "AI assistance remember past fixes."
+          "e": 2.12,
+          "t": "AI assistants remember past fixes."
         },
         {
-          "s": 3.28,
-          "e": 6.06,
+          "s": 3.26,
+          "e": 5.82,
           "t": "A memory must show a receipt before it gets the keys."
         }
       ]
@@ -39,7 +39,7 @@
       "id": "02-dangerous-coincidence-0",
       "side": "RIGHT",
       "clip": "clips/02-dangerous-coincidence-0.mp4",
-      "durationFrames": 175,
+      "durationFrames": 187,
       "panel": {
         "kind": "hero",
         "headline": "TIMING\nIS NOT PROOF.",
@@ -53,12 +53,12 @@
       "cues": [
         {
           "s": 0.0,
-          "e": 3.46,
+          "e": 3.58,
           "t": "An engineer restarts a service, the alert stops,"
         },
         {
-          "s": 4.22,
-          "e": 6.86,
+          "s": 4.3,
+          "e": 7.36,
           "t": "and the restart is remembered as the fix forever."
         }
       ]
@@ -67,7 +67,7 @@
       "id": "03-cockroachdb-aws-0",
       "side": "LEFT",
       "clip": "clips/03-cockroachdb-aws-0.mp4",
-      "durationFrames": 196,
+      "durationFrames": 170,
       "panel": {
         "kind": "hero",
         "headline": "ONE PLACE.\nFULL HISTORY.",
@@ -86,13 +86,13 @@
       "cues": [
         {
           "s": 0.0,
-          "e": 3.16,
-          "t": "Cockroach DB keeps the fact it's source,"
+          "e": 2.72,
+          "t": "CockroachDB keeps the fact, its source,"
         },
         {
-          "s": 3.66,
-          "e": 7.7,
-          "t": "it's trust level, and every later decision in one ledger."
+          "s": 3.14,
+          "e": 6.62,
+          "t": "its trust level, and every later decision in one ledger."
         }
       ]
     },
@@ -100,7 +100,7 @@
       "id": "04-held-for-review-0",
       "side": "RIGHT",
       "clip": "clips/04-held-for-review-0.mp4",
-      "durationFrames": 169,
+      "durationFrames": 168,
       "panel": {
         "kind": "quote",
         "lines": [
@@ -114,12 +114,12 @@
       "cues": [
         {
           "s": 0.0,
-          "e": 3.22,
-          "t": "When two memories disagree, neither is overrided."
+          "e": 3.26,
+          "t": "When two memories disagree, neither is overwritten."
         },
         {
-          "s": 4.4,
-          "e": 6.6,
+          "s": 4.14,
+          "e": 6.56,
           "t": "The weaker one waits for a person to review."
         }
       ]
@@ -128,7 +128,7 @@
       "id": "05-cloudwatch-receipt-0",
       "side": "LEFT",
       "clip": "clips/05-cloudwatch-receipt-0.mp4",
-      "durationFrames": 162,
+      "durationFrames": 160,
       "panel": {
         "kind": "hero",
         "headline": "MATCH OR\nREFUSE.",
@@ -147,12 +147,12 @@
       "cues": [
         {
           "s": 0.0,
-          "e": 4.02,
+          "e": 3.98,
           "t": "A claim becomes verified only when AWS CloudWatch agrees"
         },
         {
-          "s": 4.02,
-          "e": 6.3,
+          "s": 3.98,
+          "e": 6.2,
           "t": "on metric, direction, and size."
         }
       ]
@@ -161,7 +161,7 @@
       "id": "07-attack-test-0",
       "side": "LEFT",
       "clip": "clips/07-attack-test-0.mp4",
-      "durationFrames": 159,
+      "durationFrames": 173,
       "panel": {
         "kind": "hero",
         "headline": "0 OF 540\nWERE PROMOTED.",
@@ -175,12 +175,12 @@
       "cues": [
         {
           "s": 0.0,
-          "e": 4.24,
-          "t": "We tested 540 attack cases and 60 honest controls."
+          "e": 4.5,
+          "t": "We tested five hundred forty attack cases and sixty honest controls."
         },
         {
-          "s": 4.94,
-          "e": 6.16,
+          "s": 5.36,
+          "e": 6.74,
           "t": "None of the attacks were promoted."
         }
       ]
@@ -189,7 +189,7 @@
       "id": "08-honest-status-0",
       "side": "RIGHT",
       "clip": "clips/08-honest-status-0.mp4",
-      "durationFrames": 202,
+      "durationFrames": 187,
       "panel": {
         "kind": "hero",
         "headline": "LIVE\nLIMITS.",
@@ -203,17 +203,17 @@
       "cues": [
         {
           "s": 0.0,
-          "e": 2.84,
+          "e": 2.34,
           "t": "Today, search matches words not meaning."
         },
         {
-          "s": 3.66,
-          "e": 5.26,
+          "s": 3.2,
+          "e": 4.88,
           "t": "Decisions use a fixed fallback."
         },
         {
-          "s": 5.84,
-          "e": 7.96,
+          "s": 5.36,
+          "e": 7.36,
           "t": "Promotion still uses zero model calls."
         }
       ]

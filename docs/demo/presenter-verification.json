@@ -18,36 +18,36 @@
     "03-cockroachdb-aws-0": {
       "clip": "03-cockroachdb-aws-0.mp4",
       "asked": "CockroachDB keeps the fact, its source, its trust level, and every later decision in one ledger.",
-      "heard": "Cockroach DB keeps the fact it's source, it's trust level, and every later decision in one  ledger.",
+      "heard": "Cockroach DB keeps the fact it's source, it's trust level, and every later decision in one ledger.",
       "similarity": 0.743,
       "passed": true
     },
     "04-held-for-review-0": {
       "clip": "04-held-for-review-0.mp4",
       "asked": "When two memories disagree, neither is overwritten. The weaker one waits for a person to review.",
-      "heard": "When two memories disagree, neither is overrided.  The weaker one waits for a person to review.",
+      "heard": "When two memories disagree, neither is overriding.  The weaker one waits for a person to review.",
       "similarity": 0.938,
       "passed": true
     },
     "05-cloudwatch-receipt-0": {
       "clip": "05-cloudwatch-receipt-0.mp4",
       "asked": "A claim becomes verified only when AWS CloudWatch agrees on metric, direction, and size.",
-      "heard": "A claim becomes verified only when AWS CloudWatch agrees on metric, direction, and size.",
-      "similarity": 1.0,
+      "heard": "The claim becomes verified only when AWS CloudWatch agrees on metric, direction, and size.",
+      "similarity": 0.929,
       "passed": true
     },
     "07-attack-test-0": {
       "clip": "07-attack-test-0.mp4",
       "asked": "We tested five hundred forty attack cases and sixty honest controls. None of the attacks were promoted.",
-      "heard": "We tested 540 attack cases and 60 honest controls. None of the attacks were promoted.",
+      "heard": "We tested 540 attack cases and 60 honest controls.  None of the attacks were promoted.",
       "similarity": 1.0,
       "passed": true
     },
     "08-honest-status-0": {
       "clip": "08-honest-status-0.mp4",
       "asked": "Today, search matches words not meaning. Decisions use a fixed fallback. Promotion still uses zero model calls.",
-      "heard": "Today, search matches words not meaning.  Decisions use a fixed fallback.  Promotion still uses zero model calls.",
-      "similarity": 1.0,
+      "heard": "Today, search match is words not meaning.  Decisions use a fixed fallback.  Promotion still uses zero model calls.",
+      "similarity": 0.914,
       "passed": true
     }
   }

@@ -1,6 +1,9 @@
 # MemoryStand — general-public Grok presenter cut
 
-**Target runtime:** about 1:45, always below the contest's 3:00 ceiling.
+**Target runtime:** about 0:50–1:00, always below the contest's 3:00 ceiling.
+
+**Framing rule (hard):** 16:9 medium shot only. Head + both shoulders + upper chest.
+Never cover-crop a 3:4 portrait onto 16:9. See `~/.grok/skills/presenter-video-taste/SKILL.md`.
 
 **Delivery:** 1920×1080 H.264/AAC, burned English subtitles, plus a matching
 selectable English `.srt`.
