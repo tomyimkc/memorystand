@@ -53,7 +53,10 @@ RESERVED_CONCURRENCY=15
 LOG_RETENTION_DAYS="${LOG_RETENTION_DAYS:-14}"
 BUILD_IMAGE="public.ecr.aws/lambda/python:3.13"
 
-BUILD_DIR="$REPO_ROOT/infra/build"
+# Docker Desktop on macOS only bind-mounts /Users reliably. A worktree under
+# /private/tmp makes `pip --target /out` look successful inside the container
+# and then vanish. Allow an override onto a /Users path.
+BUILD_DIR="${MEMORYSTAND_BUILD_DIR:-$REPO_ROOT/infra/build}"
 PACKAGE_DIR="$BUILD_DIR/package"
 ZIP_PATH="$BUILD_DIR/memorystand-lambda.zip"
 LOG_GROUP="/aws/lambda/${FUNCTION_NAME}"
@@ -218,13 +221,16 @@ mkdir -p "$PACKAGE_DIR"
 # trailing whitespace so pip gets a bare PEP 440 spec, not "psycopg2-binary==2.9.10   #
 # CockroachDB is PostgreSQL wire-compatible" as one literal (invalid) argument.
 PSYCOPG2_SPEC="$(grep -m1 '^psycopg2-binary' "$REPO_ROOT/requirements.txt" | sed 's/#.*//' | xargs)"
+# Run the install as the image's root. `--user $(id -u)` looks nicer on paper, but
+# pip then copies from the container's /tmp onto a Desktop-bind-mounted /out and
+# dies with EINVAL cross-device + EACCES on the dest. Root writing the mount is
+# the path that has actually produced a zip on this machine.
 docker run --rm \
   --platform linux/amd64 \
   --entrypoint /bin/bash \
-  --user "$(id -u):$(id -g)" \
   -v "$PACKAGE_DIR":/out \
   "$BUILD_IMAGE" \
-  -c "pip install --no-cache-dir --target /out '${PSYCOPG2_SPEC}'"
+  -c "pip install --no-cache-dir --target /out '${PSYCOPG2_SPEC}' && chmod -R a+rX /out"
 
 cp -r "$REPO_ROOT/backend" "$PACKAGE_DIR/backend"
 find "$PACKAGE_DIR" -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true

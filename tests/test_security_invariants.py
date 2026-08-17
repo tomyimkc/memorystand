@@ -412,6 +412,52 @@ def test_operator_credential_is_not_tenant_scoped(monkeypatch, agent_id):
     assert resp["statusCode"] != 401, "the operator secret must not be tenant-scoped"
 
 
+def test_a_non_uuid_agent_id_is_a_400_not_a_500(monkeypatch, agent_id):
+    """A judge typo must not look like MemoryStand crashed.
+
+    Live `/decide` and `/ingest` 500'd when a probe sent `agent_id: readiness-eval`.
+    `agent_id` is UUID in the schema; the handler used to pass the string through and
+    let CockroachDB raise InvalidTextRepresentation, which became an unhandled 500.
+    """
+    monkeypatch.setenv("MEMORYSTAND_SHARED_SECRET", "operator-secret")
+    monkeypatch.setenv("MEMORYSTAND_KILL_SWITCH", "off")
+    monkeypatch.setattr(memory, "remember", lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError("must not reach the database with a non-UUID agent_id")
+    ))
+    tenant = str(uuid.uuid4())
+    resp = handler.lambda_handler(
+        _http("/ingest", {
+            "tenant_id": tenant,
+            "agent_id": "readiness-eval",
+            "content": "x",
+        }, "operator-secret"),
+        None,
+    )
+    assert resp["statusCode"] == 400, resp["body"]
+    body = json.loads(resp["body"])
+    assert body["error"] == "bad_request"
+    assert "agent_id" in body["detail"]
+    assert "uuid" in body["detail"].lower()
+
+
+def test_a_non_uuid_tenant_id_is_a_400_not_a_500(monkeypatch, agent_id):
+    monkeypatch.setenv("MEMORYSTAND_SHARED_SECRET", "operator-secret")
+    monkeypatch.setenv("MEMORYSTAND_KILL_SWITCH", "off")
+    monkeypatch.setattr(memory, "remember", lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError("must not reach the database with a non-UUID tenant_id")
+    ))
+    resp = handler.lambda_handler(
+        _http("/ingest", {
+            "tenant_id": "not-a-uuid",
+            "agent_id": agent_id,
+            "content": "x",
+        }, "operator-secret"),
+        None,
+    )
+    assert resp["statusCode"] == 400, resp["body"]
+    assert "tenant_id" in json.loads(resp["body"])["detail"]
+
+
 def test_a_wrong_secret_is_still_refused(monkeypatch, agent_id):
     monkeypatch.setenv("MEMORYSTAND_SHARED_SECRET", "operator-secret")
     monkeypatch.setenv("MEMORYSTAND_DEMO_SECRET", "demo-secret")

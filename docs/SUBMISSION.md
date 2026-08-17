@@ -390,15 +390,15 @@ should infer.
 
 ## 48 hours before the deadline (by 2026-08-16 17:00 ET)
 
-- [ ] `infra/provision.sh` → `infra/ssm_setup.sh` → `infra/deploy.sh` → `infra/deploy_frontend.sh`
-      have already been run once against real AWS + `ccloud` credentials (see Field 6) —
-      re-verify closer to the deadline that the deployment is still live, since a cluster or
-      Lambda can be torn down or rotated in the interim.
+- [x] Deploy path has been run against real AWS + `ccloud`. Re-verified live on 2026-08-17:
+      `/health` 200, CockroachDB reachable, migrations 001–003 applied. Write paths
+      (`/ingest`, `/decide`) return 201 with the dashboard UUID agent id. Default
+      dashboard alert: closer unconfirmed `restart_service` loses to verified `scale_up`.
 - [x] Repo is public; GitHub API reports Apache-2.0 (verified 2026-08-07).
 - [ ] `git log -p` spot-checked for anything that shouldn't go public before flipping visibility —
       a private→public flip is not cleanly reversible once anyone has cloned it.
-- [ ] `README.md`'s Status table reflects reality — no checkmark for anything that wasn't actually
-      run against real infrastructure.
+- [x] `README.md` Status table updated 2026-08-17: video upload still called out as pending;
+      reasoning provider 402 is named; demo story is the live ranking, not a 9 August receipt.
 - [ ] Demo video rendered and locally verified (**done**); upload it, set it to **Public**, and
       watch the public link once,
       logged out, start to finish.

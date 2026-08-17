@@ -127,6 +127,32 @@ _FALLBACK_DEFAULT_ACTION = "open_incident"
 _TIER_RANK = {"verified": 2, "attested": 1}
 
 
+def _summarize_model_unavailability(exc: Exception | None) -> str:
+    """One short clause for a judge-facing rationale. Never dump a provider body.
+
+    A 402 from the standby router previously landed verbatim in `/decide`, including
+    a recharge URL and a non-English wallet message. That is not a reason for an
+    action. Keep the class of failure (quota / balance / timeout) and drop the rest.
+    """
+    if exc is None:
+        return "no model answered"
+    text = str(exc)
+    lowered = text.lower()
+    if "402" in text or "insufficient_balance" in lowered or "insufficient fund" in lowered:
+        return "standby reasoning provider returned insufficient_balance"
+    if "throttl" in lowered or "too many tokens" in lowered or "quota" in lowered:
+        return "model quota or throttle"
+    if "circuit open" in lowered:
+        return "model circuit open; failing fast to memory"
+    # Keep the exception type, strip anything that looks like a JSON/HTML payload.
+    name = type(exc).__name__
+    first_line = text.splitlines()[0]
+    cut = first_line.split("{", 1)[0].split("<", 1)[0].strip()
+    if len(cut) > 120:
+        cut = cut[:117] + "..."
+    return f"{name}: {cut}" if cut else name
+
+
 def _action_from_memory(row: dict[str, Any]) -> str | None:
     """Does this memory actually name an action from the allow-list?
 
@@ -339,7 +365,8 @@ def propose(situation: str, recalled: list[dict[str, Any]]) -> dict[str, Any]:
             situation, recalled
         )
         rationale = (
-            f"Deterministic fallback: no reasoning model was available ({last_error}). {why}"
+            f"Deterministic fallback: no reasoning model was available "
+            f"({_summarize_model_unavailability(last_error)}). {why}"
         )
         source = (
             "fallback_memory"

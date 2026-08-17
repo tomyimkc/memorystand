@@ -249,7 +249,7 @@ Everything marked ✅ was run against a real CockroachDB v26.2.5 cluster, not ju
 |---|---|
 | Schema, admission control, outcome gate, cross-examination | ✅ end to end |
 | Incident fixtures (101 records, 2 designed conflicts) | ✅ 99 admitted, 2 held |
-| Test suite (`pytest`) | ✅ **162 tests passing** with the refreshed video artifact present on the isolated winner-readiness branch (2026-08-09) |
+| Test suite (`pytest`) | ✅ targeted 2026-08-17 suite green locally (UUID 400s, sanitized 402 rationale, trust-beats-proximity fallback). Full count is whatever `pytest -q` prints on a cluster; do not treat a stale 162 as current. |
 | Concurrency + TOCTOU proof (`scripts/race_demo.py`) | ✅ real `40001` captured |
 | Benchmark harness (`scripts/loadtest.py`) | ✅ 10k rows, numbers below |
 | Lambda handler, 7 routes, kill switch, degraded mode | ✅ exercised over HTTP |
@@ -261,10 +261,10 @@ Everything marked ✅ was run against a real CockroachDB v26.2.5 cluster, not ju
 | One-command demo (`scripts/demo.sh`) | ✅ 8 beats, exit 0 |
 | ccloud provisioning (`infra/provision.sh`) | ✅ flags verified against `ccloud 0.8.23`, and run for real — see cloud cluster row below |
 | AWS deploy scripts (`infra/provision.sh`, `infra/ssm_setup.sh`, `infra/deploy.sh`, `infra/deploy_frontend.sh`, IAM, SSM, keep-warm) | ✅ **all run against a real AWS account.** Lambda is Active, dashboard is live on Amplify. See [docs/DEPLOY.md](docs/DEPLOY.md) for the URL shape. |
-| Reasoning provider | ⚠️ Bedrock is tried first but this account's Bedrock quota is ~0. A third-party Anthropic-compatible router is configured and labels itself honestly when it answers, but a live 2026-08-09 check returned HTTP 402 (insufficient router balance), so `/decide` degraded to `fallback_heuristic` with `model_calls: 0`. Restoring model reasoning requires the owner to rotate/fund that credential; see [`DISCLOSURES.md`](DISCLOSURES.md). The promotion path stays model-free regardless. |
+| Reasoning provider | ⚠️ Bedrock is tried first; this account's Bedrock quota is still ~0. The Teamorouter standby returned HTTP 402 (empty wallet) on 2026-08-17. `/decide` now fails fast through a circuit breaker and falls back to memory — the default dashboard alert chooses verified `scale_up` over a closer unconfirmed `restart_service`, `model_calls: 0`. Restoring *model* reasoning needs the owner to fund/rotate that credential; see [`DISCLOSURES.md`](DISCLOSURES.md). The promotion path stays model-free regardless. |
 | Cloud cluster | ✅ CockroachDB Cloud BASIC, AWS us-west-2. Live `/health` reported CCL v26.2.5 on 2026-08-09. The last recorded row inventory remains 50,131 rows: 40 synthetic tenants at 1,250 rows each, plus the curated demo tenant (131 rows, 117 accepted); that inventory was not re-counted during the 2026-08-09 health check. |
 | MCP server wiring | ✅ working end to end (see [CockroachDB tools used](#cockroachdb-tools-used) for the honest access-level finding) |
-| Video | ✅ refreshed local 1920×1080 H.264/AAC render verified at 172.0 s (SHA-256 `3ce6696e747fc599dace4093ac82e5f75064cd6ad58e6e46fdb9fab3dd96c63c`); public YouTube/Vimeo upload remains pending |
+| Video | ⚠️ local 1920×1080 H.264/AAC renders exist (winner-readiness 172.0 s SHA-256 `3ce6696e747fc599dace4093ac82e5f75064cd6ad58e6e46fdb9fab3dd96c63c`; hybrid keypoints 110.958 s SHA-256 `d5424d5243a75634632209cd27cf04f535ee316eccfb098b93e7c1c188e7fa0c`). **Public YouTube/Vimeo upload is still the submit blocker.** |
 
 ## Measured results
 
