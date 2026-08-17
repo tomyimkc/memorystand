@@ -81,6 +81,14 @@ def main() -> int:
                 {"s": round(s, 3), "e": round(e, 3), "t": text}
                 for s, e, text in caption_cues(words)
             ]
+            folded: list[dict] = []
+            for cue in cues:
+                if folded and len(str(cue["t"]).split()) <= 2:
+                    folded[-1]["e"] = cue["e"]
+                    folded[-1]["t"] = f"{folded[-1]['t']} {cue['t']}".strip()
+                else:
+                    folded.append(cue)
+            cues = folded
             visual = (beat.get("broll") or {}).get(str(index))
             story_shots.append(
                 {
