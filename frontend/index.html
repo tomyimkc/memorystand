@@ -602,9 +602,9 @@
     <p class="panel-sub">
       Post a synthetic alert. The agent recalls what it knows, then records the action it
       took and why — every consulted memory is shown ranked by distance with its trust
-      tier. Leave "Proposed action" blank to let the agent decide for itself instead of
-      supplying one — with no model in the loop, that means the highest-trust memory that
-      names an action wins, even over a closer one.
+      tier. Leave "Proposed action" blank. The seeded default alert is built so a closer
+      <em>unconfirmed</em> restart loses to a farther <em>verified</em> scale-up — that is
+      the thesis, with zero model calls on the promotion path.
     </p>
 
     <form class="panel-form" id="form-decide">

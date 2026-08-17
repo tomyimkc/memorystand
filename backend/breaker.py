@@ -113,8 +113,9 @@ class Breaker:
 
 chat = Breaker("bedrock-converse")
 embedding = Breaker("bedrock-embed")
+standby = Breaker("standby-converse")
 
 
 def snapshot() -> dict[str, str]:
     """Current state of every breaker, for the health endpoint."""
-    return {b.name: b.state() for b in (chat, embedding)}
+    return {b.name: b.state() for b in (chat, embedding, standby)}

@@ -191,6 +191,20 @@ def _require(params: dict[str, Any], key: str) -> Any:
     return value
 
 
+def _require_uuid(params: dict[str, Any], key: str) -> str:
+    """Parse a UUID field before it reaches CockroachDB.
+
+    A typo like ``agent_id: readiness-eval`` used to become an unhandled
+    ``InvalidTextRepresentation`` and a 500. That looks like the product
+    crashed. It is a bad request.
+    """
+    value = _require(params, key)
+    try:
+        return str(uuid.UUID(str(value)))
+    except (ValueError, AttributeError, TypeError) as exc:
+        raise _BadRequest(f"{key} must be a UUID") from exc
+
+
 def _bounded_int(
     params: dict[str, Any], key: str, default: int, *, minimum: int, maximum: int
 ) -> int:
@@ -360,9 +374,9 @@ def _get_bedrock_runtime() -> Any:
 
 def _route_ingest(body: dict[str, Any], headers: dict[str, str], request_id: str) -> tuple[int, dict]:
     credential = _check_shared_secret(headers)
-    tenant_id = _require(body, "tenant_id")
+    tenant_id = _require_uuid(body, "tenant_id")
     _scope_tenant(credential, tenant_id)
-    agent_id = _require(body, "agent_id")
+    agent_id = _require_uuid(body, "agent_id")
     content = _require(body, "content")
     result = memory.remember(
         tenant_id,
@@ -382,9 +396,9 @@ def _route_ingest(body: dict[str, Any], headers: dict[str, str], request_id: str
 
 def _route_decide(body: dict[str, Any], headers: dict[str, str], request_id: str) -> tuple[int, dict]:
     credential = _check_shared_secret(headers)
-    tenant_id = _require(body, "tenant_id")
+    tenant_id = _require_uuid(body, "tenant_id")
     _scope_tenant(credential, tenant_id)
-    agent_id = _require(body, "agent_id")
+    agent_id = _require_uuid(body, "agent_id")
     query = _require(body, "query")
     k = _bounded_int(body, "k", 5, minimum=1, maximum=MAX_RECALL_K)
     task_id = body.get("task_id")
@@ -458,9 +472,9 @@ def _route_confirm_outcome(body: dict[str, Any], headers: dict[str, str], reques
     # the one path whose integrity the whole submission rests on. It is now gated like every
     # other mutating route, and scoped to a tenant.
     credential = _check_shared_secret(headers)
-    tenant_id = _require(body, "tenant_id")
+    tenant_id = _require_uuid(body, "tenant_id")
     _scope_tenant(credential, tenant_id)
-    decision_id = _require(body, "decision_id")
+    decision_id = _require_uuid(body, "decision_id")
     evidence = {
         "source": body.get("source"),
         "outcome": body.get("outcome"),
@@ -483,9 +497,11 @@ def _route_confirm_outcome(body: dict[str, Any], headers: dict[str, str], reques
 
 
 def _route_recall(qs: dict[str, Any], headers: dict[str, str], request_id: str) -> tuple[int, dict]:
-    tenant_id = _require(qs, "tenant_id")
+    tenant_id = _require_uuid(qs, "tenant_id")
     _scope_read_tenant(headers, tenant_id)
     agent_id = qs.get("agent_id")
+    if agent_id:
+        agent_id = _require_uuid({"agent_id": agent_id}, "agent_id")
     query = _require(qs, "q")
     k = _bounded_int(qs, "k", 5, minimum=1, maximum=MAX_RECALL_K)
     results = memory.recall(tenant_id, agent_id, query, k=k)
@@ -494,9 +510,9 @@ def _route_recall(qs: dict[str, Any], headers: dict[str, str], request_id: str) 
 
 
 def _route_timemachine(qs: dict[str, Any], headers: dict[str, str], request_id: str) -> tuple[int, dict]:
-    tenant_id = _require(qs, "tenant_id")
+    tenant_id = _require_uuid(qs, "tenant_id")
     _scope_read_tenant(headers, tenant_id)
-    decision_id = _require(qs, "decision_id")
+    decision_id = _require_uuid(qs, "decision_id")
     try:
         result = replay.cross_examine(tenant_id, decision_id)
     except ValueError as exc:  # "no such decision: ..."
@@ -506,7 +522,7 @@ def _route_timemachine(qs: dict[str, Any], headers: dict[str, str], request_id: 
 
 
 def _route_diff(qs: dict[str, Any], headers: dict[str, str], request_id: str) -> tuple[int, dict]:
-    tenant_id = _require(qs, "tenant_id")
+    tenant_id = _require_uuid(qs, "tenant_id")
     _scope_read_tenant(headers, tenant_id)
     instant = _require(qs, "instant")
     result = replay.belief_diff(tenant_id, instant)
@@ -784,6 +800,11 @@ def lambda_handler(event: dict[str, Any], context: Any = None) -> dict[str, Any]
         # is never allowed to look like memory that legitimately has nothing to say.
         _log("db_unreachable", request_id, level="error", method=method, path=path, detail=str(exc))
         return _response(503, {"degraded": "memory_unreachable"}, cors=True)
+    except db.psycopg2.DataError as exc:
+        # A malformed UUID or other typed input that slipped past _require_uuid
+        # is still the caller's fault. Do not report it as a crash.
+        _log("bad_typed_input", request_id, level="warn", method=method, path=path, detail=str(exc))
+        return _response(400, {"error": "bad_request", "detail": "a typed field was not valid"}, cors=True)
     except Exception as exc:  # noqa: BLE001 - last resort: report, never leak a raw traceback
         _log(
             "unhandled_error",

@@ -44,7 +44,7 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-from . import bedrock_client
+from . import bedrock_client, breaker
 
 # Base URL is configurable because the Anthropic Messages format is spoken by more than
 # Anthropic: OpenAI-compatible routers and self-hosted gateways implement it too, and pinning
@@ -190,6 +190,11 @@ def converse(
             f"{SSM_PARAM})"
         )
 
+    try:
+        breaker.standby.check()
+    except breaker.CircuitOpen as exc:
+        raise bedrock_client.ModelUnavailable(str(exc)) from exc
+
     # Bedrock's message shape is {"role", "content": [{"text": ...}]}; Anthropic accepts the
     # same structure with "type": "text" on each block.
     converted = [
@@ -232,15 +237,22 @@ def converse(
             payload = json.loads(resp.read().decode())
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode()[:200]
+        # A 402 is a balance miss, not a blip. Open the breaker immediately so the
+        # next /decide does not pay another 8s to rediscover an empty wallet.
+        breaker.standby.record_failure()
+        if exc.code == 402:
+            breaker.standby.record_failure()
         raise bedrock_client.ModelUnavailable(
             f"Anthropic API returned HTTP {exc.code}: {detail}"
         ) from exc
     except Exception as exc:  # noqa: BLE001 - never let a provider crash the agent loop
+        breaker.standby.record_failure()
         raise bedrock_client.ModelUnavailable(
             f"Anthropic API unreachable after {time.monotonic() - started:.1f}s: "
             f"{type(exc).__name__}: {exc}"
         ) from exc
 
+    breaker.standby.record_success()
     _call_count += 1
     return _to_bedrock_response(payload)
 

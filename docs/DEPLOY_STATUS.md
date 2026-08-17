@@ -1,7 +1,15 @@
 # Deployment status
 
-Last updated 2026-08-09. Written to be accurate rather than encouraging — a project whose
+Last updated 2026-08-17. Written to be accurate rather than encouraging — a project whose
 argument is "check claims before trusting them" cannot have an aspirational status page.
+
+**2026-08-17 live check (overrides older "pending" notes below).** `/health` reports
+migrations `001`–`003` applied, CockroachDB CCL v26.2.5 reachable, and a public demo
+credential. The default dashboard alert recalls a closer unconfirmed `restart_service`
+(`22207f6e`, d≈0.426) and a farther verified `scale_up` (`fb3b7ec0`, d≈0.578);
+`/decide` chooses the verified memory (`reasoning_source: fallback_memory`,
+`model_calls: 0`). Teamorouter is 402 / circuit-open; Bedrock breakers are open. The
+"001 not applied" section further down is historical and is no longer the live state.
 
 ## Working, verified against real AWS
 

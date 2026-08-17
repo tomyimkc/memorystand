@@ -220,7 +220,7 @@ def test_open_circuit_is_visible_on_health() -> None:
     from backend import breaker as breaker_mod
 
     snap = breaker_mod.snapshot()
-    assert set(snap) == {"bedrock-converse", "bedrock-embed"}
+    assert set(snap) == {"bedrock-converse", "bedrock-embed", "standby-converse"}
     assert all(v in {"closed", "open", "half_open"} for v in snap.values())
 
 

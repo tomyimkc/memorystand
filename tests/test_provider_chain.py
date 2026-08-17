@@ -60,6 +60,31 @@ def test_a_provider_with_no_key_is_skipped_not_attempted(monkeypatch):
     assert [n for n, _ in agent._providers() if n.startswith(f"{label}:")] == []
 
 
+def test_a_402_from_the_standby_does_not_leak_a_wallet_payload(monkeypatch):
+    """Judges read `/decide` rationale. A raw Teamorouter 402 body is not a rationale."""
+    monkeypatch.setattr(anthropic_client, "available", lambda: True)
+
+    def bedrock_down(*a, **k):
+        raise bedrock_client.ModelUnavailable("quota is zero")
+
+    def standby_broke(*a, **k):
+        raise bedrock_client.ModelUnavailable(
+            'Anthropic API returned HTTP 402: {"error":{"message":"TeamoRouter '
+            "钱包余额不足，请前往 https://teamorouter.com/dashboard?buy=1 充值后继续使用"
+            '","type":"insufficient_balance","code":402}}'
+        )
+
+    monkeypatch.setattr(bedrock_client, "converse", bedrock_down)
+    monkeypatch.setattr(anthropic_client, "converse", standby_broke)
+
+    out = agent.propose("payments-service latency climbing", [])
+    assert out["reasoning_source"] == "fallback_heuristic"
+    assert "teamorouter.com/dashboard" not in out["rationale"].lower()
+    assert "钱包" not in out["rationale"]
+    assert "insufficient_balance" in out["rationale"] or "standby reasoning provider" in out["rationale"]
+    assert "{" not in out["rationale"]
+
+
 def test_the_source_names_the_provider_that_actually_answered(monkeypatch):
     """Never the configured one. A reader has to be able to tell what decided this."""
     monkeypatch.setattr(anthropic_client, "available", lambda: True)
