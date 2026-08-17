@@ -1,20 +1,16 @@
 {
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "title": "MemoryStand",
-  "targetDurationSeconds": 105,
+  "targetDurationSeconds": 80,
   "candidateOnly": true,
   "canClaimAGI": false,
   "_notes": [
-    "GENERAL-PUBLIC CUT. The story is understandable without prior knowledge of AI agents, vector databases, or cloud operations.",
-    "Editorial rule: explain the safety boundary with one analogy — a memory must show its receipt before it gets the keys.",
-    "Seven beats and twelve short Grok presenter shots keep the public cut close to 1:45. Each line is 17-24 words.",
-    "Panels use one headline and no more than two short keypoints. Paragraphs belong in documentation, not in the film.",
-    "Selected shots replace the synthetic presenter with muted footage from the deployed evidence cut while retaining the verified narration.",
-    "The live-evidence shots prove that the project functions and visibly show the CockroachDB memory layer and AWS outcome gate.",
-    "Current limitation is explicit: search matches words rather than meaning, and /decide used a fixed fallback because paid model quota was unavailable.",
-    "That runtime limitation never changes the authority path: promotion is deterministic, externally checked, and uses zero model calls.",
-    "Every generated shot must pass transcript comparison before compose.py will include it.",
-    "The final MP4 burns English subtitles into the image and also writes a selectable English SRT."
+    "GENERAL-PUBLIC CUT. One idea per shot. No repeated 3-word phrase. No filler.",
+    "Seven beats, seven shots. Each line is 14-20 words.",
+    "Panels state the claim in different words from the voiceover.",
+    "Four shots cut to muted live-evidence footage so judges see the app, CockroachDB, and CloudWatch.",
+    "Remotion composes presenter + panel + captions. Grok only generates the lip-synced takes.",
+    "Every shot must pass transcript comparison before render."
   ],
   "beats": [
     {
@@ -22,10 +18,10 @@
       "presenterSide": "LEFT",
       "panelData": {
         "kind": "hero",
-        "headline": "NO RECEIPT.\nNO AUTONOMOUS ACTION.",
+        "headline": "STORED\nIS NOT TRUSTED.",
         "bullets": [
-          "Stored does not mean trusted",
-          "Outside evidence unlocks action"
+          "Write is cheap",
+          "Action needs a check"
         ],
         "footnote": "github.com/tomyimkc/memorystand"
       },
@@ -33,13 +29,12 @@
         "0": {
           "source": "artifacts/video/memorystand-evidence-source.mp4",
           "startSeconds": 0,
-          "label": "LIVE DEPLOYED APP",
-          "headline": "MEMORY MUST EARN THE KEYS"
+          "label": "LIVE DASHBOARD",
+          "headline": "THE APP IS RUNNING"
         }
       },
       "shots": [
-        "AI assistants remember past fixes. MemoryStand stops those memories from acting alone until outside evidence proves they actually worked.",
-        "Think of it this way: every memory must show a receipt before it gets the keys to act."
+        "AI assistants remember past fixes. A memory must show a receipt before it gets the keys."
       ]
     },
     {
@@ -47,16 +42,15 @@
       "presenterSide": "RIGHT",
       "panelData": {
         "kind": "hero",
-        "headline": "A COINCIDENCE\nCAN BECOME A FALSE MEMORY.",
+        "headline": "TIMING\nIS NOT PROOF.",
         "bullets": [
-          "Restart happened",
-          "Service never improved"
+          "Alert stopped",
+          "Metric never moved"
         ],
-        "footnote": "Timing is not proof."
+        "footnote": "An honest report can still be wrong."
       },
       "shots": [
-        "An engineer restarts a service, the alert stops, and everyone remembers the restart as the fix forever.",
-        "But the service's real performance never improved. The story sounds true, yet repeating it could make the next outage worse."
+        "An engineer restarts a service, the alert stops, and the restart is remembered as the fix forever."
       ]
     },
     {
@@ -64,23 +58,23 @@
       "presenterSide": "LEFT",
       "panelData": {
         "kind": "hero",
-        "headline": "COCKROACHDB\nKEEPS THE AUDIT TRAIL.",
+        "headline": "ONE PLACE.\nFULL HISTORY.",
         "bullets": [
-          "Claim + source + trust",
-          "Every decision stays traceable"
+          "Nothing is deleted",
+          "Time-travel stays native"
         ],
-        "footnote": "CockroachDB Cloud · VECTOR(512) · C-SPANN · AS OF SYSTEM TIME"
+        "footnote": "CockroachDB Cloud · VECTOR · AS OF SYSTEM TIME"
       },
       "broll": {
         "0": {
           "source": "artifacts/video/memorystand-evidence-source.mp4",
           "startSeconds": 30,
-          "label": "LIVE COCKROACHDB RECEIPT",
-          "headline": "EVERY CHANGE STAYS AUDITABLE"
+          "label": "LIVE SQL HISTORY",
+          "headline": "THE LEDGER DID NOT DROP A ROW"
         }
       },
       "shots": [
-        "MemoryStand keeps the claim, source, trust level, and decision history together in CockroachDB, so every action remains auditable."
+        "CockroachDB keeps the fact, its source, its trust level, and every later decision in one ledger."
       ]
     },
     {
@@ -90,13 +84,13 @@
         "kind": "quote",
         "lines": [
           "KEEP BOTH",
-          "STRONGER EVIDENCE MAY GUIDE",
-          "WEAKER EVIDENCE WAITS"
+          "STRONGER MAY GUIDE",
+          "WEAKER WAITS"
         ],
-        "footnote": "Every change remains linked to its source."
+        "footnote": "Disagreement is recorded, not erased."
       },
       "shots": [
-        "When two memories disagree, MemoryStand does not quietly overwrite either one. Weaker evidence waits for a person to review."
+        "When two memories disagree, neither is overwritten. The weaker one waits for a person to review."
       ]
     },
     {
@@ -104,30 +98,23 @@
       "presenterSide": "LEFT",
       "panelData": {
         "kind": "hero",
-        "headline": "CLOUDWATCH\nIS THE RECEIPT.",
+        "headline": "MATCH OR\nREFUSE.",
         "bullets": [
-          "Same service + metric",
-          "Same direction + size"
+          "Confirmed → verified",
+          "Disagree → blocked"
         ],
-        "footnote": "Live AWS outcome receipts · promotion path model_calls: 0"
+        "footnote": "AWS outcome path · model_calls: 0"
       },
       "broll": {
         "0": {
           "source": "artifacts/video/memorystand-evidence-source.mp4",
           "startSeconds": 78,
-          "label": "LIVE AWS RECEIPT",
-          "headline": "OUTSIDE EVIDENCE DECIDES"
-        },
-        "1": {
-          "source": "artifacts/video/memorystand-evidence-source.mp4",
-          "startSeconds": 90,
-          "label": "LIVE OUTCOME GATE",
-          "headline": "MATCH = VERIFIED · MISMATCH = REFUSED"
+          "label": "LIVE METRIC CHECK",
+          "headline": "CLOUDWATCH IS RE-QUERIED"
         }
       },
       "shots": [
-        "To earn the keys, a memory must match AWS CloudWatch data for the same service, metric, direction, and size.",
-        "If the evidence matches, the memory becomes verified. If anything important disagrees, MemoryStand refuses autonomous use for safety."
+        "A claim becomes verified only when AWS CloudWatch agrees on metric, direction, and size."
       ]
     },
     {
@@ -135,16 +122,15 @@
       "presenterSide": "LEFT",
       "panelData": {
         "kind": "hero",
-        "headline": "0% OF ATTACKS\nGOT THE KEYS.",
+        "headline": "0 OF 540\nWERE PROMOTED.",
         "bullets": [
-          "540 attacks blocked",
-          "60 honest cases preserved"
+          "Attacks stopped",
+          "True cases kept"
         ],
-        "footnote": "600 fixed cases · autonomous authority scored separately"
+        "footnote": "Authority scored separately from storage"
       },
       "shots": [
-        "We tested five hundred forty attack cases and sixty honest controls, measuring whether each memory received autonomous authority.",
-        "Trusting the caller gave every attack the keys. MemoryStand blocked every attack from autonomous control and preserved every honest case."
+        "We tested five hundred forty attack cases and sixty honest controls. None of the attacks were promoted."
       ]
     },
     {
@@ -152,21 +138,20 @@
       "presenterSide": "RIGHT",
       "panelData": {
         "kind": "hero",
-        "headline": "HONEST STATUS.",
+        "headline": "LIVE\nLIMITS.",
         "bullets": [
-          "Basic search + fixed fallback",
-          "Evidence gate still enforced"
+          "Word search only",
+          "Promotion stays model-free"
         ],
-        "footnote": "Model route HTTP 402 · authority gate model_calls: 0 · hackathon candidate"
+        "footnote": "Hackathon candidate · no general-intelligence claim"
       },
       "shots": [
-        "Today, search is basic rather than meaning-aware. Decisions use a fixed fallback, while the safety gate still demands outside evidence.",
-        "That gate uses zero model calls. MemoryStand gives autonomous keys only to memories that prove what really happened."
+        "Today, search matches words not meaning. Decisions use a fixed fallback. Promotion still uses zero model calls."
       ]
     }
   ],
   "outro": {
-    "tagline": "A memory must show its receipt before it gets the keys.",
+    "tagline": "Live demo in the README.",
     "repository": "github.com/tomyimkc/memorystand",
     "status": "Hackathon candidate · no general-intelligence claim",
     "disclosure": "Synthetic presenter generated with xAI Grok from a creator-owned reference photo."

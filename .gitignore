@@ -36,3 +36,8 @@ infra/build/
 # verifier receipts) -- large/binary and fully reproducible from
 # scripts/video/ + docs/demo/VIDEO_PLAN.md, which ARE committed
 artifacts/
+
+# Remotion build output. Source under remotion/src is committed.
+remotion/node_modules/
+remotion/out/
+remotion/public/

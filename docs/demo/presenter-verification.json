@@ -3,86 +3,51 @@
   "shots": {
     "01-receipt-first-0": {
       "clip": "01-receipt-first-0.mp4",
-      "asked": "AI assistants remember past fixes. MemoryStand stops those memories from acting alone until outside evidence proves they actually worked.",
-      "heard": "AI assistance remember past fixes.  Memory stands stops those memories from acting alone until outside evidence proves they actually worked.",
-      "similarity": 0.872,
-      "passed": true
-    },
-    "01-receipt-first-1": {
-      "clip": "01-receipt-first-1.mp4",
-      "asked": "Think of it this way: every memory must show a receipt before it gets the keys to act.",
-      "heard": "Think of it this way. Every memory must show a receipt before it gets the keys to act.",
-      "similarity": 1.0,
+      "asked": "AI assistants remember past fixes. A memory must show a receipt before it gets the keys.",
+      "heard": "AI assistance remember past fixes.  A memory must show a receipt before it gets the keys.",
+      "similarity": 0.938,
       "passed": true
     },
     "02-dangerous-coincidence-0": {
       "clip": "02-dangerous-coincidence-0.mp4",
-      "asked": "An engineer restarts a service, the alert stops, and everyone remembers the restart as the fix forever.",
-      "heard": "An engineer restarts a service, the alert stops, and everyone remembers the restart as the fix forever.",
+      "asked": "An engineer restarts a service, the alert stops, and the restart is remembered as the fix forever.",
+      "heard": "An engineer restarts a service, the alert stops,  and the restart is remembered as the fix forever.",
       "similarity": 1.0,
-      "passed": true
-    },
-    "02-dangerous-coincidence-1": {
-      "clip": "02-dangerous-coincidence-1.mp4",
-      "asked": "But the service's real performance never improved. The story sounds true, yet repeating it could make the next outage worse.",
-      "heard": "but the service is real performance never improved.  The story sounds true, yet repeating it could make the next outage worse.",
-      "similarity": 0.952,
       "passed": true
     },
     "03-cockroachdb-aws-0": {
       "clip": "03-cockroachdb-aws-0.mp4",
-      "asked": "MemoryStand keeps the claim, source, trust level, and decision history together in CockroachDB, so every action remains auditable.",
-      "heard": "Memory stand keeps the claim, source, trust level, and decision history together in Cockroach DB.  So every action remains auditable.",
-      "similarity": 0.842,
+      "asked": "CockroachDB keeps the fact, its source, its trust level, and every later decision in one ledger.",
+      "heard": "Cockroach DB keeps the fact it's source, it's trust level, and every later decision in one  ledger.",
+      "similarity": 0.743,
       "passed": true
     },
     "04-held-for-review-0": {
       "clip": "04-held-for-review-0.mp4",
-      "asked": "When two memories disagree, MemoryStand does not quietly overwrite either one. Weaker evidence waits for a person to review.",
-      "heard": "When two memories disagree, memory stand does not quietly overwrite either one.  Weaker evidence waits for a person to review.",
-      "similarity": 0.923,
+      "asked": "When two memories disagree, neither is overwritten. The weaker one waits for a person to review.",
+      "heard": "When two memories disagree, neither is overrided.  The weaker one waits for a person to review.",
+      "similarity": 0.938,
       "passed": true
     },
     "05-cloudwatch-receipt-0": {
       "clip": "05-cloudwatch-receipt-0.mp4",
-      "asked": "To earn the keys, a memory must match AWS CloudWatch data for the same service, metric, direction, and size.",
-      "heard": "To earn the keys, a memory must match AWS CloudWatch data  for the same service, metric, direction, and size.",
+      "asked": "A claim becomes verified only when AWS CloudWatch agrees on metric, direction, and size.",
+      "heard": "A claim becomes verified only when AWS CloudWatch agrees on metric, direction, and size.",
       "similarity": 1.0,
-      "passed": true
-    },
-    "05-cloudwatch-receipt-1": {
-      "clip": "05-cloudwatch-receipt-1.mp4",
-      "asked": "If the evidence matches, the memory becomes verified. If anything important disagrees, MemoryStand refuses autonomous use for safety.",
-      "heard": "If the evidence matches, the memory becomes verified.  If anything important disagrees, memory stand refuses autonomous use for safety.",
-      "similarity": 0.919,
       "passed": true
     },
     "07-attack-test-0": {
       "clip": "07-attack-test-0.mp4",
-      "asked": "We tested five hundred forty attack cases and sixty honest controls, measuring whether each memory received autonomous authority.",
-      "heard": "We tested 540 attack cases and 60 honest controls,  measuring whether each memory received autonomous authority.",
+      "asked": "We tested five hundred forty attack cases and sixty honest controls. None of the attacks were promoted.",
+      "heard": "We tested 540 attack cases and 60 honest controls. None of the attacks were promoted.",
       "similarity": 1.0,
-      "passed": true
-    },
-    "07-attack-test-1": {
-      "clip": "07-attack-test-1.mp4",
-      "asked": "Trusting the caller gave every attack the keys. MemoryStand blocked every attack from autonomous control and preserved every honest case.",
-      "heard": "Trusting the caller gave every attack the keys.  Memory stand blocked every attack from autonomous control and preserved every honest case.",
-      "similarity": 0.927,
       "passed": true
     },
     "08-honest-status-0": {
       "clip": "08-honest-status-0.mp4",
-      "asked": "Today, search is basic rather than meaning-aware. Decisions use a fixed fallback, while the safety gate still demands outside evidence.",
-      "heard": "Today, search is basic, rather than meaning aware.  Decisions use a fixed fallback, while the safety gate still demands outside evidence.",
+      "asked": "Today, search matches words not meaning. Decisions use a fixed fallback. Promotion still uses zero model calls.",
+      "heard": "Today, search matches words not meaning.  Decisions use a fixed fallback.  Promotion still uses zero model calls.",
       "similarity": 1.0,
-      "passed": true
-    },
-    "08-honest-status-1": {
-      "clip": "08-honest-status-1.mp4",
-      "asked": "That gate uses zero model calls. MemoryStand gives autonomous keys only to memories that prove what really happened.",
-      "heard": "that gate uses zero model calls. Memory stand gives autonomous keys only to memories  that prove what really happened.",
-      "similarity": 0.919,
       "passed": true
     }
   }

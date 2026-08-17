@@ -67,9 +67,10 @@ python scripts/presenter/make_clips.py --verify-only
 cp /absolute/path/to/reviewed-deployed-demo.mp4 \
   artifacts/video/memorystand-evidence-source.mp4
 
-# Draw large public-friendly panels and compose verified narration over panels or live evidence.
-python scripts/presenter/make_panels.py
-python scripts/presenter/compose.py --check
+# Remotion compose — same layout contract as the earlier contest films.
+python scripts/presenter/build_remotion_story.py
+( cd remotion && npm install && npm run render )
+cp remotion/out/memorystand-presenter.mp4 artifacts/video/memorystand-presenter.mp4
 ```
 
 Outputs are gitignored:

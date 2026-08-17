@@ -54,10 +54,10 @@ PROFILES = {
         "windowLabel": "2:35-2:55",
     },
     "presenter": {
-        "minDurationSeconds": 90.0,
+        "minDurationSeconds": 45.0,
         "maxDurationSeconds": 120.0,
         "expectedFps": 24.0,
-        "windowLabel": "1:30-2:00",
+        "windowLabel": "0:45-2:00",
     },
 }
 
