@@ -24,7 +24,8 @@ def test_presenter_script_rejects_overlapping_wording():
 
 def test_presenter_script_rejects_broll_outside_generated_artifacts():
     spec = json.loads(SCRIPT_JSON.read_text())
-    spec["beats"][0]["broll"]["0"]["source"] = "/tmp/unreviewed.mp4"
+    beat = next(b for b in spec["beats"] if b.get("broll"))
+    beat["broll"]["0"]["source"] = "/tmp/unreviewed.mp4"
     assert any("broll source" in error for error in validate(spec))
 
 

@@ -7,12 +7,28 @@
   "_notes": [
     "GENERAL-PUBLIC CUT. One idea per shot. No repeated 3-word phrase. No filler.",
     "Seven beats, seven shots. Each line is 14-20 words.",
+    "Story order is causal: problem, rule, check, ledger, conflict, proof, limits.",
     "Panels state the claim in different words from the voiceover.",
-    "Four shots cut to muted live-evidence footage so judges see the app, CockroachDB, and CloudWatch.",
-    "Remotion composes presenter + panel + captions. Grok only generates the lip-synced takes.",
+    "Remotion composes presenter + captions. Grok only generates the lip-synced takes.",
     "Every shot must pass transcript comparison before render."
   ],
   "beats": [
+    {
+      "id": "02-dangerous-coincidence",
+      "presenterSide": "RIGHT",
+      "panelData": {
+        "kind": "hero",
+        "headline": "TIMING\nIS NOT PROOF.",
+        "bullets": [
+          "Alert stopped",
+          "Metric never moved"
+        ],
+        "footnote": "An honest report can still be wrong."
+      },
+      "shots": [
+        "An engineer restarts a service, the alert stops, and the restart is remembered as the fix forever."
+      ]
+    },
     {
       "id": "01-receipt-first",
       "presenterSide": "LEFT",
@@ -38,19 +54,27 @@
       ]
     },
     {
-      "id": "02-dangerous-coincidence",
-      "presenterSide": "RIGHT",
+      "id": "05-cloudwatch-receipt",
+      "presenterSide": "LEFT",
       "panelData": {
         "kind": "hero",
-        "headline": "TIMING\nIS NOT PROOF.",
+        "headline": "MATCH OR\nREFUSE.",
         "bullets": [
-          "Alert stopped",
-          "Metric never moved"
+          "Confirmed → verified",
+          "Disagree → blocked"
         ],
-        "footnote": "An honest report can still be wrong."
+        "footnote": "AWS outcome path · model_calls: 0"
+      },
+      "broll": {
+        "0": {
+          "source": "artifacts/video/memorystand-evidence-source.mp4",
+          "startSeconds": 78,
+          "label": "LIVE METRIC CHECK",
+          "headline": "CLOUDWATCH IS RE-QUERIED"
+        }
       },
       "shots": [
-        "An engineer restarts a service, the alert stops, and the restart is remembered as the fix forever."
+        "A claim becomes verified only when AWS CloudWatch agrees on metric, direction, and size."
       ]
     },
     {
@@ -91,30 +115,6 @@
       },
       "shots": [
         "When two memories disagree, neither is overwritten. The weaker one waits for a person to review."
-      ]
-    },
-    {
-      "id": "05-cloudwatch-receipt",
-      "presenterSide": "LEFT",
-      "panelData": {
-        "kind": "hero",
-        "headline": "MATCH OR\nREFUSE.",
-        "bullets": [
-          "Confirmed → verified",
-          "Disagree → blocked"
-        ],
-        "footnote": "AWS outcome path · model_calls: 0"
-      },
-      "broll": {
-        "0": {
-          "source": "artifacts/video/memorystand-evidence-source.mp4",
-          "startSeconds": 78,
-          "label": "LIVE METRIC CHECK",
-          "headline": "CLOUDWATCH IS RE-QUERIED"
-        }
-      },
-      "shots": [
-        "A claim becomes verified only when AWS CloudWatch agrees on metric, direction, and size."
       ]
     },
     {

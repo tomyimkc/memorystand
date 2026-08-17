@@ -21,17 +21,15 @@ details in the voiceover.
 
 ## Seven-beat arc
 
-1. **Receipt first, keys second** — define the product and its safety rule.
-2. **A dangerous coincidence** — show how an honest report can still become a false memory.
-3. **CockroachDB ledger** — explain why the memory and its audit trail stay together.
-4. **Held for review** — show why contradicting memories are preserved instead of silently
-   overwritten.
-5. **CloudWatch receipt** — show that the same service and metric must agree before a memory
-   becomes autonomous.
-6. **Attack test** — report 540 attacks and 60 honest controls, scoring autonomous authority
-   separately from storage.
-7. **Honest status** — disclose basic search, the fixed decision fallback, and the
-   model-free authority gate before repeating the central rule.
+Causal order — problem, then the rule, then how it is checked, then where it is kept.
+
+1. **A dangerous coincidence** — an honest restart is remembered as the fix. That is the lie.
+2. **Receipt first, keys second** — a memory must show a receipt before it acts alone.
+3. **CloudWatch receipt** — AWS must agree on metric, direction, and size or the claim stays unverified.
+4. **CockroachDB ledger** — the fact, its source, its trust, and later decisions stay in one place.
+5. **Held for review** — disagreeing memories are kept; the weaker one waits for a person.
+6. **Attack test** — 540 attacks and 60 honest controls; none of the attacks were promoted.
+7. **Honest status** — word search, a fixed fallback, and zero model calls on promotion.
 
 The voiceover and main panel copy deliberately omit the Lambda/Amplify inventory, the numeric
 timeout walkthrough, the four-level taxonomy, HTTP 402, and Bedrock quota mechanics. The exact

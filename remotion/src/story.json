@@ -3,6 +3,34 @@
   "outroFrames": 72,
   "shots": [
     {
+      "id": "02-dangerous-coincidence-0",
+      "side": "RIGHT",
+      "clip": "clips/02-dangerous-coincidence-0.mp4",
+      "durationFrames": 187,
+      "panel": {
+        "kind": "hero",
+        "headline": "TIMING\nIS NOT PROOF.",
+        "bullets": [
+          "Alert stopped",
+          "Metric never moved"
+        ],
+        "footnote": "An honest report can still be wrong."
+      },
+      "broll": null,
+      "cues": [
+        {
+          "s": 0.0,
+          "e": 3.58,
+          "t": "An engineer restarts a service, the alert stops,"
+        },
+        {
+          "s": 4.3,
+          "e": 7.36,
+          "t": "and the restart is remembered as the fix forever."
+        }
+      ]
+    },
+    {
       "id": "01-receipt-first-0",
       "side": "LEFT",
       "clip": "clips/01-receipt-first-0.mp4",
@@ -36,30 +64,35 @@
       ]
     },
     {
-      "id": "02-dangerous-coincidence-0",
-      "side": "RIGHT",
-      "clip": "clips/02-dangerous-coincidence-0.mp4",
-      "durationFrames": 187,
+      "id": "05-cloudwatch-receipt-0",
+      "side": "LEFT",
+      "clip": "clips/05-cloudwatch-receipt-0.mp4",
+      "durationFrames": 160,
       "panel": {
         "kind": "hero",
-        "headline": "TIMING\nIS NOT PROOF.",
+        "headline": "MATCH OR\nREFUSE.",
         "bullets": [
-          "Alert stopped",
-          "Metric never moved"
+          "Confirmed \u2192 verified",
+          "Disagree \u2192 blocked"
         ],
-        "footnote": "An honest report can still be wrong."
+        "footnote": "AWS outcome path \u00b7 model_calls: 0"
       },
-      "broll": null,
+      "broll": {
+        "source": "artifacts/video/memorystand-evidence-source.mp4",
+        "startSeconds": 78,
+        "label": "LIVE METRIC CHECK",
+        "headline": "CLOUDWATCH IS RE-QUERIED"
+      },
       "cues": [
         {
           "s": 0.0,
-          "e": 3.58,
-          "t": "An engineer restarts a service, the alert stops,"
+          "e": 3.98,
+          "t": "A claim becomes verified only when AWS CloudWatch agrees"
         },
         {
-          "s": 4.3,
-          "e": 7.36,
-          "t": "and the restart is remembered as the fix forever."
+          "s": 3.98,
+          "e": 6.2,
+          "t": "on metric, direction, and size."
         }
       ]
     },
@@ -121,39 +154,6 @@
           "s": 4.14,
           "e": 6.56,
           "t": "The weaker one waits for a person to review."
-        }
-      ]
-    },
-    {
-      "id": "05-cloudwatch-receipt-0",
-      "side": "LEFT",
-      "clip": "clips/05-cloudwatch-receipt-0.mp4",
-      "durationFrames": 160,
-      "panel": {
-        "kind": "hero",
-        "headline": "MATCH OR\nREFUSE.",
-        "bullets": [
-          "Confirmed \u2192 verified",
-          "Disagree \u2192 blocked"
-        ],
-        "footnote": "AWS outcome path \u00b7 model_calls: 0"
-      },
-      "broll": {
-        "source": "artifacts/video/memorystand-evidence-source.mp4",
-        "startSeconds": 78,
-        "label": "LIVE METRIC CHECK",
-        "headline": "CLOUDWATCH IS RE-QUERIED"
-      },
-      "cues": [
-        {
-          "s": 0.0,
-          "e": 3.98,
-          "t": "A claim becomes verified only when AWS CloudWatch agrees"
-        },
-        {
-          "s": 3.98,
-          "e": 6.2,
-          "t": "on metric, direction, and size."
         }
       ]
     },
