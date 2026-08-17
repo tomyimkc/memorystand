@@ -68,7 +68,7 @@ MIN_SIMILARITY = 0.72
 # The corollary is that shot length is now a WRITING constraint: 19-23 words per shot. Fewer and
 # the clip pads with silence; more and he starts racing the clock again.
 DURATION_S = 10
-WORDS_MIN, WORDS_MAX = 17, 24
+WORDS_MIN, WORDS_MAX = 14, 20
 
 
 # Spoken numbers and written numbers are the same claim. The transcriber always returns digits.

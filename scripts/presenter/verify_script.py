@@ -11,10 +11,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SCRIPT_JSON = REPO_ROOT / "docs" / "demo" / "presenter-script.json"
 
-WORDS_MIN = 17
-WORDS_MAX = 24
+WORDS_MIN = 14
+WORDS_MAX = 20
 EXPECTED_BEATS = 7
-EXPECTED_TOTAL_SHOTS = 12
+EXPECTED_TOTAL_SHOTS = 7
 MIN_SHOTS_PER_BEAT = 1
 MAX_SHOTS_PER_BEAT = 2
 SUPPORTED_PANEL_KINDS = {
@@ -49,6 +49,46 @@ BANNED_PATTERNS = {
     "stale model-use claim": r"live /decide also calls a model",
     "overbroad competitor claim": r"\bevery other agent memory\b",
 }
+
+
+_STOP = {
+    "a", "an", "the", "and", "or", "to", "of", "in", "on", "for", "is", "its",
+    "as", "one", "two", "not", "no",
+}
+
+
+def _tokens(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9]+", text.lower())
+
+
+def _overlap_errors(lines: list[str]) -> list[str]:
+    """Fail if two shots share a 3-gram, or if a content word is reused."""
+    errors: list[str] = []
+    seen_grams: dict[tuple[str, str, str], str] = {}
+    seen_words: dict[str, str] = {}
+    for index, line in enumerate(lines):
+        tokens = _tokens(line)
+        tag = f"shot {index}"
+        for i in range(len(tokens) - 2):
+            gram = (tokens[i], tokens[i + 1], tokens[i + 2])
+            prior = seen_grams.get(gram)
+            if prior:
+                errors.append(
+                    f"overlapping wording: {' '.join(gram)!r} in {prior} and {tag}"
+                )
+            else:
+                seen_grams[gram] = tag
+        for token in tokens:
+            if token in _STOP or token.isdigit() or len(token) < 5:
+                continue
+            prior = seen_words.get(token)
+            if prior:
+                errors.append(
+                    f"overlapping wording: {token!r} in {prior} and {tag}"
+                )
+            else:
+                seen_words[token] = tag
+    return errors
 
 
 def validate(spec: dict) -> list[str]:
@@ -131,6 +171,7 @@ def validate(spec: dict) -> list[str]:
         errors.append(
             f"expected {EXPECTED_TOTAL_SHOTS} total shots, found {len(all_spoken)}"
         )
+    errors.extend(_overlap_errors(all_spoken))
     for phrase in REQUIRED_SPOKEN_PHRASES:
         if phrase not in spoken:
             errors.append(f"required spoken phrase missing: {phrase!r}")

@@ -1,0 +1,228 @@
+{
+  "fps": 24,
+  "outroFrames": 72,
+  "shots": [
+    {
+      "id": "01-receipt-first-0",
+      "side": "LEFT",
+      "clip": "clips/01-receipt-first-0.mp4",
+      "durationFrames": 156,
+      "panel": {
+        "kind": "hero",
+        "headline": "STORED\nIS NOT TRUSTED.",
+        "bullets": [
+          "Write is cheap",
+          "Action needs a check"
+        ],
+        "footnote": "github.com/tomyimkc/memorystand"
+      },
+      "broll": {
+        "source": "artifacts/video/memorystand-evidence-source.mp4",
+        "startSeconds": 0,
+        "label": "LIVE DASHBOARD",
+        "headline": "THE APP IS RUNNING"
+      },
+      "cues": [
+        {
+          "s": 0.0,
+          "e": 2.18,
+          "t": "AI assistance remember past fixes."
+        },
+        {
+          "s": 3.28,
+          "e": 6.06,
+          "t": "A memory must show a receipt before it gets the keys."
+        }
+      ]
+    },
+    {
+      "id": "02-dangerous-coincidence-0",
+      "side": "RIGHT",
+      "clip": "clips/02-dangerous-coincidence-0.mp4",
+      "durationFrames": 175,
+      "panel": {
+        "kind": "hero",
+        "headline": "TIMING\nIS NOT PROOF.",
+        "bullets": [
+          "Alert stopped",
+          "Metric never moved"
+        ],
+        "footnote": "An honest report can still be wrong."
+      },
+      "broll": null,
+      "cues": [
+        {
+          "s": 0.0,
+          "e": 3.46,
+          "t": "An engineer restarts a service, the alert stops,"
+        },
+        {
+          "s": 4.22,
+          "e": 6.86,
+          "t": "and the restart is remembered as the fix forever."
+        }
+      ]
+    },
+    {
+      "id": "03-cockroachdb-aws-0",
+      "side": "LEFT",
+      "clip": "clips/03-cockroachdb-aws-0.mp4",
+      "durationFrames": 196,
+      "panel": {
+        "kind": "hero",
+        "headline": "ONE PLACE.\nFULL HISTORY.",
+        "bullets": [
+          "Nothing is deleted",
+          "Time-travel stays native"
+        ],
+        "footnote": "CockroachDB Cloud \u00b7 VECTOR \u00b7 AS OF SYSTEM TIME"
+      },
+      "broll": {
+        "source": "artifacts/video/memorystand-evidence-source.mp4",
+        "startSeconds": 30,
+        "label": "LIVE SQL HISTORY",
+        "headline": "THE LEDGER DID NOT DROP A ROW"
+      },
+      "cues": [
+        {
+          "s": 0.0,
+          "e": 3.16,
+          "t": "Cockroach DB keeps the fact it's source,"
+        },
+        {
+          "s": 3.66,
+          "e": 7.7,
+          "t": "it's trust level, and every later decision in one ledger."
+        }
+      ]
+    },
+    {
+      "id": "04-held-for-review-0",
+      "side": "RIGHT",
+      "clip": "clips/04-held-for-review-0.mp4",
+      "durationFrames": 169,
+      "panel": {
+        "kind": "quote",
+        "lines": [
+          "KEEP BOTH",
+          "STRONGER MAY GUIDE",
+          "WEAKER WAITS"
+        ],
+        "footnote": "Disagreement is recorded, not erased."
+      },
+      "broll": null,
+      "cues": [
+        {
+          "s": 0.0,
+          "e": 3.22,
+          "t": "When two memories disagree, neither is overrided."
+        },
+        {
+          "s": 4.4,
+          "e": 6.6,
+          "t": "The weaker one waits for a person to review."
+        }
+      ]
+    },
+    {
+      "id": "05-cloudwatch-receipt-0",
+      "side": "LEFT",
+      "clip": "clips/05-cloudwatch-receipt-0.mp4",
+      "durationFrames": 162,
+      "panel": {
+        "kind": "hero",
+        "headline": "MATCH OR\nREFUSE.",
+        "bullets": [
+          "Confirmed \u2192 verified",
+          "Disagree \u2192 blocked"
+        ],
+        "footnote": "AWS outcome path \u00b7 model_calls: 0"
+      },
+      "broll": {
+        "source": "artifacts/video/memorystand-evidence-source.mp4",
+        "startSeconds": 78,
+        "label": "LIVE METRIC CHECK",
+        "headline": "CLOUDWATCH IS RE-QUERIED"
+      },
+      "cues": [
+        {
+          "s": 0.0,
+          "e": 4.02,
+          "t": "A claim becomes verified only when AWS CloudWatch agrees"
+        },
+        {
+          "s": 4.02,
+          "e": 6.3,
+          "t": "on metric, direction, and size."
+        }
+      ]
+    },
+    {
+      "id": "07-attack-test-0",
+      "side": "LEFT",
+      "clip": "clips/07-attack-test-0.mp4",
+      "durationFrames": 159,
+      "panel": {
+        "kind": "hero",
+        "headline": "0 OF 540\nWERE PROMOTED.",
+        "bullets": [
+          "Attacks stopped",
+          "True cases kept"
+        ],
+        "footnote": "Authority scored separately from storage"
+      },
+      "broll": null,
+      "cues": [
+        {
+          "s": 0.0,
+          "e": 4.24,
+          "t": "We tested 540 attack cases and 60 honest controls."
+        },
+        {
+          "s": 4.94,
+          "e": 6.16,
+          "t": "None of the attacks were promoted."
+        }
+      ]
+    },
+    {
+      "id": "08-honest-status-0",
+      "side": "RIGHT",
+      "clip": "clips/08-honest-status-0.mp4",
+      "durationFrames": 202,
+      "panel": {
+        "kind": "hero",
+        "headline": "LIVE\nLIMITS.",
+        "bullets": [
+          "Word search only",
+          "Promotion stays model-free"
+        ],
+        "footnote": "Hackathon candidate \u00b7 no general-intelligence claim"
+      },
+      "broll": null,
+      "cues": [
+        {
+          "s": 0.0,
+          "e": 2.84,
+          "t": "Today, search matches words not meaning."
+        },
+        {
+          "s": 3.66,
+          "e": 5.26,
+          "t": "Decisions use a fixed fallback."
+        },
+        {
+          "s": 5.84,
+          "e": 7.96,
+          "t": "Promotion still uses zero model calls."
+        }
+      ]
+    }
+  ],
+  "outro": {
+    "tagline": "Live demo in the README.",
+    "repository": "github.com/tomyimkc/memorystand",
+    "status": "Hackathon candidate \u00b7 no general-intelligence claim",
+    "disclosure": "Synthetic presenter generated with xAI Grok from a creator-owned reference photo."
+  }
+}

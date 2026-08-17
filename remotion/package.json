@@ -1,0 +1,20 @@
+{
+  "name": "memorystand-presenter",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts MemoryStand out/memorystand-presenter.mp4 --codec h264 --audio-codec aac --crf 18 --pixel-format yuv420p"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.503",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "remotion": "4.0.503"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "typescript": "5.9.3"
+  }
+}

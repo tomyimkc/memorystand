@@ -7,14 +7,13 @@ Do these in order. Do not improvise field values; they are already written in
 
 ## 1. Upload the video (this is the remaining hard blocker)
 
-Upload this cut — regenerated 2026-08-17 with the same Grok presenter pipeline
-as the earlier contest films (image_edit likeness → image_to_video lip-sync →
-whisper verify → compose). 12/12 shots passed, 0 ms lip-sync residual:
+Upload this cut — 2026-08-17 Remotion compose of seven Grok lip-synced
+shots. No repeated wording. Whisper 7/7.
 
 | Cut | Path | Runtime | SHA-256 |
 |---|---|---|---|
-| **Use this** | `~/Downloads/MemoryStand-Grok-public-presenter-2026-08-17.mp4` | 110.708 s | `9af40b085a477f1dc3385a2e19dba19a0b7486100834068cb69b7cbff99d383e` |
-| Sidecar SRT | `~/Downloads/MemoryStand-Grok-public-presenter-2026-08-17.srt` | 35 cues | `ee1141c3254c092b229a54c08bae3c8862dcc5748ef3a4d9297ebf5529212c6f` |
+| **Use this** | `~/Downloads/MemoryStand-Remotion-public-2026-08-17.mp4` | 53.845 s | `5ce9a39e6d3cfce17b3dbdbd11f39be83f4f6f7a891558d2ec38b5dcb8e9bd24` |
+| Sidecar SRT | `~/Downloads/MemoryStand-Remotion-public-2026-08-17.srt` | 15 cues | `93f7048dead04ef5c56cdbd608d7662b37894045e489373d106ad73b8bdec424` |
 
 1. YouTube or Vimeo, **Public**, not Unlisted.
 2. Watch the public link logged out, start to finish.

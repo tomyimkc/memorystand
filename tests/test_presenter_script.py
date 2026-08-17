@@ -8,11 +8,18 @@ from scripts.presenter.verify_script import SCRIPT_JSON, validate
 def test_general_public_presenter_script_contract():
     spec = json.loads(SCRIPT_JSON.read_text())
     assert validate(spec) == []
-    assert sum(len(beat.get("broll", {})) for beat in spec["beats"]) >= 4
+    assert sum(len(beat.get("broll", {})) for beat in spec["beats"]) >= 3
+    assert all(len(beat["shots"]) == 1 for beat in spec["beats"])
     assert all(
         len(beat["panelData"].get("bullets", [])) <= 2
         for beat in spec["beats"]
     )
+
+
+def test_presenter_script_rejects_overlapping_wording():
+    spec = json.loads(SCRIPT_JSON.read_text())
+    spec["beats"][4]["shots"][0] = spec["beats"][1]["shots"][0]
+    assert any("overlapping wording" in error for error in validate(spec))
 
 
 def test_presenter_script_rejects_broll_outside_generated_artifacts():
