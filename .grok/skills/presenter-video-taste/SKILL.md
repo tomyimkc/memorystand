@@ -73,6 +73,10 @@ A portrait close-up `objectFit: cover` onto 16:9 crops the mouth off and looks l
 - Evidence provenance must match the picture. Never overlay seeded or synthetic numbers on an
   unrelated live dashboard; use the matching source, or label the example visibly and explicitly
   as seeded/synthetic and not production evidence.
+- Before treating a product interaction as a success receipt, verify the cited memory's entity
+  and the underlying evidence receipt that earned its trust tier. A green `verified` badge for
+  another service is not authority for the current incident; show it as excluded, with the target
+  and exclusion reason readable in the same frame.
 
 ## Verify before you say done
 

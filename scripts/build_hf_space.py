@@ -16,6 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND = ROOT / "frontend"
+SPACE_FILES = ("README.md", "index.html", "app.js")
 
 SPACE_README = """\
 ---
@@ -60,6 +61,38 @@ def build(out: Path) -> None:
         print(f"  {path.name}: {path.stat().st_size} bytes")
 
 
+def publish(out: Path, repo_id: str) -> None:
+    """Upload one exact Space bundle and delete stale remote files.
+
+    Hugging Face's ordinary folder upload overwrites files with matching names
+    but leaves every other remote file untouched. That let the default starter
+    ``style.css`` survive even though MemoryStand no longer referenced it. An
+    exact public deployment needs an exact manifest, not an append-only copy.
+    """
+    from huggingface_hub import HfApi
+
+    api = HfApi()
+    info = api.repo_info(repo_id, repo_type="space")
+    remote = {
+        sibling.rfilename
+        for sibling in info.siblings
+        if sibling.rfilename != ".gitattributes"
+    }
+    expected = set(SPACE_FILES)
+    stale = sorted(remote - expected)
+    result = api.upload_folder(
+        repo_id=repo_id,
+        repo_type="space",
+        folder_path=out,
+        parent_commit=info.sha,
+        delete_patterns=stale or None,
+        commit_message="Sync exact MemoryStand judge demo bundle",
+    )
+    print(f"published static Space: {result.commit_url}")
+    if stale:
+        print(f"  deleted stale remote files: {', '.join(stale)}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -68,8 +101,16 @@ def main() -> int:
         default=ROOT / "dist" / "hf-space",
         help="output directory (default: dist/hf-space)",
     )
+    parser.add_argument(
+        "--publish",
+        metavar="REPO_ID",
+        help="upload the exact bundle to an existing static Space (for example tomyimkc/memorystand)",
+    )
     args = parser.parse_args()
-    build(args.out.resolve())
+    out = args.out.resolve()
+    build(out)
+    if args.publish:
+        publish(out, args.publish)
     return 0
 
 

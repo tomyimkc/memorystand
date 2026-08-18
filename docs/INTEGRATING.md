@@ -55,13 +55,17 @@ curl -s -X POST \
   -d '{
         "tenant_id": "9c8f6e5a-9d1a-4a1c-8f2e-3b6d1c7a4e10",
         "agent_id":  "1a2b3c4d-5e6f-4708-9a0b-1c2d3e4f5061",
-        "query": "payments-service failover order"
+        "query": "payments-service failover order",
+        "target_entity": "payments-service"
       }' | jq .
 ```
 
-The required body fields are `tenant_id`, `agent_id`, and `query` — note it's `query`, not
-`situation` or `alert`; see `_route_decide` in `backend/handler.py`. `k` (how many memories to
-consult, default 5) and `task_id` are optional. The response (HTTP 201) is:
+For an agent-selected action, the required body fields are `tenant_id`, `agent_id`, `query`,
+and `target_entity` — note it's `query`, not `situation` or `alert`; see `_route_decide` in
+`backend/handler.py`. `target_entity` is the structured incident subject. Recalled rows for
+another service remain visible in `consulted`, but they are listed in `excluded_memories` and
+cannot enter model or fallback decision context. `k` (how many memories to consult, default 5)
+and `task_id` are optional. The response (HTTP 201) is:
 
 ```json
 {
@@ -73,6 +77,9 @@ consult, default 5) and `task_id` are optional. The response (HTTP 201) is:
   "produced": [],
   "rationale": "...",
   "reasoning_source": "fallback_heuristic",
+  "target_entity": "payments-service",
+  "eligible_memory_ids": [],
+  "excluded_memories": [],
   "model_calls": 0
 }
 ```
@@ -87,7 +94,8 @@ so verbatim. Provider availability can change, so do not hard-code this snapshot
 If you already know what action you want recorded — you're driving this from your own agent
 loop and MemoryStand is just the memory layer — pass `action` and `rationale` directly in the
 body and MemoryStand records them without touching the model or the fallback rule at all;
-`reasoning_source` comes back `"caller_supplied"` and `model_calls: 0`.
+`reasoning_source` comes back `"caller_supplied"` and `model_calls: 0`. `target_entity` is
+optional on that separately-labelled recording path.
 
 **Step 2 — later, when the real world reports back, close the loop:**
 

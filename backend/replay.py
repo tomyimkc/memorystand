@@ -30,7 +30,7 @@ from typing import Any, Sequence
 
 from psycopg2.extras import RealDictCursor
 
-from . import db, embeddings
+from . import authority, db, embeddings
 
 
 class GCWindowExceeded(RuntimeError):
@@ -210,7 +210,11 @@ def recall_as_of(tenant_id: str, agent_id: str | None, query: str, instant: Any,
                 """,
                 (vec_literal, tenant_id, vec_literal, k),
             )
-            rows = [dict(r) for r in cur.fetchall()]
+            rows = authority.annotate_action_eligibility_at(
+                cur,
+                tenant_id,
+                [dict(r) for r in cur.fetchall()],
+            )
         conn.commit()
         return rows
     except Exception as exc:  # noqa: BLE001
@@ -278,14 +282,26 @@ def cross_examine(tenant_id: str, decision_id: str) -> dict:
     """
     conn = db.get_conn()
     schema_has_receipt = True
+    schema_has_target = True
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             try:
-                cur.execute(base.format(extra=", query_text, recall_k"), (decision_id, tenant_id))
+                cur.execute(
+                    base.format(extra=", query_text, recall_k, target_entity"),
+                    (decision_id, tenant_id),
+                )
             except db.psycopg2.errors.UndefinedColumn:
                 conn.rollback()
-                schema_has_receipt = False
-                cur.execute(base.format(extra=""), (decision_id, tenant_id))
+                schema_has_target = False
+                try:
+                    cur.execute(
+                        base.format(extra=", query_text, recall_k"),
+                        (decision_id, tenant_id),
+                    )
+                except db.psycopg2.errors.UndefinedColumn:
+                    conn.rollback()
+                    schema_has_receipt = False
+                    cur.execute(base.format(extra=""), (decision_id, tenant_id))
             decision = cur.fetchone()
         conn.commit()
     finally:
@@ -330,6 +346,25 @@ def cross_examine(tenant_id: str, decision_id: str) -> dict:
             "instant -- it is not the agent's ranked retrieval."
         )
 
+    eligible_as_of: list[dict[str, Any]] | None = None
+    excluded_as_of: list[dict[str, Any]] | None = None
+    policy_note: str | None = None
+    if recalled_as_of is not None and decision.get("target_entity"):
+        eligible_as_of, excluded_as_of = authority.filter_for_target(
+            recalled_as_of,
+            str(decision["target_entity"]),
+        )
+    elif recalled_as_of is not None and not schema_has_target:
+        policy_note = (
+            "no target-entity receipt: migration 004 has not been applied, so the ranked "
+            "recall can be shown but its subject-bound decision context cannot be reconstructed"
+        )
+    elif recalled_as_of is not None:
+        policy_note = (
+            "no target-entity receipt: this decision predates migration 004 or was caller-supplied; "
+            "the ranked recall is preserved, but no subject filter is invented"
+        )
+
     at_the_time = belief_state_at(tenant_id, decision["decided_at"])
     changes = [d for d in belief_diff(tenant_id, decision["decided_at"]) if d["delta"] != "unchanged"]
 
@@ -338,6 +373,13 @@ def cross_examine(tenant_id: str, decision_id: str) -> dict:
         # The agent's own ranked query, re-run against the past. None when there is no receipt.
         "recalled_as_of": recalled_as_of,
         "recall_note": recall_note,
+        "eligible_memory_ids_as_of": (
+            [str(row["memory_id"]) for row in eligible_as_of]
+            if eligible_as_of is not None
+            else None
+        ),
+        "excluded_memories_as_of": excluded_as_of,
+        "policy_note": policy_note,
         "believed_at_decision_time": at_the_time,
         "changed_since": changes,
         "consulted": [str(m) for m in (decision["consulted_memory_ids"] or [])],

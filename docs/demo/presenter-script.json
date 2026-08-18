@@ -22,7 +22,7 @@
         "headline": "TIMING\nIS NOT PROOF.",
         "bullets": [
           "Alert stopped",
-          "Metric never moved"
+          "Cause still unproven"
         ],
         "footnote": "An honest report can still be wrong."
       },
@@ -37,7 +37,7 @@
         "kind": "hero",
         "headline": "SYMPTOM\nIS NOT CAUSE.",
         "bullets": [
-          "Seeded result stayed flat",
+          "Only 3 ms changed",
           "Timing alone proves nothing"
         ],
         "footnote": "The alert stopping is not an outcome receipt."
@@ -47,7 +47,7 @@
           "source": "artifacts/video/presenter-receipts/why-false.png",
           "startSeconds": 0,
           "label": "SEEDED DECISION-RULE TEST",
-          "headline": "THE PAGE CLEARED. LATENCY STAYED FLAT.",
+          "headline": "THE ALERT CLEARED. ONLY 3 MS CHANGED.",
           "callouts": [
             "Before: 223 ms",
             "After: 220 ms",
@@ -57,7 +57,7 @@
         }
       },
       "shots": [
-        "In a seeded test, service latency stayed flat. The page cleared, but that timing does not prove the reboot worked."
+        "The alert went quiet, but seeded service latency changed only from 223 to 220 milliseconds. Timing alone does not prove the restart fixed it."
       ]
     },
     {
@@ -65,23 +65,24 @@
       "presenterSide": "LEFT",
       "panelData": {
         "kind": "hero",
-        "headline": "STORED\nIS NOT TRUSTED.",
+        "headline": "WRONG SERVICE.\nNO AUTHORITY.",
         "bullets": [
-          "Write is cheap",
-          "Action needs a check"
+          "Visible in recall",
+          "Excluded from action"
         ],
         "footnote": "github.com/tomyimkc/memorystand"
       },
       "broll": {
         "0": {
-          "source": "artifacts/video/live-product/decision-live.png",
+          "source": "artifacts/video/presenter-receipts/decision-live.png",
           "startSeconds": 0,
           "label": "LIVE DEPLOYED DECISION",
-          "headline": "THE RESTART LOSES TO VERIFIED EVIDENCE",
+          "headline": "WRONG-SERVICE PROOF IS REFUSED",
           "callouts": [
-            "Closer restart: unconfirmed",
-            "CloudWatch-backed scale-up: verified",
-            "Memory decided · model calls: 0"
+            "Target: payments-service",
+            "checkout-api row: excluded",
+            "Fixed fallback · held for approval",
+            "Model calls: 0"
           ]
         }
       },

@@ -16,7 +16,7 @@
 // docstring (not guessed) as of the last time this file was updated:
 //
 //   POST {API_BASE}/decide     — requires header x-memorystand-secret
-//     body: { tenant_id, agent_id, action, rationale, query, k, task_id,
+//     body: { tenant_id, agent_id, target_entity, action, rationale, query, k, task_id,
 //             produced_memory_ids: string[], requires_approval }
 //     -> backend.memory.recall(tenant_id, agent_id, query, k) for "consulted",
 //        then backend.decisions.decide(tenant_id, agent_id, action, rationale,
@@ -122,6 +122,11 @@
   // start behind a dead security group, a typo'd ?api=) turns into a clear timeout error
   // within a few seconds instead of a spinner that spins forever with no explanation.
   var FETCH_TIMEOUT_MS = 10000;
+  // Requests start concurrently on page load. Generic API calls may update only
+  // transport reachability; /health owns the richer database/credential state.
+  var requestEpoch = 0;
+  var connectionStateEpoch = 0;
+  var healthStateEpoch = 0;
 
   function fetchWithTimeout(url, opts) {
     var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
@@ -317,6 +322,12 @@
     if (opts.isChosen) {
       topChildren.push(el("span", { class: "badge green", text: "chose this action" }));
     }
+    if (opts.eligibility) {
+      topChildren.push(el("span", {
+        class: "badge " + (opts.eligibility === "decision eligible" ? "green" : "amber"),
+        text: opts.eligibility,
+      }));
+    }
     var top = el("div", { class: "memory-top" }, topChildren);
     var attrLine = null;
     if (m.entity || m.attribute_key) {
@@ -332,6 +343,7 @@
   // -------------------------------------------------------------- API layer
 
   function apiPost(path, body, extraHeaders) {
+    var epoch = ++requestEpoch;
     var url = API_BASE + path;
     var headers = { "Content-Type": "application/json" };
     Object.keys(extraHeaders || {}).forEach(function (k) {
@@ -356,16 +368,17 @@
           });
       })
       .then(function (result) {
-        markConnected(true);
+        markConnected(true, epoch);
         return result;
       })
       .catch(function (err) {
-        markConnected(false);
+        markConnected(false, epoch);
         return { ok: false, status: 0, data: null, rawText: "", networkError: err };
       });
   }
 
   function apiGet(path, params) {
+    var epoch = ++requestEpoch;
     var qsStr = new URLSearchParams(params || {}).toString();
     var url = API_BASE + path + (qsStr ? "?" + qsStr : "");
     return fetchWithTimeout(url, { method: "GET" })
@@ -381,11 +394,11 @@
         });
       })
       .then(function (result) {
-        markConnected(true);
+        markConnected(true, epoch);
         return result;
       })
       .catch(function (err) {
-        markConnected(false);
+        markConnected(false, epoch);
         return { ok: false, status: 0, data: null, rawText: "", networkError: err };
       });
   }
@@ -425,11 +438,50 @@
 
   var statusDot = $("statusDot");
   var statusText = $("statusText");
+  var heroStatus = $("heroStatus");
+  var heroStatusDot = $("heroStatusDot");
+  var heroStatusText = $("heroStatusText");
+  var SEEDED_TENANT_ID = "9c8f6e5a-9d1a-4a1c-8f2e-3b6d1c7a4e10";
+  var SEEDED_AGENT_ID = "1a2b3c4d-5e6f-4708-9a0b-1c2d3e4f5061";
+  var publicDemoCredential = "";
+  var publicDemoTenantId = SEEDED_TENANT_ID;
   $("apiBaseLabel").textContent = API_BASE;
 
-  function markConnected(ok) {
+  function markConnected(ok, epoch, health) {
+    var hasHealth = Boolean(health);
+    // Once a current /health response established database + credential state,
+    // a later generic /recall completion must not downgrade the pill to the
+    // weaker "HTTP API reachable" label. Network failure is still allowed to
+    // override it, because that is new evidence that the public surface is down.
+    if (ok && !hasHealth && healthStateEpoch > 0) return;
+    if (epoch !== undefined && epoch < connectionStateEpoch) return;
+    if (epoch !== undefined) connectionStateEpoch = epoch;
+    if (hasHealth && epoch !== undefined) healthStateEpoch = epoch;
     statusDot.className = "status-dot " + (ok ? "ok" : "down");
-    statusText.textContent = ok ? "API reachable" : "API unreachable";
+    var databaseReachable = hasHealth && health.database === "reachable";
+    var interactiveReady = Boolean(databaseReachable && health.demo && health.demo.credential);
+    if (!ok) {
+      statusText.textContent = "API unreachable";
+    } else if (hasHealth && !databaseReachable) {
+      statusText.textContent = "API reachable · database unavailable";
+    } else if (hasHealth && !interactiveReady) {
+      statusText.textContent = "Read-only API ready · demo credential unavailable";
+    } else {
+      statusText.textContent = hasHealth ? "Interactive demo ready" : "HTTP API reachable";
+    }
+    if (heroStatus && heroStatusDot && heroStatusText) {
+      heroStatus.className = "hero-note" + (interactiveReady ? "" : " degraded");
+      heroStatusDot.className = "status-dot " + (interactiveReady ? "ok" : "down");
+      heroStatusText.textContent = !ok
+        ? "Live API unavailable · the explanation remains readable, but interactive proof cannot run"
+        : (!hasHealth
+          ? "HTTP API reachable · health details unavailable, so interactive proof is not confirmed"
+          : (!databaseReachable
+          ? "HTTP API reachable · CockroachDB unavailable, so live memory proof cannot run"
+          : (!interactiveReady
+            ? "CockroachDB reachable · read-only proof works, but no public interactive credential is available"
+            : "Live CockroachDB-backed demo · public tenant-scoped credential · no account needed")));
+    }
   }
 
   // Fill in the published demo credential, and say plainly what it can and cannot do. A judge
@@ -437,10 +489,15 @@
   // is deliberately public AND deliberately powerless outside one tenant.
   function applyDemoCredential(demo) {
     if (!demo || !demo.credential) return;
+    publicDemoCredential = String(demo.credential);
+    if (demo.tenant_id) publicDemoTenantId = String(demo.tenant_id);
     var secretInput = $("sharedSecret");
     var tenantInput = $("tenantId");
-    if (secretInput && !secretInput.value) secretInput.value = demo.credential;
-    if (tenantInput && !tenantInput.value) tenantInput.value = demo.tenant_id;
+    if (secretInput && !secretInput.value) secretInput.value = publicDemoCredential;
+    if (tenantInput &&
+        (!tenantInput.value || tenantInput.value.trim() === SEEDED_TENANT_ID)) {
+      tenantInput.value = publicDemoTenantId;
+    }
     if (runGuidedDemoBtn) runGuidedDemoBtn.disabled = false;
     var label = document.querySelector('label[for="sharedSecret"] .hint');
     if (label) {
@@ -449,36 +506,35 @@
   }
 
   function checkConnection() {
+    var epoch = ++requestEpoch;
     statusDot.className = "status-dot";
     statusText.textContent = "checking…";
     return fetchWithTimeout(API_BASE + "/health", { method: "GET" })
       .then(function (res) {
-        markConnected(true);
         // Auto-fill the public demo credential so a reviewer never has to be handed one, or
         // type one, to drive the write routes. It is safe to publish precisely because the
         // server scopes it to a single tenant (handler._scope_tenant) -- 401 for anything else.
         // Nothing is overwritten if the visitor has already typed their own secret.
         return res.json().then(function (h) {
+          markConnected(true, epoch, h);
           applyDemoCredential(h && h.demo);
           return h;
-        }).catch(function () { return null; });
+        }).catch(function () {
+          markConnected(true, epoch, null);
+          return null;
+        });
       })
       .catch(function () {
         // A same-origin-policy / network failure / timeout means truly unreachable.
-        // Any HTTP response at all (even 404, if /health isn't implemented)
-        // still proves the server is up, and is handled in the .then above.
-        markConnected(false);
+        // Any HTTP response proves only that the HTTP surface answered. The
+        // parsed health body separately decides whether CockroachDB and the
+        // public interactive credential are ready.
+        markConnected(false, epoch);
         return null;
       });
   }
 
-  checkConnection();
-
-  // Stable identifiers for the isolated public demo tenant. They are declared
-  // before the guided path because that path starts during page load, not only
-  // after the Advanced workspace is opened.
-  var SEEDED_TENANT_ID = "9c8f6e5a-9d1a-4a1c-8f2e-3b6d1c7a4e10";
-  var SEEDED_AGENT_ID = "1a2b3c4d-5e6f-4708-9a0b-1c2d3e4f5061";
+  var initialHealthCheck = checkConnection();
 
   // --------------------------------------------------------- guided judge path
   // The default page is deliberately not the four-form operator dashboard. It
@@ -487,11 +543,22 @@
   // retrieval receipt. Raw JSON and all manual controls remain below under
   // "Advanced workspace".
   var GUIDED_QUERY = "payments-service p99 latency above 2s, error rate climbing";
+  var GUIDED_ENTITY = "payments-service";
   var guidedResult = $("guidedResult");
   var runGuidedDemoBtn = $("runGuidedDemo");
   var inspectGuidedReceiptBtn = $("inspectGuidedReceipt");
   var guidedInstruction = $("guidedInstruction");
   var lastGuidedDecisionId = null;
+
+  function guidedTenantId() {
+    return publicDemoTenantId || SEEDED_TENANT_ID;
+  }
+
+  function guidedSecretHeaders() {
+    return publicDemoCredential
+      ? { "x-memorystand-secret": publicDemoCredential }
+      : {};
+  }
 
   function actionLabel(value) {
     return String(value || "unknown").replace(/_/g, " ");
@@ -500,8 +567,9 @@
   function findGuidedMemories(rows) {
     var list = rows || [];
     var restart = list.find(function (m) {
-      return String(m.attribute_value || "").toLowerCase() === "restart_service" ||
-        String(m.content || "").toLowerCase().indexOf("restart_service") !== -1;
+      return matchesGuidedEntity(m) &&
+        (String(m.attribute_value || "").toLowerCase() === "restart_service" ||
+          String(m.content || "").toLowerCase().indexOf("restart_service") !== -1);
     }) || null;
     var verified = list.find(function (m) {
       return m.trust_tier === "verified" &&
@@ -509,6 +577,18 @@
           String(m.content || "").toLowerCase().indexOf("scale_up") !== -1);
     }) || null;
     return { restart: restart, verified: verified };
+  }
+
+  function normalizedEntity(value) {
+    return String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[\s_-]+/g, "");
+  }
+
+  function matchesGuidedEntity(memory) {
+    return Boolean(memory) &&
+      normalizedEntity(memory.entity) === normalizedEntity(GUIDED_ENTITY);
   }
 
   function guidedMemoryCard(memory, opts) {
@@ -551,21 +631,23 @@
           explain: "Closest word match. The page cleared, but the outcome was never independently corroborated.",
         }),
         guidedMemoryCard(pair.verified, {
-          action: "Scale up",
+          action: "Scale up · " + String(pair.verified.entity || "service missing"),
           stronger: true,
-          explain: "Farther word match. CloudWatch-backed standing gives this memory authority the restart does not have.",
+          explain: matchesGuidedEntity(pair.verified) && pair.verified.action_eligible === true
+            ? "Farther word match. This matching receipt-backed row is eligible for decision context."
+            : "Farther word match, but it is not eligible for this service. It remains visible for audit only.",
         }),
       ])
     );
     guidedInstruction.textContent =
-      "The restart is closer, but closeness is not proof. Click “Run the live decision” to see which memory may steer.";
+      "Closeness is not proof, and a different service is not the same subject. Click “Run the live decision” to inspect eligibility and exclusions.";
   }
 
   function loadGuidedComparison() {
     clear(guidedResult);
     guidedResult.appendChild(placeholder("Loading the decisive memories from the live deployment…"));
     apiGet("/recall", {
-      tenant_id: SEEDED_TENANT_ID,
+      tenant_id: guidedTenantId(),
       q: GUIDED_QUERY,
       k: 5,
     }).then(function (result) {
@@ -579,31 +661,176 @@
     });
   }
 
+  function assessGuidedDecision(data) {
+    data = data || {};
+    var consulted = Array.isArray(data.consulted) ? data.consulted : [];
+    var pair = findGuidedMemories(consulted);
+    var citedIds = Array.isArray(data.cited_memory_ids) ? data.cited_memory_ids : [];
+    var chosenId = citedIds[0] || null;
+    var chosen = chosenId
+      ? consulted.find(function (m) { return m.memory_id === chosenId; }) || null
+      : null;
+    var eligibleIds = Array.isArray(data.eligible_memory_ids) ? data.eligible_memory_ids : [];
+    var excluded = Array.isArray(data.excluded_memories) ? data.excluded_memories : [];
+    var memoryActuallyDecided = data.reasoning_source === "fallback_memory" && Boolean(chosen);
+    var restartExcluded = Boolean(pair.restart) && excluded.some(function (row) {
+      return row.memory_id === pair.restart.memory_id &&
+        row.reason === "trust_tier_not_eligible";
+    });
+    var wrongRowExcluded = Boolean(pair.verified) && excluded.some(function (row) {
+      return row.memory_id === pair.verified.memory_id &&
+        row.reason === "entity_mismatch";
+    });
+    var passed =
+      memoryActuallyDecided &&
+      data.target_entity === GUIDED_ENTITY &&
+      data.action === "scale_up" &&
+      data.status === "held_for_approval" &&
+      data.model_calls === 0 &&
+      Boolean(pair.restart) &&
+      matchesGuidedEntity(pair.restart) &&
+      chosen.trust_tier === "verified" &&
+      eligibleIds.indexOf(chosen.memory_id) !== -1 &&
+      matchesGuidedEntity(chosen) &&
+      chosen.memory_id !== pair.restart.memory_id &&
+      typeof pair.restart.distance === "number" &&
+      typeof chosen.distance === "number" &&
+      pair.restart.distance < chosen.distance;
+    var wrongEntityRefused =
+      restartExcluded &&
+      wrongRowExcluded &&
+      data.target_entity === GUIDED_ENTITY &&
+      Boolean(pair.restart) &&
+      Boolean(pair.verified) &&
+      !matchesGuidedEntity(pair.verified) &&
+      eligibleIds.length === 0 &&
+      citedIds.length === 0 &&
+      !chosen &&
+      data.reasoning_source === "fallback_heuristic" &&
+      data.action === "scale_up" &&
+      data.status === "held_for_approval" &&
+      data.model_calls === 0;
+    return {
+      passed: passed,
+      wrongEntityRefused: wrongEntityRefused,
+      consulted: consulted,
+      pair: pair,
+      chosen: chosen,
+      excluded: excluded,
+    };
+  }
+
+  function assessGuidedReceipt(data, expectedDecisionId) {
+    data = data || {};
+    var decision = data.decision || {};
+    var hasRankedReceipt = Array.isArray(data.recalled_as_of);
+    var recalled = hasRankedReceipt ? data.recalled_as_of : [];
+    var pair = findGuidedMemories(recalled);
+    var excludedAsOf = Array.isArray(data.excluded_memories_as_of)
+      ? data.excluded_memories_as_of
+      : [];
+    var eligibleAsOf = Array.isArray(data.eligible_memory_ids_as_of)
+      ? data.eligible_memory_ids_as_of
+      : null;
+    var baseReceipt =
+      hasRankedReceipt &&
+      !data.recall_note &&
+      !data.policy_note &&
+      decision.query_text === GUIDED_QUERY &&
+      decision.target_entity === GUIDED_ENTITY &&
+      (!expectedDecisionId || decision.decision_id === expectedDecisionId) &&
+      Boolean(pair.restart) &&
+      matchesGuidedEntity(pair.restart);
+    var wrongEntityRefused = baseReceipt &&
+      Boolean(pair.verified) &&
+      Array.isArray(eligibleAsOf) &&
+      eligibleAsOf.length === 0 &&
+      excludedAsOf.some(function (row) {
+        return row.memory_id === pair.restart.memory_id &&
+          row.reason === "trust_tier_not_eligible";
+      }) &&
+      excludedAsOf.some(function (row) {
+        return row.memory_id === pair.verified.memory_id &&
+          row.reason === "entity_mismatch";
+      });
+    var matchingAuthority = baseReceipt &&
+      Boolean(pair.verified) &&
+      matchesGuidedEntity(pair.verified) &&
+      Array.isArray(eligibleAsOf) &&
+      eligibleAsOf.indexOf(pair.verified.memory_id) !== -1;
+    var passed =
+      (wrongEntityRefused || matchingAuthority) &&
+      typeof pair.restart.distance === "number" &&
+      typeof pair.verified.distance === "number" &&
+      pair.restart.distance < pair.verified.distance;
+    return {
+      passed: passed,
+      wrongEntityRefused: wrongEntityRefused,
+      matchingAuthority: matchingAuthority,
+      recalled: recalled,
+      pair: pair,
+    };
+  }
+
+  function guidedDecisionCopy(data) {
+    var assessment = assessGuidedDecision(data);
+    if (assessment.passed) {
+      return {
+        headline: "scale up wins on trust",
+        explanation:
+          "The closer unconfirmed restart remained visible, but it did not steer the action. " +
+          "The verified memory supplied the recommendation, and the high-risk action stayed behind human approval.",
+      };
+    }
+    if (assessment.wrongEntityRefused) {
+      return {
+        headline: "wrong service — proof refused",
+        explanation:
+          "The checkout-api scale-up memory stayed visible in recall, but target_entity=" +
+          GUIDED_ENTITY +
+          " excluded it from decision context. The disclosed fixed fallback selected scale up; no mismatched memory was cited.",
+      };
+    }
+    if (assessment.chosen && !matchesGuidedEntity(assessment.chosen)) {
+      return {
+        headline: "policy failure — wrong service cited",
+        explanation:
+          "The cited memory belongs to " + String(assessment.chosen.entity || "an unknown entity") +
+          ", not " + GUIDED_ENTITY + ". This response is unsafe and is shown as a failure, not proof.",
+      };
+    }
+    return {
+      headline: actionLabel(data && data.action) + " returned",
+      explanation:
+        "This live response did not prove the seeded trust-over-proximity path. " +
+        "It returned reasoning_source=" + String((data && data.reasoning_source) || "unknown") +
+        ", status=" + String((data && data.status) || "unknown") +
+        ", and action=" + String((data && data.action) || "unknown") +
+        ". The raw receipt is preserved below without rewriting the result as a success.",
+    };
+  }
+
   function renderGuidedDecision(data) {
     clear(guidedResult);
-    var consulted = data.consulted || [];
-    var pair = findGuidedMemories(consulted);
-    var chosenId = Array.isArray(data.cited_memory_ids) ? data.cited_memory_ids[0] : null;
-    var chosen = chosenId
-      ? consulted.find(function (m) { return m.memory_id === chosenId; })
-      : pair.verified;
+    var assessment = assessGuidedDecision(data);
+    var pair = assessment.pair;
+    var chosen = assessment.chosen;
+    var expectedTrustOverrule = assessment.passed;
+    var expectedRefusal = assessment.wrongEntityRefused;
+    var expectedPolicy = expectedTrustOverrule || expectedRefusal;
+    var copy = guidedDecisionCopy(data);
     var statusText = data.status === "held_for_approval"
       ? "Held for human approval"
       : "Cleared to proceed";
     guidedResult.appendChild(
-      el("div", { class: "guided-verdict" }, [
+      el("div", { class: "guided-verdict" + (expectedPolicy ? "" : " unexpected") }, [
         el("div", {}, [
           el("span", {
-            class: "badge " + (data.status === "held_for_approval" ? "amber" : "green"),
-            text: statusText,
+            class: "badge " + (expectedPolicy ? "green" : "amber"),
+            text: expectedPolicy ? statusText : "Unexpected live result",
           }),
-          el("h4", { text: actionLabel(data.action) + " wins on trust" }),
-          el("p", {
-            text:
-              "The closer unconfirmed restart remained visible, but it did not steer the action. " +
-              "The " + trustTierLabel(chosen && chosen.trust_tier) +
-              " memory supplied the recommendation, and the high-risk action stayed behind human approval.",
-          }),
+          el("h4", { text: copy.headline }),
+          el("p", { text: copy.explanation }),
         ]),
         el("div", { class: "guided-metric" }, [
           el("span", { text: "model calls" }),
@@ -611,7 +838,7 @@
         ]),
       ])
     );
-    if (pair.restart && chosen) {
+    if (expectedTrustOverrule) {
       guidedResult.appendChild(
         el("div", { class: "guided-compare" }, [
           guidedMemoryCard(pair.restart, {
@@ -625,25 +852,57 @@
           }),
         ])
       );
+    } else if (expectedRefusal) {
+      guidedResult.appendChild(
+        el("div", { class: "guided-compare" }, [
+          guidedMemoryCard(pair.restart, {
+            action: "Closer: restart",
+            explain: "Unconfirmed, so it cannot steer.",
+          }),
+          guidedMemoryCard(pair.verified, {
+            action: "Excluded · " + String(pair.verified.entity || "wrong service"),
+            stronger: true,
+            explain: "Verified label, wrong service. Visible in recall; barred from decision context.",
+          }),
+        ])
+      );
     }
     guidedResult.appendChild(rawJsonBlock(data));
-    guidedInstruction.textContent =
-      "Result: trust outranked proximity, and safety still held the risky action. Inspect the CockroachDB receipt next.";
+    guidedInstruction.textContent = expectedTrustOverrule
+      ? "Result: matching, receipt-backed trust outranked proximity, and safety held the risky action. Inspect the CockroachDB receipt next."
+      : (expectedRefusal
+        ? "Result: wrong-service evidence was refused; the fixed fallback is labeled and the risky action remains held. Inspect the CockroachDB receipt next."
+        : "The live response differed from the expected candidate path. Inspect the raw receipt; this page will not relabel it as proof.");
   }
 
   function renderGuidedReceipt(data) {
     clear(guidedResult);
     var decision = data.decision || {};
-    var recalled = data.recalled_as_of || [];
-    var pair = findGuidedMemories(recalled);
+    var assessment = assessGuidedReceipt(data, lastGuidedDecisionId);
+    var recalled = assessment.recalled;
+    var pair = assessment.pair;
+    var receiptMatchesExpected = assessment.passed;
     guidedResult.appendChild(
-      el("div", { class: "guided-verdict" }, [
+      el("div", { class: "guided-verdict" + (receiptMatchesExpected ? "" : " unexpected") }, [
         el("div", {}, [
-          el("span", { class: "badge purple", text: "CockroachDB receipt" }),
-          el("h4", { text: "The ranked context was preserved" }),
+          el("span", {
+            class: "badge " + (receiptMatchesExpected ? "purple" : "amber"),
+            text: receiptMatchesExpected ? "CockroachDB receipt" : "Receipt incomplete",
+          }),
+          el("h4", {
+            text: receiptMatchesExpected
+              ? (assessment.wrongEntityRefused
+                ? "The ranked context and refusal were preserved"
+                : "The ranked context was preserved")
+              : "The expected ranked comparison was not available",
+          }),
           el("p", {
-            text:
-              "MemoryStand re-ran the recorded query at the decision timestamp. The old and new beliefs remain inspectable; nothing was overwritten to make the decision look cleaner.",
+            text: receiptMatchesExpected
+              ? (assessment.wrongEntityRefused
+                ? "MemoryStand re-ran the recorded query at the decision timestamp and preserved the wrong-service exclusion. Nothing was overwritten to make the decision look cleaner."
+                : "MemoryStand re-ran the recorded query at the decision timestamp. The old and new beliefs remain inspectable; nothing was overwritten to make the decision look cleaner.")
+              : (data.recall_note ||
+                "The response did not include both seeded memories with ranked distances, so this page does not claim a complete time-travel receipt."),
           }),
         ]),
         el("div", { class: "guided-metric" }, [
@@ -663,6 +922,10 @@
           el("strong", { text: decision.query_text || GUIDED_QUERY }),
         ]),
         el("div", { class: "receipt-line" }, [
+          el("span", { text: "Target service" }),
+          el("strong", { text: decision.target_entity || "not recorded" }),
+        ]),
+        el("div", { class: "receipt-line" }, [
           el("span", { text: "Closer memory" }),
           el("strong", {
             text: pair.restart
@@ -671,10 +934,12 @@
           }),
         ]),
         el("div", { class: "receipt-line" }, [
-          el("span", { text: "Stronger memory" }),
+          el("span", { text: assessment.wrongEntityRefused ? "Excluded memory" : "Stronger memory" }),
           el("strong", {
             text: pair.verified
-              ? "scale_up · " + trustTierLabel(pair.verified.trust_tier) + " · distance " + fmtNum(pair.verified.distance)
+              ? "scale_up · " + trustTierLabel(pair.verified.trust_tier) +
+                " · " + String(pair.verified.entity || "entity missing") +
+                " · distance " + fmtNum(pair.verified.distance)
               : "not returned",
           }),
         ]),
@@ -689,8 +954,11 @@
       ])
     );
     guidedResult.appendChild(rawJsonBlock(data));
-    guidedInstruction.textContent =
-      "Complete: a non-causal restart stayed visible, the verified memory guided, the action was held, and CockroachDB preserved the receipt.";
+    guidedInstruction.textContent = receiptMatchesExpected
+      ? (assessment.wrongEntityRefused
+        ? "Complete: the unconfirmed restart and wrong-service scale-up stayed visible, neither guided the action, and CockroachDB preserved the refusal."
+        : "Complete: a non-causal restart stayed visible, matching receipt-backed memory guided, the action was held, and CockroachDB preserved the receipt.")
+      : "The receipt was returned, but it did not prove every expected comparison. Review the raw response rather than treating this as a pass.";
   }
 
   if (runGuidedDemoBtn) {
@@ -701,9 +969,9 @@
       clear(guidedResult);
       guidedResult.appendChild(placeholder("Checking the tenant-scoped public demo credential…"));
 
-      var credentialReady = sharedSecret()
+      var credentialReady = publicDemoCredential
         ? Promise.resolve(true)
-        : checkConnection().then(function () { return Boolean(sharedSecret()); });
+        : checkConnection().then(function () { return Boolean(publicDemoCredential); });
 
       credentialReady.then(function (ready) {
         if (!ready) return null;
@@ -711,9 +979,10 @@
         clear(guidedResult);
         guidedResult.appendChild(placeholder("Calling the deployed /decide route…"));
         return apiPost("/decide", {
-          tenant_id: SEEDED_TENANT_ID,
+          tenant_id: guidedTenantId(),
           agent_id: SEEDED_AGENT_ID,
           query: GUIDED_QUERY,
+          target_entity: GUIDED_ENTITY,
           action: null,
           rationale: "Guided demo: compare trust standing against vector proximity.",
           k: 5,
@@ -723,7 +992,7 @@
           task_id: null,
           produced_memory_ids: [],
           requires_approval: false,
-        }, secretHeaders());
+        }, guidedSecretHeaders());
       }).then(function (result) {
         runGuidedDemoBtn.disabled = false;
         runGuidedDemoBtn.textContent = result ? "Run again" : "Retry live decision";
@@ -740,7 +1009,7 @@
         if (!result.ok || !result.data) {
           renderError(guidedResult, result);
           guidedInstruction.textContent =
-            "The live decision did not complete. The public credential may still be loading; check connection status and retry.";
+            "The live decision did not complete. Review the error above, check the connection status, and retry.";
           return;
         }
         lastGuidedDecisionId = result.data.decision_id || null;
@@ -762,7 +1031,7 @@
       clear(guidedResult);
       guidedResult.appendChild(placeholder("Reading the decision-time receipt from CockroachDB…"));
       apiGet("/timemachine", {
-        tenant_id: SEEDED_TENANT_ID,
+        tenant_id: guidedTenantId(),
         decision_id: lastGuidedDecisionId,
       }).then(function (result) {
         inspectGuidedReceiptBtn.disabled = false;
@@ -835,16 +1104,18 @@
   }
 
   loadSeededDemoBtn.addEventListener("click", function () {
-    $("tenantId").value = SEEDED_TENANT_ID;
+    $("tenantId").value = guidedTenantId();
     $("agentId").value = SEEDED_AGENT_ID;
-    runPreview(SEEDED_TENANT_ID);
+    runPreview(guidedTenantId());
   });
 
-  // Auto-run once on load with whatever tenant ID is currently in the field (the seeded
-  // UUID by default) -- a first-time visitor who never clicks anything still sees real
-  // data or a clear empty-state message instead of nothing.
-  runPreview($("tenantId").value.trim() || SEEDED_TENANT_ID);
-  loadGuidedComparison();
+  // Wait for /health before the initial reads so a rotated public demo tenant is
+  // adopted before any tenant-scoped request is sent. If /health is unavailable,
+  // checkConnection resolves to null and these reads still try the committed seed.
+  initialHealthCheck.then(function () {
+    runPreview($("tenantId").value.trim() || guidedTenantId());
+    loadGuidedComparison();
+  });
 
   function tenantId() {
     return $("tenantId").value.trim();
@@ -860,6 +1131,25 @@
     return s ? { "x-memorystand-secret": s } : {};
   }
 
+  function isUuid(value) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      .test(String(value || "").trim());
+  }
+
+  function validateOptionalUuid(fieldId, resultNode, label) {
+    var value = $(fieldId).value.trim();
+    if (!value || isUuid(value)) return true;
+    clear(resultNode);
+    resultNode.appendChild(
+      el("div", {
+        class: "error-banner",
+        text: label + " must be a UUID or left blank.",
+      })
+    );
+    $(fieldId).focus();
+    return false;
+  }
+
   // ============================================================ Panel 1
   // Incident feed -> POST /decide
 
@@ -869,6 +1159,18 @@
 
   decideForm.addEventListener("submit", function (evt) {
     evt.preventDefault();
+    if (!validateOptionalUuid("decideTaskId", decideResult, "Task / incident ID")) return;
+    if (!$("decideAction").value.trim() && !$("decideTargetEntity").value.trim()) {
+      clear(decideResult);
+      decideResult.appendChild(
+        el("div", {
+          class: "error-banner",
+          text: "Target service is required when MemoryStand selects the action.",
+        })
+      );
+      $("decideTargetEntity").focus();
+      return;
+    }
 
     var produced = $("decideProduced").value
       .split(",")
@@ -879,6 +1181,7 @@
       tenant_id: tenantId(),
       agent_id: agentId(),
       query: $("decideQuery").value,
+      target_entity: $("decideTargetEntity").value.trim() || null,
       // Blank on purpose is a real, supported request: omitting `action` lets the agent's
       // own reasoning path (memory fallback or model) pick one instead of the caller
       // dictating it -- see the reasoning_source explanation rendered below.
@@ -954,8 +1257,26 @@
     if (reasoningExplain) {
       decideResult.appendChild(el("p", { class: "verification-status-line", text: reasoningExplain }));
     }
+    if (data.target_entity) {
+      decideResult.appendChild(
+        el("div", { class: "kv-line" }, [
+          document.createTextNode("target service: "),
+          el("b", { text: data.target_entity }),
+        ])
+      );
+    }
 
     var consulted = (data.consulted || []).slice();
+    var eligibleIds = Array.isArray(data.eligible_memory_ids)
+      ? data.eligible_memory_ids.slice()
+      : [];
+    var excluded = Array.isArray(data.excluded_memories)
+      ? data.excluded_memories.slice()
+      : [];
+    var excludedById = {};
+    excluded.forEach(function (row) {
+      if (row && row.memory_id) excludedById[row.memory_id] = row.reason || "excluded";
+    });
     decideResult.appendChild(
       el("div", { class: "kv-line" }, [
         el("b", { text: String(consulted.length) }),
@@ -984,13 +1305,46 @@
 
       ranked.forEach(function (m, i) {
         decideResult.appendChild(
-          memoryRow(m, { rank: i + 1, isChosen: !!(chosen && m.memory_id === chosen.memory_id) })
+          memoryRow(m, {
+            rank: i + 1,
+            isChosen: !!(chosen && m.memory_id === chosen.memory_id),
+            eligibility: eligibleIds.indexOf(m.memory_id) !== -1
+              ? "decision eligible"
+              : (excludedById[m.memory_id]
+                ? "excluded: " + excludedById[m.memory_id].replace(/_/g, " ")
+                : null),
+          })
         );
       });
 
-      // This is the entire product argument in one on-screen moment: a memory closer in
-      // vector space lost to one with more trust standing, and nothing here asked a model.
-      if (chosen && nearest && chosen.memory_id !== nearest.memory_id) {
+      if (excluded.length) {
+        var mismatch = excluded.find(function (row) {
+          return row.reason === "entity_mismatch";
+        });
+        decideResult.appendChild(
+          el("div", { class: "overrule-banner" }, [
+            el("div", { class: "overrule-title" }, [
+              el("span", { class: "badge green", text: "subject policy enforced" }),
+              el("span", {
+                text: excluded.length + " recalled row(s) stayed visible but could not steer",
+              }),
+            ]),
+            el("p", {
+              class: "overrule-explain",
+              text: mismatch
+                ? "A row for " + String(mismatch.entity || "another service") +
+                  " was excluded from target " + String(data.target_entity || "the requested service") +
+                  ". Recall preserves it for audit without treating its trust label as authority here."
+                : "The response lists each excluded row and reason. Recall remains an audit surface; decision authority is narrower.",
+            }),
+          ])
+        );
+      }
+
+      // A named memory may be described as overruling proximity only when the backend
+      // explicitly cited it from the eligible decision context.
+      if (chosen && eligibleIds.indexOf(chosen.memory_id) !== -1 &&
+          nearest && chosen.memory_id !== nearest.memory_id) {
         decideResult.appendChild(
           el("div", { class: "overrule-banner" }, [
             el("div", { class: "overrule-title" }, [
@@ -1011,11 +1365,11 @@
             ]),
           ])
         );
-      } else if (chosen) {
+      } else if (chosen && eligibleIds.indexOf(chosen.memory_id) !== -1) {
         decideResult.appendChild(
           el("p", { class: "kv-line", text: "The memory that decided the action was also the nearest match here -- proximity and trust agreed." })
         );
-      } else if (nearest) {
+      } else if (nearest && eligibleIds.length) {
         // WHEN A MODEL ANSWERED, we cannot name the deciding memory: only
         // agent.py::_fallback_action writes "Chosen from memory <id>" into its rationale, and a
         // model returns free prose. Claiming an overrule here would be a guess, and this file
@@ -1027,7 +1381,9 @@
         // clicked. What IS provable from the response alone is what the ranking says: which
         // candidate is nearest, and which carries the most standing. Show exactly that, labelled
         // as a property of the candidates rather than a claim about what decided.
-        var strongest = ranked.slice().sort(function (a, b) {
+        var strongest = ranked.filter(function (row) {
+          return eligibleIds.indexOf(row.memory_id) !== -1;
+        }).sort(function (a, b) {
           return tierWeight(b.trust_tier) - tierWeight(a.trust_tier);
         })[0];
         // A REAL DISTANCE GAP IS REQUIRED, not just a different row. On the seeded demo tenant
@@ -1096,6 +1452,7 @@
 
   ingestForm.addEventListener("submit", function (evt) {
     evt.preventDefault();
+    if (!validateOptionalUuid("ingestTaskId", ingestResult, "Task / incident ID")) return;
 
     var body = {
       tenant_id: tenantId(),
@@ -1508,4 +1865,13 @@
     d.appendChild(pre);
     return d;
   }
+
+  // Browser-test seam: observable claim policy only, with no network or DOM
+  // dependency. The production page does not read this object.
+  window.MemoryStandJudge = Object.freeze({
+    assessDecision: assessGuidedDecision,
+    assessReceipt: assessGuidedReceipt,
+    decisionCopy: guidedDecisionCopy,
+    matchesGuidedEntity: matchesGuidedEntity,
+  });
 })();

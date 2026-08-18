@@ -30,16 +30,23 @@ Runtime: **98.048 seconds**
 - Repeated left-composed takes and an unchanged background make the film
   visually monotonous.
 
-The full audio transcript was extracted from the assembled master. Silence
-detection independently confirmed the long idle tails above.
+The full audio transcript was extracted from the assembled master, the film
+was listened to from **0:00 through 1:38.048**, and a frame was sampled every
+two seconds. Silence detection independently confirmed the long idle tails
+above. The review is not based on the handover script or isolated screenshots.
 
-## Replacement cut
+## First replacement cut — later rejected by product-integrity review
 
 File: `MemoryStand-Remotion-large-keypoints-subtitle-safe-2026-08-18.mp4`
 SHA-256: `d5ca8ea60407ccd1ec02b46da953daade8bb39c229220a25cb900cce6fb7c44a`
 Runtime: **72.597 seconds**
 
-**Verdict: KEEP**
+**Verdict: REJECT**
+
+The visual and subtitle observations below remain true, but the product receipt at roughly
+**0:19.5–0:22.1** shows a `payments-service` query choosing a `checkout-api` scale-up row.
+The later claim that wrong-entity evidence is refused therefore contradicts the picture.
+Presentation gates cannot make that receipt acceptable.
 
 - **0:08–0:16.25 — the false-cause explanation is now concrete.** At about
   **0:09.85**, the frame shows `RESTART → ALERT QUIET → LATENCY FLAT`,

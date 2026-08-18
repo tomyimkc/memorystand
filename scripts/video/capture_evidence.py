@@ -255,6 +255,7 @@ def main() -> int:
         "tenant_id": TENANT_ID,
         "agent_id": AGENT_ID,
         "query": query,
+        "target_entity": "checkout-api",
         # Deliberately NO "action" and NO "rationale".
         #
         # Supplying them makes /decide skip reasoning entirely and just record what it

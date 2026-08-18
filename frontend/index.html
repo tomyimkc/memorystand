@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230a121a'/%3E%3Cpath d='M17 47V17h8l7 14 7-14h8v30h-8V31l-7 13-7-13v16z' fill='%236de0a6'/%3E%3C/svg%3E">
 <title>MemoryStand — memory that must prove it worked</title>
 <style>
   :root {
@@ -196,6 +197,7 @@
     font-size: 13px;
   }
   .hero-note .status-dot { width: 8px; height: 8px; }
+  .hero-note.degraded { color: var(--red); }
 
   .causal-card {
     position: relative;
@@ -634,6 +636,10 @@
     border-radius: 14px;
     background: linear-gradient(135deg, rgba(18, 51, 34, 0.66), rgba(10, 18, 26, 0.96));
   }
+  .guided-verdict.unexpected {
+    border-color: rgba(245, 185, 61, 0.66);
+    background: linear-gradient(135deg, rgba(58, 46, 15, 0.58), rgba(10, 18, 26, 0.96));
+  }
   .guided-verdict h4 { margin: 0; font-size: 24px; }
   .guided-verdict p { margin: 7px 0 0; color: var(--text-dim); font-size: 13px; }
   .guided-metric {
@@ -1048,9 +1054,9 @@
         <a class="primary button-link" href="#guided-demo">Try the guided demo</a>
         <a class="ghost button-link" href="https://github.com/tomyimkc/memorystand" target="_blank" rel="noreferrer">Read the source</a>
       </div>
-      <p class="hero-note">
-        <span class="status-dot ok" aria-hidden="true"></span>
-        Live CockroachDB-backed demo · public tenant-scoped credential · no account needed
+      <p class="hero-note" id="heroStatus" aria-live="polite">
+        <span class="status-dot" id="heroStatusDot" aria-hidden="true"></span>
+        <span id="heroStatusText">Checking the live CockroachDB-backed demo…</span>
       </p>
     </div>
     <aside class="causal-card" aria-label="Why a service restart is not proof">
@@ -1081,14 +1087,14 @@
       <article class="step-card active">
         <span class="step-index">1</span>
         <h3>Load the incident</h3>
-        <p>Read two competing memories: a closer restart story and a farther CloudWatch-backed scale-up.</p>
+        <p>Read two competing memories: a closer restart story and a farther scale-up row whose service and receipt still need checking.</p>
         <div class="step-result">Expected: both remain inspectable.</div>
       </article>
       <article class="step-card">
         <span class="step-index">2</span>
         <h3>Ask MemoryStand</h3>
-        <p>Run the real <code>/decide</code> path. Trust outranks proximity and the risky action is held.</p>
-        <div class="step-result">Expected: scale up · held for approval.</div>
+        <p>Run the real <code>/decide</code> path. Only matching, receipt-backed evidence may steer; otherwise the fixed fallback is disclosed.</p>
+        <div class="step-result">Expected policy: wrong-service proof refused.</div>
       </article>
       <article class="step-card">
         <span class="step-index">3</span>
@@ -1103,9 +1109,9 @@
     <div class="section-head">
       <div>
         <p class="eyebrow">Live product</p>
-        <h2 id="guided-title">Trust beats proximity.</h2>
+        <h2 id="guided-title">Proof must match the service.</h2>
       </div>
-      <p>The seeded incident is designed to make the dangerous memory look more relevant. Run it and inspect the real response.</p>
+      <p>The seeded incident is designed to make dangerous evidence look relevant. Run it and verify what was eligible, excluded, and cited.</p>
     </div>
     <div class="judge-stage">
       <section class="guided-card" aria-live="polite">
@@ -1118,9 +1124,9 @@
         </div>
         <div class="guided-body">
           <div class="guided-summary" aria-label="Guided demo facts">
-            <div class="summary-stat"><span>Closer memory</span><strong>Restart · unconfirmed</strong></div>
-            <div class="summary-stat"><span>Stronger memory</span><strong>Scale up · verified</strong></div>
-            <div class="summary-stat"><span>Policy</span><strong>Risky action held</strong></div>
+            <div class="summary-stat"><span>Expected closer memory</span><strong>Restart · unconfirmed</strong></div>
+            <div class="summary-stat"><span>Expected wrong-service row</span><strong>Visible · excluded</strong></div>
+            <div class="summary-stat"><span>Expected policy</span><strong>Fallback disclosed</strong></div>
           </div>
           <div id="guidedResult" class="result-area">
             <p class="placeholder">Loading the two decisive memories from the live deployment…</p>
@@ -1138,7 +1144,7 @@
           <ul>
             <li>The restart is the closest word match.</li>
             <li>It is still <strong>unconfirmed</strong>.</li>
-            <li>The verified scale-up wins and stays held for a person.</li>
+            <li>The <strong>checkout-api</strong> scale-up row stays visible but cannot justify payments-service.</li>
             <li>The response reports the model-call count.</li>
           </ul>
         </section>
@@ -1180,7 +1186,7 @@
     </div>
     <div class="architecture-grid">
       <article class="architecture-card"><span class="icon">CR</span><h3>CockroachDB ledger</h3><p>Stores facts, sources, trust tiers, ranked retrieval receipts, and later decisions together. Time travel reconstructs what the agent knew.</p></article>
-      <article class="architecture-card"><span class="icon">CW</span><h3>CloudWatch check</h3><p>Promotion requires the external system of record to agree. A direction, amount, metric, or entity mismatch refuses the claim.</p></article>
+      <article class="architecture-card"><span class="icon">CW</span><h3>CloudWatch check</h3><p>Metric-based promotion requires the external system of record to agree. A direction, amount, metric, or entity mismatch refuses the claim; non-metric reports cannot reach verified.</p></article>
       <article class="architecture-card"><span class="icon">0</span><h3>Model-free authority</h3><p>A model may propose an action, but it does not promote its own memory. The authority path reports zero model calls.</p></article>
     </div>
   </section>
@@ -1232,14 +1238,18 @@
       Post a synthetic alert. The agent recalls what it knows, then records the action it
       took and why — every consulted memory is shown ranked by distance with its trust
       tier. Leave "Proposed action" blank. The seeded default alert is built so a closer
-      <em>unconfirmed</em> restart loses to a farther <em>verified</em> scale-up — that is
-      the thesis, with zero model calls on the promotion path.
+      <em>unconfirmed</em> restart cannot steer. A farther row also needs the same target
+      service and a complete outcome receipt before it may enter decision context.
     </p>
 
     <form class="panel-form" id="form-decide">
       <div class="field span2">
         <label for="decideQuery">Alert / recall query</label>
         <textarea id="decideQuery" required placeholder="payments-service p99 latency above 2s, error rate climbing">payments-service p99 latency above 2s, error rate climbing</textarea>
+      </div>
+      <div class="field">
+        <label for="decideTargetEntity">Target service <span class="hint">(required when the agent decides)</span></label>
+        <input type="text" id="decideTargetEntity" value="payments-service" placeholder="payments-service">
       </div>
       <div class="field">
         <label for="decideAction">Proposed action <span class="hint">(optional — blank lets the agent decide)</span></label>
@@ -1254,8 +1264,8 @@
         <textarea id="decideRationale" required placeholder="Recent memory says restarting payments-service clears the stuck connection pool.">Recent memory says restarting payments-service clears the stuck connection pool.</textarea>
       </div>
       <div class="field">
-        <label for="decideTaskId">Task / incident ID <span class="hint">(optional)</span></label>
-        <input type="text" id="decideTaskId" placeholder="inc-4471">
+        <label for="decideTaskId">Task / incident UUID <span class="hint">(optional)</span></label>
+        <input type="text" id="decideTaskId" inputmode="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
       </div>
       <div class="field">
         <label for="decideProduced">Produced memory IDs <span class="hint">(comma-separated, optional)</span></label>
@@ -1316,8 +1326,8 @@
         <input type="text" id="ingestSource" placeholder="runbook:db-failover">
       </div>
       <div class="field">
-        <label for="ingestTaskId">Task / incident ID <span class="hint">(optional)</span></label>
-        <input type="text" id="ingestTaskId" placeholder="inc-4471">
+        <label for="ingestTaskId">Task / incident UUID <span class="hint">(optional)</span></label>
+        <input type="text" id="ingestTaskId" inputmode="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
       </div>
       <div class="field span2">
         <button class="primary" type="submit" id="ingestSubmit">Submit to /ingest</button>

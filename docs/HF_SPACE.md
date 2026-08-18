@@ -25,8 +25,16 @@ The intended repository is `tomyimkc/memorystand`.
 ```bash
 hf auth whoami
 hf repo create tomyimkc/memorystand --repo-type space --space-sdk static
-hf upload tomyimkc/memorystand /tmp/memorystand-hf-space . --repo-type space
+python3 scripts/build_hf_space.py \
+  --out /tmp/memorystand-hf-space \
+  --publish tomyimkc/memorystand
 ```
+
+Use the builder's `--publish` path rather than a bare `hf upload`. A folder
+upload replaces files with matching names but leaves unrelated remote files
+behind; the builder deletes stale Space files (while preserving Hugging Face's
+managed `.gitattributes`) and uses the observed parent commit to avoid
+overwriting a concurrent update.
 
 The public app URL is:
 
@@ -49,12 +57,13 @@ https://tomyimkc-memorystand.static.hf.space/
 After upload, verify in a logged-out browser:
 
 1. The page loads and reports `API reachable`.
-2. The first comparison shows a closer `restart_service` memory as
-   `unconfirmed` and a farther `scale_up` memory as `verified`.
-3. **Run the live decision** returns `scale up`, `held for human approval`, and
-   the response's actual model-call count.
-4. **Inspect CockroachDB receipt** shows the recorded query and both ranked
-   memories.
+2. The first comparison shows whatever the deployed tenant actually returns;
+   the page labels the seeded pair as **Expected**, never as a live fact.
+3. **Run the live decision** names `target_entity=payments-service`. Any
+   wrong-service or legacy receiptless row remains visible in `consulted` but
+   is excluded from decision context; the page must not relabel it as proof.
+4. **Inspect CockroachDB receipt** shows the recorded query, target entity,
+   ranked recall, eligible ids, and exclusions when the GC window permits.
 5. Desktop and 390 px mobile views have no horizontal overflow.
 
 If the live writes fail only on the Space, inspect the browser's preflight and

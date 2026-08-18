@@ -93,7 +93,7 @@ def test_cross_examine_reruns_the_ranked_query_when_a_receipt_exists(tenant_id, 
     decision = decisions.decide(
         tenant_id, agent_id, action="scale_up", rationale="r",
         consulted_memory_ids=[r["memory_id"] for r in recalled],
-        query_text=query, recall_k=5,
+        query_text=query, recall_k=5, target_entity="checkout-api",
     )
 
     out = replay.cross_examine(tenant_id, decision["decision_id"])
@@ -103,6 +103,10 @@ def test_cross_examine_reruns_the_ranked_query_when_a_receipt_exists(tenant_id, 
     # The distinguishing property vs a belief-state dump: real per-row distances, in order.
     assert all("distance" in r for r in ranked)
     assert [r["distance"] for r in ranked] == sorted(r["distance"] for r in ranked)
+    assert out["decision"]["target_entity"] == "checkout-api"
+    assert isinstance(out["eligible_memory_ids_as_of"], list)
+    assert isinstance(out["excluded_memories_as_of"], list)
+    assert out["policy_note"] is None
 
 
 def test_cross_examine_refuses_to_fake_a_receipt_it_does_not_have(tenant_id, agent_id):

@@ -16,10 +16,18 @@ That sentence is the editorial test for every beat. The narration assumes the vi
 never used an AI agent, CockroachDB, AWS, vector search, or an incident-management tool.
 The film uses one large headline and only the decisive state or number. Five shots begin on the
 medium-shot presenter, then hand the complete 1920×1080 frame to focused receipts derived from
-captured deployed API, CockroachDB, and CloudWatch evidence. The receipt-first beat now uses a
-focused crop of an actual deployed `/decide` interaction: a closer unconfirmed restart loses to
-a farther verified scale-up, with `model calls: 0` visible in the live product. A whole-dashboard
-shrink was rejected because its product words were unreadable at normal playback size.
+captured deployed API, CockroachDB, and CloudWatch evidence. The previous receipt-first beat is
+rejected because it let a `checkout-api` row steer a `payments-service` incident. The
+replacement must show the corrected subject policy: the closer unconfirmed restart and farther
+wrong-service scale-up stay visible, both are excluded from authority, the fixed fallback is
+disclosed, and `model calls: 0` remains visible. A whole-dashboard shrink remains rejected
+because its product words are unreadable at normal playback size.
+
+Before a deployed interaction becomes a “success” receipt, verify the cited memory's entity
+and the receipt that earned its trust tier. A green label is not enough: if the entity differs,
+the row is evidence of exclusion, not evidence for the action. Capture the structured target,
+eligible ids, exclusion reasons, cited ids, reasoning source, approval state, and model-call
+count together so the picture cannot imply a stronger result than the API returned.
 
 ## Nine-beat arc
 
@@ -27,8 +35,8 @@ Causal order. The Grok source take remains 10 seconds, but Remotion trims the fi
 measured speech plus a 0.65-second hold. Fixed generation length is not editorial runtime.
 
 1. **A dangerous coincidence** — an honest restart is remembered as the fix.
-2. **Why that is false** — in a clearly labeled seeded decision-rule test, the page cleared
-   while service latency stayed essentially flat (223 ms before, 220 ms after, versus a claimed
+2. **Why that is false** — in a clearly labeled seeded decision-rule test, the alert went
+   quiet while service latency changed only 3 ms (223 ms before, 220 ms after, versus a claimed
    112 ms improvement); timing alone does not prove the reboot caused recovery. The film states
    that these numbers are not production CloudWatch data.
 3. **Receipt first, keys second** — a memory must show a receipt before it acts alone.
@@ -73,6 +81,7 @@ python scripts/presenter/xai_video.py
 python scripts/presenter/make_clips.py --verify-only
 
 # Build five focused 1920x1080 receipts from captured evidence and fixed test claims.
+python scripts/video/capture_guided_refusal.py
 python scripts/video/build_presenter_receipts.py
 
 # Remotion compose and final-master verification.

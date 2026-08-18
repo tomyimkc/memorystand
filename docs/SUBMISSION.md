@@ -76,7 +76,7 @@ model. Lead with that behavior, not an unbounded market claim.
 
 | # | Field | Id | Required | Status |
 |---|---|---|---|---|
-| 1 | Demo app URL | 27812 | Yes | Ready: use `https://tomyimkc-memorystand.static.hf.space/` (current public judge-facing build). AWS Amplify remains reachable at `https://main.d19xad9aeccy3e.amplifyapp.com`, but still serves the earlier UI until AWS authentication is renewed and the frontend is redeployed. Do not use the raw Lambda Function URL. |
+| 1 | Demo app URL | 27812 | Yes | Use `https://tomyimkc-memorystand.static.hf.space/` only after the corrected exact bundle is published and verified logged out. AWS Amplify remains reachable at `https://main.d19xad9aeccy3e.amplifyapp.com`, but serves an earlier UI. Do not use the raw Lambda Function URL. |
 | 2 | Testing credentials/instructions | 28078 | No | Drafted below |
 | 3 | Public repo URL | 27813 | Yes | Ready: `https://github.com/tomyimkc/memorystand` is public (verified 2026-08-07) |
 | 4 | OSS license file URL | 27814 | Yes | Ready: `https://github.com/tomyimkc/memorystand/blob/main/LICENSE`; GitHub identifies Apache-2.0 |
@@ -128,8 +128,8 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > → cross-examine loop with no AWS account and no CockroachDB Cloud account. Embeddings fall back
 > to a deterministic local stub (`MEMORYSTAND_EMBED_STUB=1`, set automatically by the script and
 > announced on screen — a stub result is never presented as a real embedding). `pytest -q` runs
-> the test suite (**174 tests passed, 1 skipped** on 2026-08-18 with the final,
-> independently verified local video artifact present).
+> the current suite. Use the fresh command output in any final submission copy; do not reuse an
+> older count after backend, frontend, or video changes.
 > `python cli/memorystand.py recall --query "payments failover"` drives the CLI directly.
 > A deployed demo also exists now — see Field 1's URL,
 > `https://main.d19xad9aeccy3e.amplifyapp.com`, no account or login needed — this local path
@@ -355,7 +355,7 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > history and `DISCLOSURES.md` preserve that provenance; the human owner remains responsible for
 > the submission and its claims.
 >
-> **The current submission-candidate video.** It is a hybrid of deployed-product evidence and a
+> **The replacement submission-candidate video workflow.** It produces a hybrid of deployed-product evidence and a
 > synthetic presenter generated from the creator's own reference photo with xAI Grok
 > (`image_edit` through Grok CLI for consistent base frames, then the same Grok video model for
 > the exact spoken lines). Because Zero Data Retention is enabled on the xAI team, the CLI video
@@ -394,18 +394,17 @@ should infer.
 
 ## 48 hours before the deadline (by 2026-08-16 17:00 ET)
 
-- [x] Deploy path has been run against real AWS + `ccloud`. Re-verified live on 2026-08-17:
-      `/health` 200, CockroachDB reachable, migrations 001–003 applied. Write paths
-      (`/ingest`, `/decide`) return 201 with the dashboard UUID agent id. Default
-      dashboard alert: closer unconfirmed `restart_service` loses to verified `scale_up`.
+- [ ] Deploy the 2026-08-18 target-entity policy and migration 004, then re-verify:
+      `/health` 200, CockroachDB reachable, migrations 001–004 applied. The default
+      dashboard must show the wrong-service `scale_up` row as visible but excluded,
+      never as evidence for payments-service.
 - [x] Repo is public; GitHub API reports Apache-2.0 (verified 2026-08-07).
 - [ ] `git log -p` spot-checked for anything that shouldn't go public before flipping visibility —
       a private→public flip is not cleanly reversible once anyone has cloned it.
 - [x] `README.md` Status table updated 2026-08-17: video upload still called out as pending;
       reasoning provider 402 is named; demo story is the live ranking, not a 9 August receipt.
-- [ ] Demo video rendered and locally verified (**done**); upload it, set it to **Public**, and
-      watch the public link once,
-      logged out, start to finish.
+- [ ] Render and verify a replacement video after the corrected live capture. The prior
+      72.597-second cut is rejected because it shows a wrong-service row steering.
 - [x] Demo app URL fetched through an external web reader on 2026-08-07; it returned the MemoryStand dashboard. Re-check immediately before submission.
 - [ ] Every field above except the owner-only rows is filled in on the live Devpost draft.
 - [x] Architecture diagram is exported at `docs/architecture.png` (1920×1080).

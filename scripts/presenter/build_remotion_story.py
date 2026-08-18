@@ -126,20 +126,6 @@ def main() -> int:
                                 file=sys.stderr,
                             )
                             return 2
-                        # A live product screenshot may contain credentials in its
-                        # top bar. The compositor only needs the product interaction
-                        # and result. Convert it into a full-frame, readable evidence
-                        # master here, with the final 80px deliberately left empty for
-                        # burned subtitles.
-                        if evidence_path.name == "decision-live.png":
-                            clean = Image.new("RGB", (1920, 1080), "#05080d")
-                            crop = image.convert("RGB").crop((0, 150, 960, 1080))
-                            crop = crop.resize((1840, 930), Image.Resampling.LANCZOS)
-                            clean.paste(crop, (40, 0))
-                            transformed = public_evidence / f"{tag}-prepared.png"
-                            clean.save(transformed)
-                            evidence_path = transformed
-                            suffix = ".png"
                     kind = "image"
                 elif suffix in {".mp4", ".mov", ".m4v", ".webm"}:
                     evidence_probe = json.loads(

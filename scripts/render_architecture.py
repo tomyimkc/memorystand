@@ -277,9 +277,10 @@ def main() -> int:
         "BEDROCK-TOUCHING ROUTES · secret-gated",
         [
             "POST /ingest → memory.remember() → embeddings.embed()",
-            "POST /decide → memory.recall() → agent.propose() → decisions.decide()",
-            "VERIFIED may steer autonomously; ATTESTED stays advisory + approval",
-            "Bedrock first; deterministic fallback on error or zero quota",
+            "POST /decide records target_entity; recall stays audit-visible while subject + "
+            "receipt policy selects the eligible decision context",
+            "Receipt-backed VERIFIED may steer autonomously; ATTESTED stays advisory + approval",
+            "No eligible memory → no model call; the fixed fallback is disclosed",
         ],
         fill=RED_FILL,
         outline=bf.RED,
@@ -326,10 +327,10 @@ def main() -> int:
         [
             "agent_memories — VECTOR INDEX (tenant_id, verdict, embedding vector_cosine_ops)",
             "verdict: accepted / quarantined / superseded — decides what recall can ever see",
-            "trust_tier: unconfirmed / attested / verified / disputed — only verified may act "
-            "autonomously; attested requires approval",
-            "agent_decisions — consulted vs cited vs produced; every referenced memory id is "
-            "validated as admitted and same-tenant",
+            "trust_tier: unconfirmed / attested / verified / disputed — a verified label acts "
+            "only while its matching metric receipt remains complete",
+            "agent_decisions — target_entity + consulted / produced ids; replay reconstructs "
+            "ranked recall, eligible ids, and exclusion reasons",
             "belief_snapshots — SHA-256 checkpoint of the admitted set, re-derived with "
             "AS OF SYSTEM TIME",
             "tool_audit — every governed call, native row-level TTL = 180 days",

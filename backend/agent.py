@@ -35,7 +35,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from . import anthropic_client, bedrock_client, decisions, memory
+from . import anthropic_client, authority, bedrock_client, decisions, memory
 
 ALLOWED_ACTIONS: tuple[str, ...] = (
     "page_oncall",
@@ -309,7 +309,12 @@ def _ask_model(alert_text: str, recalled: list[dict], client=bedrock_client) -> 
     )
 
 
-def propose(situation: str, recalled: list[dict[str, Any]]) -> dict[str, Any]:
+def propose(
+    situation: str,
+    recalled: list[dict[str, Any]],
+    *,
+    target_entity: str,
+) -> dict[str, Any]:
     """Choose ONE action for ``situation``, grounded in ``recalled`` memories.
 
     The single reasoning entry point. ``handle_alert`` uses it, and so does the
@@ -324,7 +329,14 @@ def propose(situation: str, recalled: list[dict[str, Any]]) -> dict[str, Any]:
     keyword table silently impersonating an agent is precisely the failure this project
     should not ship.
     """
+    if not authority.normalize_entity(target_entity):
+        raise ValueError("target_entity is required when MemoryStand selects the action")
+
     calls_before = bedrock_client.call_count() + anthropic_client.call_count()
+    decision_context, excluded = authority.filter_for_target(
+        recalled,
+        target_entity,
+    )
 
     # Try each provider in preference order. reasoning_source names the one that actually
     # answered -- never the one that was configured -- so a reader can always tell whether a
@@ -336,18 +348,24 @@ def propose(situation: str, recalled: list[dict[str, Any]]) -> dict[str, Any]:
     # tier supplied when present. If there is no verified context, attested memory may support an
     # advisory recommendation, but the result is held for approval even if the model omits its
     # required citation -- anything shown to the model may have influenced it.
-    verified_context = [r for r in recalled if r.get("trust_tier") == "verified"]
-    attested_context = [r for r in recalled if r.get("trust_tier") == "attested"]
+    verified_context = [r for r in decision_context if r.get("trust_tier") == "verified"]
+    attested_context = [r for r in decision_context if r.get("trust_tier") == "attested"]
     model_context = verified_context or attested_context
     model_context_ids = {str(r["memory_id"]) for r in model_context}
     model_context_is_advisory = bool(attested_context and not verified_context)
-    for name, client in _providers():
-        try:
-            proposal = _ask_model(situation, model_context, client)
-            source = name
-            break
-        except bedrock_client.ModelUnavailable as exc:
-            last_error = exc
+    # A model with no eligible memory context would be making an operational
+    # recommendation from the alert alone. That is not a memory-driven decision,
+    # and it would make the public wrong-service refusal nondeterministic whenever
+    # provider availability changes. With no authoritative context, go directly
+    # to the disclosed fixed fallback.
+    if model_context:
+        for name, client in _providers():
+            try:
+                proposal = _ask_model(situation, model_context, client)
+                source = name
+                break
+            except bedrock_client.ModelUnavailable as exc:
+                last_error = exc
 
     memory_requires_approval = False
     cited_memory_ids: list[str] = []
@@ -362,16 +380,26 @@ def propose(situation: str, recalled: list[dict[str, Any]]) -> dict[str, Any]:
         memory_requires_approval = model_context_is_advisory
     else:
         action, why, memory_requires_approval, cited_memory_ids = _fallback_decision(
-            situation, recalled
+            situation, decision_context
         )
-        rationale = (
-            f"Deterministic fallback: no reasoning model was available "
-            f"({_summarize_model_unavailability(last_error)}). {why}"
+        availability = (
+            "no action-authoritative memory was eligible, so no model was asked"
+            if not model_context
+            else f"no reasoning model was available ({_summarize_model_unavailability(last_error)})"
         )
+        rationale = f"Deterministic fallback: {availability}. {why}"
         source = (
             "fallback_memory"
             if cited_memory_ids
             else "fallback_heuristic"
+        )
+
+    if excluded:
+        rationale += (
+            " Subject policy kept "
+            f"{len(excluded)} recalled row(s) audit-visible but out of decision context "
+            f"for target_entity={target_entity!r} "
+            f"({authority.exclusion_summary(excluded)})."
         )
 
     return {
@@ -380,6 +408,9 @@ def propose(situation: str, recalled: list[dict[str, Any]]) -> dict[str, Any]:
         "requires_approval": memory_requires_approval or action in HIGH_RISK_ACTIONS,
         "reasoning_source": source,
         "cited_memory_ids": cited_memory_ids,
+        "eligible_memory_ids": [str(row["memory_id"]) for row in decision_context],
+        "excluded_memories": excluded,
+        "target_entity": target_entity,
         "model_calls": (bedrock_client.call_count() + anthropic_client.call_count())
         - calls_before,
     }
@@ -402,10 +433,19 @@ def handle_alert(tenant_id: str, agent_id: str, alert: dict[str, Any]) -> dict[s
     rationale, and how many Bedrock calls this invocation made.
     """
     alert_text = _alert_text(alert)
+    target_entity = alert.get("entity") or alert.get("service")
+    if not target_entity:
+        raise ValueError("alert.entity or alert.service is required")
+    target_entity = str(target_entity)
+
     recalled = memory.recall(tenant_id, agent_id, alert_text, k=5)
     recalled_ids = {row["memory_id"] for row in recalled}
 
-    proposed = propose(alert_text, recalled)
+    proposed = propose(
+        alert_text,
+        recalled,
+        target_entity=target_entity,
+    )
     action = proposed["action"]
     rationale = proposed["rationale"]
     used_model = not proposed["reasoning_source"].startswith("fallback_")
@@ -414,21 +454,19 @@ def handle_alert(tenant_id: str, agent_id: str, alert: dict[str, Any]) -> dict[s
     requires_approval = proposed["requires_approval"]
 
     produced_memory_ids: list[str] = []
-    entity = alert.get("entity") or alert.get("service")
-    if entity:
-        remembered = memory.remember(
-            tenant_id,
-            agent_id,
-            f"Alert observed for {entity}: {alert_text} -> action taken: {action}",
-            entity=str(entity),
-            attribute_key="last_alert_action",
-            attribute_value=action,
-            memory_type="episodic",
-            source=str(alert.get("source") or "pagerduty"),
-            structured_data=alert,
-        )
-        if remembered.get("verdict") == memory.ACCEPTED:
-            produced_memory_ids.append(remembered["memory_id"])
+    remembered = memory.remember(
+        tenant_id,
+        agent_id,
+        f"Alert observed for {target_entity}: {alert_text} -> action taken: {action}",
+        entity=target_entity,
+        attribute_key="last_alert_action",
+        attribute_value=action,
+        memory_type="episodic",
+        source=str(alert.get("source") or "pagerduty"),
+        structured_data=alert,
+    )
+    if remembered.get("verdict") == memory.ACCEPTED:
+        produced_memory_ids.append(remembered["memory_id"])
 
     decision = decisions.decide(
         tenant_id,
@@ -438,6 +476,9 @@ def handle_alert(tenant_id: str, agent_id: str, alert: dict[str, Any]) -> dict[s
         list(recalled_ids),
         produced_memory_ids=produced_memory_ids,
         requires_approval=requires_approval,
+        query_text=alert_text,
+        recall_k=5,
+        target_entity=target_entity,
     )
 
     return {
@@ -446,6 +487,9 @@ def handle_alert(tenant_id: str, agent_id: str, alert: dict[str, Any]) -> dict[s
         "action": action,
         "rationale": rationale,
         "cited_memory_ids": cited_memory_ids,
+        "eligible_memory_ids": proposed["eligible_memory_ids"],
+        "excluded_memories": proposed["excluded_memories"],
+        "target_entity": target_entity,
         "used_model": used_model,
         "model_calls": model_calls_this_call,
     }
