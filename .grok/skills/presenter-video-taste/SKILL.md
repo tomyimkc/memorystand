@@ -44,6 +44,9 @@ A portrait close-up `objectFit: cover` onto 16:9 crops the mouth off and looks l
   not evidence.
 - Never stack fresh captions over captions already burned into evidence footage. Crop or mask
   the source caption band, or deliberately use the existing caption as the only subtitle layer.
+- Treat baked badges, watermarks, and status labels as occupied space too. Inspect the full
+  evidence frame before placing authored headings; reserve a safe area so labels such as
+  `candidateOnly`, `LIVE`, or source provenance never collide with the new title.
 - Evidence provenance must match the picture. Never overlay seeded or synthetic numbers on an
   unrelated live dashboard; use the matching source, or label the example visibly and explicitly
   as seeded/synthetic and not production evidence.
@@ -52,4 +55,6 @@ A portrait close-up `objectFit: cover` onto 16:9 crops the mouth off and looks l
 
 Extract a frame at ~2s and ~mid-shot. Fail if: forehead-only, mouth under a caption, no shoulders,
 or the subject fills more than half the frame height. For evidence beats, also fail if the product
-text is unreadable at 1920×1080 or the presenter covers the receipt.
+text is unreadable at 1920×1080, the presenter covers the receipt, or an authored heading overlaps
+text already baked into the source. Inspect the overlay region at full resolution, not only in a
+scaled contact sheet.

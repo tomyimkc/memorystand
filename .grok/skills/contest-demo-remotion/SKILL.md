@@ -29,17 +29,24 @@ Talking-head first. Load `/presenter-video-taste` before generating any still or
 - A number and its background must share provenance. Never place seeded values over unrelated
   live footage; use the matching receipt, or state on screen that the example is seeded/synthetic
   and not production evidence.
+- Evidence overlays must respect every label already baked into the reviewed footage. Audit one
+  full-resolution frame from each b-roll range and move authored headings out of the safe area
+  used by `candidateOnly`, `LIVE`, watermark, or source-caption text.
+- Before re-running Whisper or building the Remotion story, verify that the selected Python
+  environment imports both `faster_whisper` and `PIL`. Use an isolated environment if needed;
+  a saved receipt is not evidence that a fresh rerun actually happened.
 
 ## Commands
 
 ```bash
-python scripts/presenter/verify_script.py
+python3 scripts/presenter/verify_script.py
 # Generate takes with Grok image_to_video from 16:9 masters (2 at a time).
 # Copy videos/N.mp4 -> artifacts/presenter/clips/<beat>-0.mp4 before the next pair.
-python scripts/presenter/make_clips.py --verify-only
-python scripts/presenter/build_remotion_story.py
+python3 -c 'import faster_whisper; from PIL import Image'
+python3 scripts/presenter/make_clips.py --verify-only
+python3 scripts/presenter/build_remotion_story.py
 ( cd remotion && npm run render )
-.venv/bin/python scripts/video/verify_video.py remotion/out/memorystand-presenter.mp4 --profile presenter
+python3 scripts/video/verify_video.py remotion/out/memorystand-presenter.mp4 --profile presenter
 cp remotion/out/memorystand-presenter.mp4 ~/Downloads/MemoryStand-Remotion-medium-shot-$(date +%F).mp4
 ```
 
