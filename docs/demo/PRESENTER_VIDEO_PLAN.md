@@ -25,9 +25,10 @@ Causal order. The Grok source take remains 10 seconds, but Remotion trims the fi
 measured speech plus a 0.65-second hold. Fixed generation length is not editorial runtime.
 
 1. **A dangerous coincidence** — an honest restart is remembered as the fix.
-2. **Why that is false** — the alert stopped, but the outside service-latency result stayed
-   essentially flat (223 ms before, 220 ms after, versus a claimed 112 ms improvement);
-   timing alone does not prove the reboot caused recovery.
+2. **Why that is false** — in a clearly labeled seeded decision-rule test, the page cleared
+   while service latency stayed essentially flat (223 ms before, 220 ms after, versus a claimed
+   112 ms improvement); timing alone does not prove the reboot caused recovery. The film states
+   that these numbers are not production CloudWatch data.
 3. **Receipt first, keys second** — a memory must show a receipt before it acts alone.
 4. **CloudWatch receipt** — AWS must agree on metric, direction, and size.
 5. **Refuse on mismatch** — CloudWatch showing the wrong direction or amount blocks acting alone.

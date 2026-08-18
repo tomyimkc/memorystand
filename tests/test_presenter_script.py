@@ -38,7 +38,7 @@ def test_every_broll_beat_has_plain_english_callouts():
         for visual in beat.get("broll", {}).values()
     ]
     assert visuals
-    assert all(1 <= len(visual["callouts"]) <= 3 for visual in visuals)
+    assert all(1 <= len(visual["callouts"]) <= 4 for visual in visuals)
     assert all(
         1 <= len(callout) <= 48
         for visual in visuals
@@ -51,21 +51,23 @@ def test_why_beat_shows_correlation_is_not_causation_in_plain_language():
     beat = next(b for b in spec["beats"] if b["id"] == "09-why-false-cause")
     visual = beat["broll"]["0"]
     displayed = " ".join([visual["headline"], *visual["callouts"]]).lower()
-    assert "alert quiet" in displayed
+    assert "page cleared" in displayed
     assert "latency" in displayed
-    assert "flat" in displayed
+    assert "stayed flat" in displayed
     assert "before:" in displayed and "after:" in displayed
     assert "claimed improvement:" in displayed
+    assert "not production cloudwatch" in displayed
 
 
 def test_why_spoken_line_names_the_outside_metric_and_causal_error():
     spec = json.loads(SCRIPT_JSON.read_text())
     beat = next(b for b in spec["beats"] if b["id"] == "09-why-false-cause")
     spoken = beat["shots"][0].lower()
-    assert "outside service latency graph" in spoken
-    assert "alert stopped" in spoken
+    assert "seeded test" in spoken
+    assert "service latency stayed flat" in spoken
+    assert "page cleared" in spoken
     assert "does not prove" in spoken
-    assert "reboot fixed" in spoken
+    assert "reboot worked" in spoken
 
 
 def test_presenter_script_rejects_broll_outside_generated_artifacts():
