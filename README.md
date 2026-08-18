@@ -77,8 +77,11 @@ tenant: used against any other it returns `401`. Ingest a memory, run `/decide`,
 and watch a tier move. Public `recall`, `timemachine`, and `diff` reads are also restricted to that
 isolated demo tenant; the operator credential is required for any other tenant.
 
-**Live demo (click this): <https://main.d19xad9aeccy3e.amplifyapp.com>** — the dashboard, deployed
-on AWS Amplify Hosting. The API it talks to is
+**Live demo (click this): <https://main.d19xad9aeccy3e.amplifyapp.com>** — the judge-facing guided
+demo, deployed on AWS Amplify Hosting. It opens with a three-step path that compares the closer
+unconfirmed restart memory against the farther verified scale-up, runs the live decision, and
+opens the CockroachDB retrieval receipt. The manual four-panel operator workspace remains under
+**Advanced workspace**. The API it talks to is
 <https://ojao6oaxlk26mqfjwpuy7g4dy40tglyi.lambda-url.us-west-2.on.aws>, a JSON API with no root
 route (`GET /` returns 404 by design — it is not a page to open in a browser). ·
 [deployment status](docs/DEPLOY_STATUS.md)
