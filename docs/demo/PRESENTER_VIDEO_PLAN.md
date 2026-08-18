@@ -16,8 +16,10 @@ That sentence is the editorial test for every beat. The narration assumes the vi
 never used an AI agent, CockroachDB, AWS, vector search, or an incident-management tool.
 The film uses one large headline and only the decisive state or number. Five shots begin on the
 medium-shot presenter, then hand the complete 1920×1080 frame to focused receipts derived from
-captured deployed API, CockroachDB, and CloudWatch evidence. A shrunk dashboard was rejected
-because its product words were unreadable at normal playback size.
+captured deployed API, CockroachDB, and CloudWatch evidence. The receipt-first beat now uses a
+focused crop of an actual deployed `/decide` interaction: a closer unconfirmed restart loses to
+a farther verified scale-up, with `model calls: 0` visible in the live product. A whole-dashboard
+shrink was rejected because its product words were unreadable at normal playback size.
 
 ## Nine-beat arc
 
@@ -88,6 +90,13 @@ chrome, headings, gradients, and callouts do not cover the evidence. The receipt
 reserves an empty lower rail for burned subtitles, so captions remain present for every spoken
 word without covering a product label, metric, number, provenance line, or the presenter's mouth.
 `build_remotion_story.py` rejects a still that is not exactly 1920×1080.
+
+Presenter-only beats use the empty side of the genuine medium shot for one large headline and at
+most two short keypoint pills. The conflict beat also uses this same hero contract; a prior
+quote-only panel shape was rejected after the compositor silently dropped its `lines` field.
+The source 736×400 Grok takes are picture-only upscaled with a center crop, Lanczos resampling,
+and restrained sharpening before Remotion; their AAC audio is copied byte-for-byte and every
+transformed file must pass Whisper again.
 
 Outputs are gitignored:
 

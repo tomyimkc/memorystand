@@ -37,8 +37,8 @@
         "kind": "hero",
         "headline": "SYMPTOM\nIS NOT CAUSE.",
         "bullets": [
-        "Seeded result stayed flat",
-        "Timing alone proves nothing"
+          "Seeded result stayed flat",
+          "Timing alone proves nothing"
         ],
         "footnote": "The alert stopping is not an outcome receipt."
       },
@@ -74,14 +74,14 @@
       },
       "broll": {
         "0": {
-          "source": "artifacts/video/presenter-receipts/receipt-first.png",
+          "source": "artifacts/video/live-product/decision-live.png",
           "startSeconds": 0,
-          "label": "LIVE DASHBOARD",
-          "headline": "THE DEPLOYED APP IS RUNNING",
+          "label": "LIVE DEPLOYED DECISION",
+          "headline": "THE RESTART LOSES TO VERIFIED EVIDENCE",
           "callouts": [
-            "Write a memory",
-            "Check the outcome",
-            "Only then grant authority"
+            "Closer restart: unconfirmed",
+            "CloudWatch-backed scale-up: verified",
+            "Memory decided · model calls: 0"
           ]
         }
       },
@@ -167,11 +167,11 @@
       "id": "04-held-for-review",
       "presenterSide": "RIGHT",
       "panelData": {
-        "kind": "quote",
-        "lines": [
-          "KEEP BOTH",
-          "STRONGER MAY GUIDE",
-          "WEAKER WAITS"
+        "kind": "hero",
+        "headline": "KEEP BOTH.\nREVIEW THE WEAKER.",
+        "bullets": [
+          "Stronger may guide",
+          "Weaker waits"
         ],
         "footnote": "Disagreement is recorded, not erased."
       },

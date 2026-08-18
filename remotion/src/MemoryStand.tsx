@@ -43,7 +43,7 @@ type Shot = {
   side: 'LEFT' | 'RIGHT';
   clip: string;
   durationFrames: number;
-  panel?: {headline?: string};
+  panel?: {headline?: string; bullets?: string[]; footnote?: string};
   broll?: Broll | null;
   cues: Cue[];
 };
@@ -102,30 +102,34 @@ const Captions: React.FC<{
   );
 };
 
-const LowerThird: React.FC<{label: string; side: 'LEFT' | 'RIGHT'}> = ({
-  label,
-  side,
+const Keypoint: React.FC<{shot: Shot}> = ({
+  shot,
 }) => {
-  if (!label) return null;
-  const emptySide = side === 'LEFT' ? {right: 48} : {left: 48};
+  const headline = shot.panel?.headline || '';
+  const bullets = (shot.panel?.bullets || []).slice(0, 2);
+  const footnote = shot.panel?.footnote || '';
+  const side = shot.side;
+  if (!headline) return null;
+  const emptySide = side === 'LEFT' ? {right: 72} : {left: 72};
   return (
     <div
       style={{
         position: 'absolute',
         ...emptySide,
-        bottom: 148,
+        top: 120,
+        width: 620,
         display: 'flex',
         flexDirection: 'column',
-        gap: 6,
         alignItems: side === 'LEFT' ? 'flex-end' : 'flex-start',
+        textAlign: side === 'LEFT' ? 'right' : 'left',
         pointerEvents: 'none',
       }}
     >
       <div
         style={{
-          fontSize: 14,
-          letterSpacing: 2.4,
-          fontWeight: 750,
+          fontSize: 16,
+          letterSpacing: 3.1,
+          fontWeight: 800,
           fontFamily: UI_FONT,
           color: C.accent,
         }}
@@ -134,15 +138,63 @@ const LowerThird: React.FC<{label: string; side: 'LEFT' | 'RIGHT'}> = ({
       </div>
       <div
         style={{
-          fontSize: 22,
-          fontWeight: 650,
+          marginTop: 14,
+          maxWidth: 600,
+          whiteSpace: 'pre-line',
+          fontSize: 70,
+          lineHeight: 0.98,
+          fontWeight: 820,
           fontFamily: UI_FONT,
-          color: C.dim,
-          letterSpacing: 0.2,
+          color: C.ink,
+          letterSpacing: -2.1,
+          textShadow: '0 5px 24px rgba(0,0,0,0.55)',
         }}
       >
-        {label}
+        {headline}
       </div>
+      {bullets.length ? (
+        <div
+          style={{
+            marginTop: 28,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 13,
+            alignItems: side === 'LEFT' ? 'flex-end' : 'flex-start',
+          }}
+        >
+          {bullets.map((bullet) => (
+            <div
+              key={bullet}
+              style={{
+                padding: '9px 15px 10px',
+                borderRadius: 999,
+                border: '1px solid rgba(255,255,255,0.18)',
+                backgroundColor: 'rgba(3,6,10,0.62)',
+                fontSize: 24,
+                lineHeight: 1.1,
+                fontWeight: 670,
+                color: C.dim,
+              }}
+            >
+              {bullet}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {footnote ? (
+        <div
+          style={{
+            marginTop: 18,
+            maxWidth: 520,
+            fontSize: 17,
+            lineHeight: 1.35,
+            fontWeight: 560,
+            color: C.faint,
+          }}
+        >
+          {footnote}
+        </div>
+      ) : null}
     </div>
   );
 };
@@ -152,7 +204,6 @@ const PresenterShot: React.FC<{
   captions: boolean;
   volume?: number;
 }> = ({shot, captions, volume = 1}) => {
-  const kicker = (shot.panel?.headline || '').replace(/\n/g, ' ').replace(/\.$/, '');
   return (
     <AbsoluteFill style={{backgroundColor: C.bg}}>
       <OffthreadVideo
@@ -168,10 +219,12 @@ const PresenterShot: React.FC<{
       <AbsoluteFill
         style={{
           background:
-            'linear-gradient(180deg, rgba(7,9,13,0.12) 0%, rgba(7,9,13,0) 22%, rgba(7,9,13,0.08) 70%, rgba(7,9,13,0.48) 100%)',
+            shot.side === 'LEFT'
+              ? 'linear-gradient(90deg, rgba(7,9,13,0.04) 0%, rgba(7,9,13,0.01) 43%, rgba(7,9,13,0.72) 73%, rgba(7,9,13,0.92) 100%)'
+              : 'linear-gradient(90deg, rgba(7,9,13,0.92) 0%, rgba(7,9,13,0.72) 27%, rgba(7,9,13,0.01) 57%, rgba(7,9,13,0.04) 100%)',
         }}
       />
-      <LowerThird label={kicker} side={shot.side} />
+      <Keypoint shot={shot} />
       {captions ? <Captions list={shot.cues} /> : null}
     </AbsoluteFill>
   );
