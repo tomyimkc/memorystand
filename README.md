@@ -401,7 +401,7 @@ git clone <this-repo> && cd memorystand
 Then:
 
 ```bash
-.venv/bin/python -m pytest -q                                   # 162 passed with the refreshed local render present
+.venv/bin/python -m pytest -q                                   # 174 passed, 1 skipped on 2026-08-18 with the final local render present
 .venv/bin/python cli/memorystand.py recall --query "payments failover"
 .venv/bin/python scripts/loadtest.py --rows 10000 --tenants 50  # reproduce the numbers below
 ```

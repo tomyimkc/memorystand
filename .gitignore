@@ -38,6 +38,6 @@ infra/build/
 artifacts/
 
 # Remotion build output. Source under remotion/src is committed.
-remotion/node_modules/
+remotion/node_modules
 remotion/out/
 remotion/public/

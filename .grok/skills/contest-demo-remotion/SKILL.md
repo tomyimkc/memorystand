@@ -40,6 +40,12 @@ Talking-head first. Load `/presenter-video-taste` before generating any still or
   Prefer a short talking-head setup followed by a full-frame, overlay-free evidence handoff.
 - Maximize keypoints, not words: one receipt, one decisive state/number, and at most one short
   interpretation line. A whole dashboard shrunk beside explanatory chrome is not a proof shot.
+- If the deployed UI already shows the decisive before/after or trust contrast, use a focused,
+  credential-free crop of that real interaction before inventing a custom proof board.
+- Low-resolution Grok output may be picture-only upscaled for delivery, but the transform must
+  preserve framing, copy audio unchanged, and trigger a fresh N/N Whisper verification.
+- Use the empty side of presenter-only medium shots for the headline. Do not reduce the central
+  point to a tiny lower-third while half the frame is unused.
 - Burn subtitles for every spoken word, including evidence handoffs. Reserve a dedicated empty
   subtitle rail in the receipt rather than covering product words, numbers, or provenance.
 - Verify the assembled master, not only source clips: compare all SRT cues with the Remotion

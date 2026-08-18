@@ -128,9 +128,10 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > → cross-examine loop with no AWS account and no CockroachDB Cloud account. Embeddings fall back
 > to a deterministic local stub (`MEMORYSTAND_EMBED_STUB=1`, set automatically by the script and
 > announced on screen — a stub result is never presented as a real embedding). `pytest -q` runs
-> the test suite (**162 tests passed** with the refreshed, independently verified local video
-> artifact present). `python cli/memorystand.py recall --query "payments failover"` drives the CLI
-> directly. A deployed demo also exists now — see Field 1's URL,
+> the test suite (**174 tests passed, 1 skipped** on 2026-08-18 with the final,
+> independently verified local video artifact present).
+> `python cli/memorystand.py recall --query "payments failover"` drives the CLI directly.
+> A deployed demo also exists now — see Field 1's URL,
 > `https://main.d19xad9aeccy3e.amplifyapp.com`, no account or login needed — this local path
 > remains as a fallback for judges who prefer to run it themselves.
 

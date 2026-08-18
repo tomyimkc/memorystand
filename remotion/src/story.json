@@ -95,14 +95,14 @@
         "footnote": "github.com/tomyimkc/memorystand"
       },
       "broll": {
-        "source": "artifacts/video/presenter-receipts/receipt-first.png",
+        "source": "artifacts/video/live-product/decision-live.png",
         "startSeconds": 0,
-        "label": "LIVE DASHBOARD",
-        "headline": "THE DEPLOYED APP IS RUNNING",
+        "label": "LIVE DEPLOYED DECISION",
+        "headline": "THE RESTART LOSES TO VERIFIED EVIDENCE",
         "callouts": [
-          "Write a memory",
-          "Check the outcome",
-          "Only then grant authority"
+          "Closer restart: unconfirmed",
+          "CloudWatch-backed scale-up: verified",
+          "Memory decided \u00b7 model calls: 0"
         ],
         "asset": "evidence/01-receipt-first-0.png",
         "kind": "image",
@@ -241,11 +241,11 @@
       "durationFrames": 173,
       "speechEndSeconds": 6.56,
       "panel": {
-        "kind": "quote",
-        "lines": [
-          "KEEP BOTH",
-          "STRONGER MAY GUIDE",
-          "WEAKER WAITS"
+        "kind": "hero",
+        "headline": "KEEP BOTH.\nREVIEW THE WEAKER.",
+        "bullets": [
+          "Stronger may guide",
+          "Weaker waits"
         ],
         "footnote": "Disagreement is recorded, not erased."
       },

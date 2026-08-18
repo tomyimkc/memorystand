@@ -58,6 +58,14 @@ A portrait close-up `objectFit: cover` onto 16:9 crops the mouth off and looks l
 - A full dashboard can still be useless evidence. Crop or rebuild a provenance-backed receipt
   around the one decisive state or number, in large type. Remove duplicate headings and helper
   prose; narration supplies context while the picture supplies proof.
+- Prefer one readable crop of the real deployed interaction over a custom status board when the
+  product UI already contains the decisive contrast. Remove credentials and unrelated panels,
+  preserve the recognizable controls/result, and reserve an empty subtitle rail.
+- When a video model hard-caps 16:9 output below delivery resolution, a picture-only Lanczos
+  upscale with restrained sharpening is acceptable only as a clarity treatment, not as a claim
+  of newly generated detail. Copy audio unchanged, then rerun Whisper on every transformed clip.
+- Presenter-only beats should spend the empty side: one large 2–5-word headline and at most two
+  short pills. A 22px lower-third wastes the composition and makes the keypoint disappear.
 - Subtitle completeness is non-negotiable. Do not suppress burned captions during evidence
   handoffs. The receipt must reserve an empty lower rail, and the final master must be sampled
   inside every cue to prove visible text exists at the same time as the speech. Use the same
