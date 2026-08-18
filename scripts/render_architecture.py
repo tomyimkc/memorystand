@@ -277,10 +277,10 @@ def main() -> int:
         "BEDROCK-TOUCHING ROUTES · secret-gated",
         [
             "POST /ingest → memory.remember() → embeddings.embed()",
-            "POST /decide records target_entity; recall stays audit-visible while subject + "
-            "receipt policy selects the eligible decision context",
-            "Receipt-backed VERIFIED may steer autonomously; ATTESTED stays advisory + approval",
-            "No eligible memory → no model call; the fixed fallback is disclosed",
+            "POST /decide records target_entity; recall stays visible while subject + receipt "
+            "policy selects decision context",
+            "Receipt-backed VERIFIED may act; ATTESTED stays advisory + approval",
+            "No eligible memory → disclosed fixed fallback, no model call",
         ],
         fill=RED_FILL,
         outline=bf.RED,
