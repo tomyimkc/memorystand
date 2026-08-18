@@ -76,7 +76,7 @@ model. Lead with that behavior, not an unbounded market claim.
 
 | # | Field | Id | Required | Status |
 |---|---|---|---|---|
-| 1 | Demo app URL | 27812 | Yes | Ready: prefer `https://tomyimkc-memorystand.static.hf.space/` (public judge-facing mirror). AWS Amplify remains live at `https://main.d19xad9aeccy3e.amplifyapp.com`. Do not use the raw Lambda Function URL. |
+| 1 | Demo app URL | 27812 | Yes | Ready: use `https://tomyimkc-memorystand.static.hf.space/` (current public judge-facing build). AWS Amplify remains reachable at `https://main.d19xad9aeccy3e.amplifyapp.com`, but still serves the earlier UI until AWS authentication is renewed and the frontend is redeployed. Do not use the raw Lambda Function URL. |
 | 2 | Testing credentials/instructions | 28078 | No | Drafted below |
 | 3 | Public repo URL | 27813 | Yes | Ready: `https://github.com/tomyimkc/memorystand` is public (verified 2026-08-07) |
 | 4 | OSS license file URL | 27814 | Yes | Ready: `https://github.com/tomyimkc/memorystand/blob/main/LICENSE`; GitHub identifies Apache-2.0 |

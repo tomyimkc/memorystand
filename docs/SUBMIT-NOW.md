@@ -44,7 +44,7 @@ No channel credential exists in this environment, so this step cannot be automat
 
 | # | Field | Value |
 |---|---|---|
-| 1 | Demo app URL | `https://tomyimkc-memorystand.static.hf.space/` (preferred judge-facing mirror; Amplify fallback: `https://main.d19xad9aeccy3e.amplifyapp.com`) |
+| 1 | Demo app URL | `https://tomyimkc-memorystand.static.hf.space/` (current judge-facing build; do not substitute the older Amplify UI) |
 | 2 | Testing instructions | Field 2 in SUBMISSION.md (demo credential is auto-filled from `/health`) |
 | 3 | Public repo | `https://github.com/tomyimkc/memorystand` |
 | 4 | License | `https://github.com/tomyimkc/memorystand/blob/main/LICENSE` |
