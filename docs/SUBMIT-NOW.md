@@ -14,13 +14,15 @@ restart-as-fix memory is false: in a clearly labeled seeded decision-rule test,
 the page cleared while service latency stayed essentially flat (223 ms before,
 220 ms after, versus a claimed 112 ms improvement), so timing did not prove
 cause. The film explicitly says those example values are not production
-CloudWatch data.
+CloudWatch data. This final safe-area revision also keeps every authored
+evidence heading clear of the source footage's baked `candidateOnly` and
+`canClaimAGI` labels.
 
 | Cut | Path | Runtime | SHA-256 |
 |---|---|---|---|
-| **Use this** | `~/Downloads/MemoryStand-Remotion-proof-cut-2026-08-18.mp4` | 72.597 s | `c101320b38e9432fdb9e33d7424503412f3d57f23a767f1d27370d5198677cba` |
-| Sidecar SRT | `~/Downloads/MemoryStand-Remotion-proof-cut-2026-08-18.srt` | 20 cues | same timings as this cut |
-| Do not use | earlier `why-hold` / `story-order` / `medium-shot` / `presenter-first` files | — | padded, missing product evidence, missing the why-beat, or too close |
+| **Use this** | `~/Downloads/MemoryStand-Remotion-proof-cut-safe-area-2026-08-18.mp4` | 72.597 s | `48464cf74b4138fea7603f24564da7455e83ddf556b3a6640f36f09c7727bd7d` |
+| Sidecar SRT | `~/Downloads/MemoryStand-Remotion-proof-cut-safe-area-2026-08-18.srt` | 20 cues | `a551a41bbc6a158e454e549d616ae87502ea835470d2857db15ed3ff685d9669` |
+| Do not use | earlier `proof-cut` / `why-hold` / `story-order` / `medium-shot` / `presenter-first` files | — | overlay collision, padding, missing product evidence, missing the why-beat, or framing too close |
 
 1. YouTube or Vimeo, **Public**, not Unlisted.
 2. Watch the public link logged out, start to finish.

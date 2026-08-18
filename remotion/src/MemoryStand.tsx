@@ -157,7 +157,10 @@ const EvidenceCard: React.FC<{broll: Broll}> = ({broll}) => (
     <div
       style={{
         position: 'absolute',
-        top: 34,
+        // The reviewed evidence source has its own candidate-only badge in the
+        // upper-right corner. Keep authored proof labels below that baked safe
+        // area instead of making two independently valid labels unreadable.
+        top: 82,
         right: 56,
         width: 560,
         display: 'flex',
