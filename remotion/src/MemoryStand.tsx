@@ -7,6 +7,7 @@ import {
   AbsoluteFill,
   OffthreadVideo,
   Sequence,
+  interpolate,
   spring,
   staticFile,
   useCurrentFrame,
@@ -109,12 +110,26 @@ const LowerThird: React.FC<{label: string; side: 'LEFT' | 'RIGHT'}> = ({
   );
 };
 
+const FADE_FRAMES = 18;
+
 const ShotView: React.FC<{shot: Shot}> = ({shot}) => {
+  const frame = useCurrentFrame();
+  const fadeIn = interpolate(frame, [0, FADE_FRAMES], [0, 1], {
+    extrapolateRight: 'clamp',
+  });
+  const fadeOut = interpolate(
+    frame,
+    [Math.max(FADE_FRAMES, shot.durationFrames - FADE_FRAMES), shot.durationFrames],
+    [1, 0],
+    {extrapolateLeft: 'clamp'},
+  );
+  const opacity = fadeIn * fadeOut;
   const kicker = (shot.panel?.headline || '').replace(/\n/g, ' ').replace(/\.$/, '');
   return (
-    <AbsoluteFill style={{backgroundColor: C.bg}}>
+    <AbsoluteFill style={{backgroundColor: C.bg, opacity}}>
       <OffthreadVideo
         src={staticFile(shot.clip)}
+        volume={opacity}
         style={{
           width: '100%',
           height: '100%',

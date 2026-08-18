@@ -1,12 +1,12 @@
 {
   "fps": 24,
-  "outroFrames": 72,
+  "outroFrames": 192,
   "shots": [
     {
       "id": "02-dangerous-coincidence-0",
       "side": "RIGHT",
       "clip": "clips/02-dangerous-coincidence-0.mp4",
-      "durationFrames": 187,
+      "durationFrames": 240,
       "panel": {
         "kind": "hero",
         "headline": "TIMING\nIS NOT PROOF.",
@@ -31,10 +31,43 @@
       ]
     },
     {
+      "id": "09-why-false-cause-0",
+      "side": "LEFT",
+      "clip": "clips/09-why-false-cause-0.mp4",
+      "durationFrames": 240,
+      "panel": {
+        "kind": "hero",
+        "headline": "SYMPTOM\nIS NOT CAUSE.",
+        "bullets": [
+          "Number stayed flat",
+          "Silence is luck"
+        ],
+        "footnote": "The alert stopping is not an outcome receipt."
+      },
+      "broll": null,
+      "cues": [
+        {
+          "s": 0.0,
+          "e": 2.28,
+          "t": "The latency figure never moved."
+        },
+        {
+          "s": 2.9,
+          "e": 4.02,
+          "t": "Quiet is not evidence,"
+        },
+        {
+          "s": 4.58,
+          "e": 7.1,
+          "t": "so treating that reboot as the cause is false."
+        }
+      ]
+    },
+    {
       "id": "01-receipt-first-0",
       "side": "LEFT",
       "clip": "clips/01-receipt-first-0.mp4",
-      "durationFrames": 150,
+      "durationFrames": 240,
       "panel": {
         "kind": "hero",
         "headline": "STORED\nIS NOT TRUSTED.",
@@ -67,7 +100,7 @@
       "id": "05-cloudwatch-receipt-0",
       "side": "LEFT",
       "clip": "clips/05-cloudwatch-receipt-0.mp4",
-      "durationFrames": 160,
+      "durationFrames": 240,
       "panel": {
         "kind": "hero",
         "headline": "MATCH OR\nREFUSE.",
@@ -97,10 +130,38 @@
       ]
     },
     {
+      "id": "06-refuse-mismatch-0",
+      "side": "RIGHT",
+      "clip": "clips/06-refuse-mismatch-0.mp4",
+      "durationFrames": 240,
+      "panel": {
+        "kind": "hero",
+        "headline": "NO MATCH.\nNO KEYS.",
+        "bullets": [
+          "Wrong heading \u2192 stop",
+          "Wrong scale \u2192 stop"
+        ],
+        "footnote": "Authority stays blocked until a person reviews."
+      },
+      "broll": null,
+      "cues": [
+        {
+          "s": 0.0,
+          "e": 4.68,
+          "t": "A miss on heading or scale blocks acting alone without"
+        },
+        {
+          "s": 4.68,
+          "e": 5.78,
+          "t": "a human in the loop."
+        }
+      ]
+    },
+    {
       "id": "03-cockroachdb-aws-0",
       "side": "LEFT",
       "clip": "clips/03-cockroachdb-aws-0.mp4",
-      "durationFrames": 170,
+      "durationFrames": 240,
       "panel": {
         "kind": "hero",
         "headline": "ONE PLACE.\nFULL HISTORY.",
@@ -133,7 +194,7 @@
       "id": "04-held-for-review-0",
       "side": "RIGHT",
       "clip": "clips/04-held-for-review-0.mp4",
-      "durationFrames": 168,
+      "durationFrames": 240,
       "panel": {
         "kind": "quote",
         "lines": [
@@ -161,7 +222,7 @@
       "id": "07-attack-test-0",
       "side": "LEFT",
       "clip": "clips/07-attack-test-0.mp4",
-      "durationFrames": 173,
+      "durationFrames": 240,
       "panel": {
         "kind": "hero",
         "headline": "0 OF 540\nWERE PROMOTED.",
@@ -189,7 +250,7 @@
       "id": "08-honest-status-0",
       "side": "RIGHT",
       "clip": "clips/08-honest-status-0.mp4",
-      "durationFrames": 187,
+      "durationFrames": 240,
       "panel": {
         "kind": "hero",
         "headline": "LIVE\nLIMITS.",

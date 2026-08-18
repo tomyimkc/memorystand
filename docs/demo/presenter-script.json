@@ -1,13 +1,14 @@
 {
   "schemaVersion": 5,
   "title": "MemoryStand",
-  "targetDurationSeconds": 80,
+  "targetDurationSeconds": 110,
   "candidateOnly": true,
   "canClaimAGI": false,
   "_notes": [
     "GENERAL-PUBLIC CUT. One idea per shot. No repeated 3-word phrase. No filler.",
-    "Seven beats, seven shots. Each line is 14-20 words.",
-    "Story order is causal: problem, rule, check, ledger, conflict, proof, limits.",
+    "Nine beats, nine shots. Each line is 14-20 words.",
+    "Story: problem, why it is false, rule, check, refuse, ledger, conflict, proof, limits.",
+    "Each take plays the full 10s so the idle tail can fade into the next shot.",
     "Panels state the claim in different words from the voiceover.",
     "Remotion composes presenter + captions. Grok only generates the lip-synced takes.",
     "Every shot must pass transcript comparison before render."
@@ -27,6 +28,22 @@
       },
       "shots": [
         "An engineer restarts a service, the alert stops, and the restart is remembered as the fix forever."
+      ]
+    },
+    {
+      "id": "09-why-false-cause",
+      "presenterSide": "LEFT",
+      "panelData": {
+        "kind": "hero",
+        "headline": "SYMPTOM\nIS NOT CAUSE.",
+        "bullets": [
+          "Number stayed flat",
+          "Silence is luck"
+        ],
+        "footnote": "The alert stopping is not an outcome receipt."
+      },
+      "shots": [
+        "The latency figure never moved. Quiet is not evidence, so treating that reboot as the cause is false."
       ]
     },
     {
@@ -75,6 +92,22 @@
       },
       "shots": [
         "A claim becomes verified only when AWS CloudWatch agrees on metric, direction, and size."
+      ]
+    },
+    {
+      "id": "06-refuse-mismatch",
+      "presenterSide": "RIGHT",
+      "panelData": {
+        "kind": "hero",
+        "headline": "NO MATCH.\nNO KEYS.",
+        "bullets": [
+          "Wrong heading → stop",
+          "Wrong scale → stop"
+        ],
+        "footnote": "Authority stays blocked until a person reviews."
+      },
+      "shots": [
+        "A miss on heading or scale blocks acting alone without a human in the loop."
       ]
     },
     {

@@ -19,17 +19,19 @@ the reviewed deployed-demo footage so judges can see the project functioning, th
 memory history, and the AWS outcome gate without forcing the general viewer to decode those
 details in the voiceover.
 
-## Seven-beat arc
+## Nine-beat arc
 
-Causal order — problem, then the rule, then how it is checked, then where it is kept.
+Causal order. Each take plays the full 10 seconds so the idle tail can fade.
 
-1. **A dangerous coincidence** — an honest restart is remembered as the fix. That is the lie.
-2. **Receipt first, keys second** — a memory must show a receipt before it acts alone.
-3. **CloudWatch receipt** — AWS must agree on metric, direction, and size or the claim stays unverified.
-4. **CockroachDB ledger** — the fact, its source, its trust, and later decisions stay in one place.
-5. **Held for review** — disagreeing memories are kept; the weaker one waits for a person.
-6. **Attack test** — 540 attacks and 60 honest controls; none of the attacks were promoted.
-7. **Honest status** — word search, a fixed fallback, and zero model calls on promotion.
+1. **A dangerous coincidence** — an honest restart is remembered as the fix.
+2. **Why that is false** — the latency figure never moved; quiet is not evidence.
+3. **Receipt first, keys second** — a memory must show a receipt before it acts alone.
+4. **CloudWatch receipt** — AWS must agree on metric, direction, and size.
+5. **Refuse on mismatch** — a miss on heading or scale blocks acting alone.
+6. **CockroachDB ledger** — the fact, its source, its trust, and later decisions stay together.
+7. **Held for review** — disagreeing memories are kept; the weaker one waits for a person.
+8. **Attack test** — 540 attacks and 60 honest controls; none of the attacks were promoted.
+9. **Honest status** — word search, a fixed fallback, and zero model calls on promotion.
 
 The voiceover and main panel copy deliberately omit the Lambda/Amplify inventory, the numeric
 timeout walkthrough, the four-level taxonomy, HTTP 402, and Bedrock quota mechanics. The exact
