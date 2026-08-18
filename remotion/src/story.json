@@ -1,12 +1,13 @@
 {
   "fps": 24,
-  "outroFrames": 192,
+  "outroFrames": 120,
   "shots": [
     {
       "id": "02-dangerous-coincidence-0",
       "side": "RIGHT",
       "clip": "clips/02-dangerous-coincidence-0.mp4",
-      "durationFrames": 240,
+      "durationFrames": 192,
+      "speechEndSeconds": 7.36,
       "panel": {
         "kind": "hero",
         "headline": "TIMING\nIS NOT PROOF.",
@@ -34,32 +35,44 @@
       "id": "09-why-false-cause-0",
       "side": "LEFT",
       "clip": "clips/09-why-false-cause-0.mp4",
-      "durationFrames": 240,
+      "durationFrames": 218,
+      "speechEndSeconds": 8.42,
       "panel": {
         "kind": "hero",
         "headline": "SYMPTOM\nIS NOT CAUSE.",
         "bullets": [
-          "Number stayed flat",
-          "Silence is luck"
+          "Outside result stayed flat",
+          "Timing alone proves nothing"
         ],
         "footnote": "The alert stopping is not an outcome receipt."
       },
-      "broll": null,
+      "broll": {
+        "source": "artifacts/video/memorystand-evidence-source.mp4",
+        "startSeconds": 90,
+        "label": "OUTSIDE RECEIPT",
+        "headline": "ALERT QUIET. SERVICE LATENCY STILL FLAT.",
+        "callouts": [
+          "Before: 223 ms",
+          "After: 220 ms",
+          "Claimed improvement: 112 ms"
+        ],
+        "durationSeconds": 9.07
+      },
       "cues": [
         {
           "s": 0.0,
-          "e": 2.28,
-          "t": "The latency figure never moved."
+          "e": 2.72,
+          "t": "The outside service latency graph stayed flat."
         },
         {
-          "s": 2.9,
-          "e": 4.02,
-          "t": "Quiet is not evidence,"
+          "s": 3.62,
+          "e": 4.46,
+          "t": "The alert stopped,"
         },
         {
-          "s": 4.58,
-          "e": 7.1,
-          "t": "so treating that reboot as the cause is false."
+          "s": 4.96,
+          "e": 8.42,
+          "t": "but that timing does not prove the reboot fixed anything."
         }
       ]
     },
@@ -67,7 +80,8 @@
       "id": "01-receipt-first-0",
       "side": "LEFT",
       "clip": "clips/01-receipt-first-0.mp4",
-      "durationFrames": 240,
+      "durationFrames": 155,
+      "speechEndSeconds": 5.82,
       "panel": {
         "kind": "hero",
         "headline": "STORED\nIS NOT TRUSTED.",
@@ -79,9 +93,15 @@
       },
       "broll": {
         "source": "artifacts/video/memorystand-evidence-source.mp4",
-        "startSeconds": 0,
+        "startSeconds": 2,
         "label": "LIVE DASHBOARD",
-        "headline": "THE APP IS RUNNING"
+        "headline": "THE DEPLOYED APP IS RUNNING",
+        "callouts": [
+          "Write a memory",
+          "Check the outcome",
+          "Only then grant authority"
+        ],
+        "durationSeconds": 6.47
       },
       "cues": [
         {
@@ -100,7 +120,8 @@
       "id": "05-cloudwatch-receipt-0",
       "side": "LEFT",
       "clip": "clips/05-cloudwatch-receipt-0.mp4",
-      "durationFrames": 240,
+      "durationFrames": 164,
+      "speechEndSeconds": 6.2,
       "panel": {
         "kind": "hero",
         "headline": "MATCH OR\nREFUSE.",
@@ -112,9 +133,15 @@
       },
       "broll": {
         "source": "artifacts/video/memorystand-evidence-source.mp4",
-        "startSeconds": 78,
+        "startSeconds": 96,
         "label": "LIVE METRIC CHECK",
-        "headline": "CLOUDWATCH IS RE-QUERIED"
+        "headline": "CLOUDWATCH IS RE-QUERIED",
+        "callouts": [
+          "Right metric",
+          "Right direction",
+          "Right amount"
+        ],
+        "durationSeconds": 6.85
       },
       "cues": [
         {
@@ -133,13 +160,14 @@
       "id": "06-refuse-mismatch-0",
       "side": "RIGHT",
       "clip": "clips/06-refuse-mismatch-0.mp4",
-      "durationFrames": 240,
+      "durationFrames": 196,
+      "speechEndSeconds": 7.52,
       "panel": {
         "kind": "hero",
         "headline": "NO MATCH.\nNO KEYS.",
         "bullets": [
-          "Wrong heading \u2192 stop",
-          "Wrong scale \u2192 stop"
+          "Wrong direction \u2192 stop",
+          "Wrong amount \u2192 stop"
         ],
         "footnote": "Authority stays blocked until a person reviews."
       },
@@ -147,13 +175,13 @@
       "cues": [
         {
           "s": 0.0,
-          "e": 4.68,
-          "t": "A miss on heading or scale blocks acting alone without"
+          "e": 3.38,
+          "t": "If CloudWatch shows the wrong direction or amount,"
         },
         {
-          "s": 4.68,
-          "e": 5.78,
-          "t": "a human in the loop."
+          "s": 4.3,
+          "e": 7.52,
+          "t": "autonomous action stops until a person reviews it."
         }
       ]
     },
@@ -161,7 +189,8 @@
       "id": "03-cockroachdb-aws-0",
       "side": "LEFT",
       "clip": "clips/03-cockroachdb-aws-0.mp4",
-      "durationFrames": 240,
+      "durationFrames": 174,
+      "speechEndSeconds": 6.62,
       "panel": {
         "kind": "hero",
         "headline": "ONE PLACE.\nFULL HISTORY.",
@@ -173,9 +202,15 @@
       },
       "broll": {
         "source": "artifacts/video/memorystand-evidence-source.mp4",
-        "startSeconds": 30,
-        "label": "LIVE SQL HISTORY",
-        "headline": "THE LEDGER DID NOT DROP A ROW"
+        "startSeconds": 118,
+        "label": "COCKROACHDB HISTORY",
+        "headline": "THE OLD AND NEW BELIEF BOTH REMAIN",
+        "callouts": [
+          "Pinned read at decision time",
+          "Live database now",
+          "Real diff, no reconstruction"
+        ],
+        "durationSeconds": 7.27
       },
       "cues": [
         {
@@ -194,7 +229,8 @@
       "id": "04-held-for-review-0",
       "side": "RIGHT",
       "clip": "clips/04-held-for-review-0.mp4",
-      "durationFrames": 240,
+      "durationFrames": 173,
+      "speechEndSeconds": 6.56,
       "panel": {
         "kind": "quote",
         "lines": [
@@ -222,7 +258,8 @@
       "id": "07-attack-test-0",
       "side": "LEFT",
       "clip": "clips/07-attack-test-0.mp4",
-      "durationFrames": 240,
+      "durationFrames": 177,
+      "speechEndSeconds": 6.74,
       "panel": {
         "kind": "hero",
         "headline": "0 OF 540\nWERE PROMOTED.",
@@ -232,7 +269,18 @@
         ],
         "footnote": "Authority scored separately from storage"
       },
-      "broll": null,
+      "broll": {
+        "source": "artifacts/video/memorystand-evidence-source.mp4",
+        "startSeconds": 163,
+        "label": "DETERMINISTIC TEST RECEIPT",
+        "headline": "540 ATTACKS \u00b7 60 HONEST \u00b7 0 PROMOTED",
+        "callouts": [
+          "540 of 540 attacks stored",
+          "0 of 540 attacks gained authority",
+          "60 of 60 honest controls preserved"
+        ],
+        "durationSeconds": 7.39
+      },
       "cues": [
         {
           "s": 0.0,
@@ -250,7 +298,8 @@
       "id": "08-honest-status-0",
       "side": "RIGHT",
       "clip": "clips/08-honest-status-0.mp4",
-      "durationFrames": 240,
+      "durationFrames": 192,
+      "speechEndSeconds": 7.36,
       "panel": {
         "kind": "hero",
         "headline": "LIVE\nLIMITS.",

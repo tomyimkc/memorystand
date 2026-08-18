@@ -65,10 +65,11 @@ MIN_SIMILARITY = 0.72
 # 2.34 words/sec, an unhurried presenting pace -- and each beat becomes one or two long takes
 # instead of three short ones, so the cut stops chopping sentences in half.
 #
-# The corollary is that shot length is now a WRITING constraint: 19-23 words per shot. Fewer and
-# the clip pads with silence; more and he starts racing the clock again.
+# The source take still needs enough room for unhurried delivery. The final
+# compositor measures speech and trims the unused tail instead of padding the
+# edit to the generator's fixed duration.
 DURATION_S = 10
-WORDS_MIN, WORDS_MAX = 14, 20
+WORDS_MIN, WORDS_MAX = 10, 24
 
 
 # Spoken numbers and written numbers are the same claim. The transcriber always returns digits.

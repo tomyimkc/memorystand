@@ -26,12 +26,21 @@ RECEIPT = REPO_ROOT / "docs" / "demo" / "presenter-verification.json"
 CLIP_DIR = REPO_ROOT / "artifacts" / "presenter" / "clips"
 PUBLIC = REPO_ROOT / "remotion" / "public"
 STORY_OUT = REPO_ROOT / "remotion" / "src" / "story.json"
-EVIDENCE = REPO_ROOT / "artifacts" / "video" / "memorystand-evidence-source.mp4"
 FPS = 24
-# Play the whole 10s Grok take. The idle tail after speech is the hold
-# that makes the cut breathe; Remotion fades across that tail.
-CLIP_DURATION_S = 10.0
-OUTRO_FRAMES = 192
+# Grok returns fixed 10s takes, but the film should not inherit their unused
+# tails. Keep just enough measured post-speech room for the final consonant and
+# a natural visual breath.
+HOLD_S = 0.65
+MIN_SHOT_S = 5.0
+OUTRO_FRAMES = 120
+
+
+def _srt_time(seconds: float) -> str:
+    ms = int(round(seconds * 1000))
+    hours, ms = divmod(ms, 3_600_000)
+    minutes, ms = divmod(ms, 60_000)
+    secs, ms = divmod(ms, 1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{ms:03d}"
 
 
 def _whisper_words(mp4: Path) -> list[tuple[str, float, float]]:
@@ -60,8 +69,45 @@ def main() -> int:
 
     public_clips = PUBLIC / "clips"
     public_clips.mkdir(parents=True, exist_ok=True)
-    if EVIDENCE.is_file():
-        shutil.copy2(EVIDENCE, PUBLIC / "evidence.mp4")
+    evidence_sources = {
+        str(visual["source"])
+        for beat in spec["beats"]
+        for visual in (beat.get("broll") or {}).values()
+    }
+    if len(evidence_sources) > 1:
+        print(
+            "refusing story: Remotion currently supports one shared evidence source, "
+            f"found {sorted(evidence_sources)!r}",
+            file=sys.stderr,
+        )
+        return 2
+    evidence_source = next(iter(evidence_sources), "")
+    evidence_path = REPO_ROOT / evidence_source if evidence_source else None
+    if evidence_path and evidence_path.is_file():
+        shutil.copy2(evidence_path, PUBLIC / "evidence.mp4")
+        evidence_probe = json.loads(
+            subprocess.run(
+                [
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-show_entries",
+                    "format=duration",
+                    "-of",
+                    "json",
+                    str(evidence_path),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout
+        )
+        evidence_duration = float(evidence_probe["format"]["duration"])
+    elif evidence_source:
+        print(f"refusing story: b-roll source is missing: {evidence_path}", file=sys.stderr)
+        return 2
+    else:
+        evidence_duration = 0.0
 
     story_shots = []
     for beat in spec["beats"]:
@@ -78,7 +124,11 @@ def main() -> int:
             dest = public_clips / src.name
             shutil.copy2(src, dest)
             words = align_to_script(line, _whisper_words(src))
-            duration = CLIP_DURATION_S
+            if not words:
+                print(f"refusing {tag}: no speech found in clip", file=sys.stderr)
+                return 2
+            speech_end = max(end for _, _, end in words)
+            duration = min(10.0, max(MIN_SHOT_S, speech_end + HOLD_S))
             cues = [
                 {"s": round(s, 3), "e": round(e, 3), "t": text}
                 for s, e, text in caption_cues(words)
@@ -92,12 +142,32 @@ def main() -> int:
                     folded.append(cue)
             cues = folded
             visual = (beat.get("broll") or {}).get(str(index))
+            if visual:
+                visual = dict(visual)
+                if visual["source"] != evidence_source:
+                    print(
+                        f"refusing {tag}: b-roll source changed after validation",
+                        file=sys.stderr,
+                    )
+                    return 2
+                visual_duration = float(visual.get("durationSeconds", duration))
+                start = float(visual["startSeconds"])
+                if start + visual_duration > evidence_duration + 0.05:
+                    print(
+                        f"refusing {tag}: b-roll range {start:.2f}-"
+                        f"{start + visual_duration:.2f}s exceeds the "
+                        f"{evidence_duration:.2f}s reviewed source",
+                        file=sys.stderr,
+                    )
+                    return 2
+                visual["durationSeconds"] = round(visual_duration, 3)
             story_shots.append(
                 {
                     "id": tag,
                     "side": beat["presenterSide"],
                     "clip": f"clips/{src.name}",
                     "durationFrames": max(1, round(duration * FPS)),
+                    "speechEndSeconds": round(speech_end, 3),
                     "panel": beat["panelData"],
                     "broll": visual,
                     "cues": cues,
@@ -111,8 +181,30 @@ def main() -> int:
         "outro": spec["outro"],
     }
     STORY_OUT.write_text(json.dumps(story, indent=2) + "\n")
+    srt_rows: list[str] = []
+    cursor_s = 0.0
+    cue_index = 1
+    for shot in story_shots:
+        for cue in shot["cues"]:
+            start = cursor_s + float(cue["s"])
+            end = cursor_s + float(cue["e"])
+            srt_rows.extend(
+                [
+                    str(cue_index),
+                    f"{_srt_time(start)} --> {_srt_time(end)}",
+                    str(cue["t"]),
+                    "",
+                ]
+            )
+            cue_index += 1
+        cursor_s += shot["durationFrames"] / FPS
+    srt_out = PUBLIC / "memorystand-presenter.srt"
+    srt_out.write_text("\n".join(srt_rows).rstrip() + "\n", encoding="utf-8")
     total = sum(s["durationFrames"] for s in story_shots) + OUTRO_FRAMES
-    print(f"wrote {STORY_OUT}  {len(story_shots)} shots  {total / FPS:.1f}s")
+    print(
+        f"wrote {STORY_OUT} and {srt_out}  "
+        f"{len(story_shots)} shots  {total / FPS:.1f}s"
+    )
     return 0
 
 

@@ -1,8 +1,9 @@
-# MemoryStand Remotion cut
+# MemoryStand Remotion proof cut
 
-Presenter-first. Grok lip-synced takes fill the frame. Remotion only adds
-captions, a thin lower-third, and the end card — no slide boards, no
-screen-capture takeover.
+Presenter-led. Grok lip-synced medium shots carry the narration. Selected
+beats keep the presenter visible over reviewed product evidence so judges see
+the functioning project and CockroachDB memory layer, not just hear them named.
+Remotion adds captions, evidence callouts, and the end card.
 
 ```bash
 python scripts/presenter/verify_script.py

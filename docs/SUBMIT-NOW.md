@@ -7,15 +7,18 @@ Do these in order. Do not improvise field values; they are already written in
 
 ## 1. Upload the video (this is the remaining hard blocker)
 
-Upload this cut — 2026-08-18 Remotion compose. Nine full 10s medium-shot
-takes with fades. Beat 2 now says **why** the restart-as-fix memory is false
-(the latency figure never moved; quiet is not evidence).
+Upload this cut — 2026-08-18 Remotion presenter-led proof cut. It trims each
+10-second source take to measured speech plus a short hold, keeps the synthetic
+presenter visible over five evidence beats, and directly explains **why** the
+restart-as-fix memory is false: the alert stopped, but the outside
+service-latency graph stayed essentially flat (223 ms before, 220 ms after,
+versus a claimed 112 ms improvement), so timing did not prove cause.
 
 | Cut | Path | Runtime | SHA-256 |
 |---|---|---|---|
-| **Use this** | `~/Downloads/MemoryStand-Remotion-why-hold-2026-08-18.mp4` | 98.048 s | `1dddd4d17c122dd3fc7445c5de2531187a104593712fec0e72a364e8ee83885c` |
-| Sidecar SRT | `~/Downloads/MemoryStand-Remotion-why-hold-2026-08-18.srt` | 20 cues | same timings as this cut |
-| Do not use | earlier `story-order` / `medium-shot` / `presenter-first` files | — | missing the why-beat, or too tight / too close |
+| **Use this** | `~/Downloads/MemoryStand-Remotion-proof-cut-2026-08-18.mp4` | 73.429 s | `2ae87a57c0a3bd052e003b7558b0e0ebbf07b80a2dfeee8989d8995c456995a8` |
+| Sidecar SRT | `~/Downloads/MemoryStand-Remotion-proof-cut-2026-08-18.srt` | 20 cues | same timings as this cut |
+| Do not use | earlier `why-hold` / `story-order` / `medium-shot` / `presenter-first` files | — | padded, missing product evidence, missing the why-beat, or too close |
 
 1. YouTube or Vimeo, **Public**, not Unlisted.
 2. Watch the public link logged out, start to finish.

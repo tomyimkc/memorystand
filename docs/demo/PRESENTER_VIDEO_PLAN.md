@@ -1,6 +1,6 @@
 # MemoryStand — general-public Grok presenter cut
 
-**Target runtime:** about 0:50–1:00, always below the contest's 3:00 ceiling.
+**Target runtime:** about 1:10, always below the contest's 3:00 ceiling.
 
 **Framing rule (hard):** 16:9 medium shot only. Head + both shoulders + upper chest.
 Never cover-crop a 3:4 portrait onto 16:9. See `~/.grok/skills/presenter-video-taste/SKILL.md`.
@@ -14,23 +14,27 @@ An AI memory must show an outside receipt before it gets the keys to act alone.
 
 That sentence is the editorial test for every beat. The narration assumes the viewer has
 never used an AI agent, CockroachDB, AWS, vector search, or an incident-management tool.
-The film uses one large headline and at most two short keypoints per panel. Four shots cut to
-the reviewed deployed-demo footage so judges can see the project functioning, the CockroachDB
-memory history, and the AWS outcome gate without forcing the general viewer to decode those
-details in the voiceover.
+The film uses one large headline and at most three short evidence callouts. Five shots use
+reviewed deployed-demo footage while keeping the presenter visible, so judges can see the
+project functioning, the CockroachDB memory history, the AWS outcome gate, and the adversarial
+test receipt without turning the film into a screen-capture walkthrough.
 
 ## Nine-beat arc
 
-Causal order. Each take plays the full 10 seconds so the idle tail can fade.
+Causal order. The Grok source take remains 10 seconds, but Remotion trims the final shot to
+measured speech plus a 0.65-second hold. Fixed generation length is not editorial runtime.
 
 1. **A dangerous coincidence** — an honest restart is remembered as the fix.
-2. **Why that is false** — the latency figure never moved; quiet is not evidence.
+2. **Why that is false** — the alert stopped, but the outside service-latency result stayed
+   essentially flat (223 ms before, 220 ms after, versus a claimed 112 ms improvement);
+   timing alone does not prove the reboot caused recovery.
 3. **Receipt first, keys second** — a memory must show a receipt before it acts alone.
 4. **CloudWatch receipt** — AWS must agree on metric, direction, and size.
-5. **Refuse on mismatch** — a miss on heading or scale blocks acting alone.
+5. **Refuse on mismatch** — CloudWatch showing the wrong direction or amount blocks acting alone.
 6. **CockroachDB ledger** — the fact, its source, its trust, and later decisions stay together.
 7. **Held for review** — disagreeing memories are kept; the weaker one waits for a person.
-8. **Attack test** — 540 attacks and 60 honest controls; none of the attacks were promoted.
+8. **Attack test** — show the receipt: 540 attacks stored, 0 granted authority, 60 honest
+   controls preserved.
 9. **Honest status** — word search, a fixed fallback, and zero model calls on promotion.
 
 The voiceover and main panel copy deliberately omit the Lambda/Amplify inventory, the numeric
@@ -75,6 +79,11 @@ python scripts/presenter/build_remotion_story.py
 ( cd remotion && npm install && npm run render )
 cp remotion/out/memorystand-presenter.mp4 artifacts/video/memorystand-presenter.mp4
 ```
+
+The Remotion component renders every `broll` entry. Each evidence beat keeps the talking-head
+visible in a medium-shot picture-in-picture; the product footage supplies the proof, not a PPT
+board. `build_remotion_story.py` fails closed if a requested evidence range would exceed the
+reviewed source.
 
 Outputs are gitignored:
 

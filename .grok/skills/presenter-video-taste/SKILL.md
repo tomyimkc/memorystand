@@ -32,9 +32,21 @@ A portrait close-up `objectFit: cover` onto 16:9 crops the mouth off and looks l
 - 16:9 medium take: `objectFit: "cover"` + `objectPosition: "center center"`.
 - **Never** `objectPosition: "center 42%"` to "fix" a portrait — that is how the 2026-08-17 MemoryStand cut became a face-fill.
 - Portrait take: `objectFit: "contain"` on a dark 16:9 canvas. Never `cover` a 3:4 portrait onto 16:9.
-- Talking head is the picture. No slide boards unless the user asked for product footage.
+- The talking head carries the film. When contest rules require product footage, keep the
+  presenter visible in a medium-shot picture-in-picture and let a short evidence sting supply
+  the proof. Do not choose between presenter and compliance.
 - Captions in the empty lower band. Lower-third on the **empty** side (LEFT presenter → right).
+- A 10-second generator maximum is not a 10-second edit mandate. Trim to measured speech plus
+  roughly 0.5–0.8 seconds; silent face time is padding, not smoothness.
+- Crossfades must actually overlap. Independently fading an outgoing shot to black and then
+  fading the next shot up creates a visible pulse and doubles the transition.
+- If a claim hinges on a dashboard or a number, show that receipt. A tiny lower-third is a label,
+  not evidence.
+- Never stack fresh captions over captions already burned into evidence footage. Crop or mask
+  the source caption band, or deliberately use the existing caption as the only subtitle layer.
 
 ## Verify before you say done
 
-Extract a frame at ~2s and ~mid-shot. Fail if: forehead-only, mouth under a caption, no shoulders, or the subject fills more than half the frame height.
+Extract a frame at ~2s and ~mid-shot. Fail if: forehead-only, mouth under a caption, no shoulders,
+or the subject fills more than half the frame height. For evidence beats, also fail if the product
+text is unreadable at 1920×1080 or the presenter covers the receipt.
