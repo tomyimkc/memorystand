@@ -10,13 +10,15 @@ Do these in order. Do not improvise field values; they are already written in
 Upload this cut — 2026-08-18 Remotion presenter-led proof cut. It trims each
 10-second source take to measured speech plus a short hold, keeps the synthetic
 presenter visible over five evidence beats, and directly explains **why** the
-restart-as-fix memory is false: the alert stopped, but the outside
-service-latency graph stayed essentially flat (223 ms before, 220 ms after,
-versus a claimed 112 ms improvement), so timing did not prove cause.
+restart-as-fix memory is false: in a clearly labeled seeded decision-rule test,
+the page cleared while service latency stayed essentially flat (223 ms before,
+220 ms after, versus a claimed 112 ms improvement), so timing did not prove
+cause. The film explicitly says those example values are not production
+CloudWatch data.
 
 | Cut | Path | Runtime | SHA-256 |
 |---|---|---|---|
-| **Use this** | `~/Downloads/MemoryStand-Remotion-proof-cut-2026-08-18.mp4` | 73.429 s | `2ae87a57c0a3bd052e003b7558b0e0ebbf07b80a2dfeee8989d8995c456995a8` |
+| **Use this** | `~/Downloads/MemoryStand-Remotion-proof-cut-2026-08-18.mp4` | 72.597 s | `c101320b38e9432fdb9e33d7424503412f3d57f23a767f1d27370d5198677cba` |
 | Sidecar SRT | `~/Downloads/MemoryStand-Remotion-proof-cut-2026-08-18.srt` | 20 cues | same timings as this cut |
 | Do not use | earlier `why-hold` / `story-order` / `medium-shot` / `presenter-first` files | — | padded, missing product evidence, missing the why-beat, or too close |
 

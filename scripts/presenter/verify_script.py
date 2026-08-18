@@ -165,8 +165,8 @@ def validate(spec: dict) -> list[str]:
                 errors.append(f"{beat_id}-{raw_index}: broll label must be 1-32 characters")
             if not isinstance(headline, str) or not 1 <= len(headline) <= 64:
                 errors.append(f"{beat_id}-{raw_index}: broll headline must be 1-64 characters")
-            if not isinstance(callouts, list) or not 1 <= len(callouts) <= 3:
-                errors.append(f"{beat_id}-{raw_index}: broll callouts must contain 1-3 items")
+            if not isinstance(callouts, list) or not 1 <= len(callouts) <= 4:
+                errors.append(f"{beat_id}-{raw_index}: broll callouts must contain 1-4 items")
             elif any(not isinstance(item, str) or not 1 <= len(item) <= 48 for item in callouts):
                 errors.append(
                     f"{beat_id}-{raw_index}: each broll callout must be 1-48 characters"

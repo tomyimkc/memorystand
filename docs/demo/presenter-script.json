@@ -1,7 +1,7 @@
 {
   "schemaVersion": 5,
   "title": "MemoryStand",
-  "targetDurationSeconds": 73,
+  "targetDurationSeconds": 72,
   "candidateOnly": true,
   "canClaimAGI": false,
   "_notes": [
@@ -37,7 +37,7 @@
         "kind": "hero",
         "headline": "SYMPTOM\nIS NOT CAUSE.",
         "bullets": [
-        "Outside result stayed flat",
+        "Seeded result stayed flat",
         "Timing alone proves nothing"
         ],
         "footnote": "The alert stopping is not an outcome receipt."
@@ -45,18 +45,19 @@
       "broll": {
         "0": {
           "source": "artifacts/video/memorystand-evidence-source.mp4",
-          "startSeconds": 90,
-          "label": "OUTSIDE RECEIPT",
-          "headline": "ALERT QUIET. SERVICE LATENCY STILL FLAT.",
+          "startSeconds": 0,
+          "label": "SEEDED DECISION-RULE TEST",
+          "headline": "THE PAGE CLEARED. LATENCY STAYED FLAT.",
           "callouts": [
             "Before: 223 ms",
             "After: 220 ms",
-            "Claimed improvement: 112 ms"
+            "Claimed improvement: 112 ms",
+            "Not production CloudWatch"
           ]
         }
       },
       "shots": [
-        "The outside service latency graph stayed flat. The alert stopped, but that timing does not prove the reboot fixed anything."
+        "In a seeded test, service latency stayed flat. The page cleared, but that timing does not prove the reboot worked."
       ]
     },
     {

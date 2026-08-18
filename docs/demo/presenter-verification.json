@@ -59,9 +59,9 @@
     },
     "09-why-false-cause-0": {
       "clip": "09-why-false-cause-0.mp4",
-      "asked": "The outside service latency graph stayed flat. The alert stopped, but that timing does not prove the reboot fixed anything.",
-      "heard": "The outside service latency graph stayed flat.  The alert stopped, but that timing does not prove the reboot fixed anything.",
-      "similarity": 1.0,
+      "asked": "In a seeded test, service latency stayed flat. The page cleared, but that timing does not prove the reboot worked.",
+      "heard": "In a seated test, service latency stayed flat.  The page cleared, but that timing does not prove the reboot worked.",
+      "similarity": 0.95,
       "passed": true
     }
   }
