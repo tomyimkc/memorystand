@@ -211,7 +211,17 @@ Its write probe is opt-in behind `--probe-writes` and has not been run.
 
 ## Live and verified end to end
 
-**Dashboard (click this): <https://main.d19xad9aeccy3e.amplifyapp.com>**
+**Dashboard (AWS Amplify): <https://main.d19xad9aeccy3e.amplifyapp.com>**
+
+**Judge-facing mirror (Hugging Face Static Space):
+<https://tomyimkc-memorystand.static.hf.space/>**
+
+Both URLs serve the same canonical files from `frontend/`. The Hugging Face
+bundle is generated with `python3 scripts/build_hf_space.py`; it is not a
+separate implementation. The default experience is now a concise guided path:
+compare the closer unconfirmed restart with the farther verified scale-up, run
+the deployed `/decide` route, then inspect its CockroachDB retrieval receipt.
+The manual four-panel dashboard remains under **Advanced workspace**.
 
 **API endpoint it talks to: <https://ojao6oaxlk26mqfjwpuy7g4dy40tglyi.lambda-url.us-west-2.on.aws>**
 — a JSON API with no root route, so `GET /` returns 404 by design. It is not the demo; it is

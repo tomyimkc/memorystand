@@ -441,6 +441,7 @@
     var tenantInput = $("tenantId");
     if (secretInput && !secretInput.value) secretInput.value = demo.credential;
     if (tenantInput && !tenantInput.value) tenantInput.value = demo.tenant_id;
+    if (runGuidedDemoBtn) runGuidedDemoBtn.disabled = false;
     var label = document.querySelector('label[for="sharedSecret"] .hint');
     if (label) {
       label.textContent = "(public demo credential, filled in for you — writes only to the demo tenant)";
@@ -450,24 +451,330 @@
   function checkConnection() {
     statusDot.className = "status-dot";
     statusText.textContent = "checking…";
-    fetchWithTimeout(API_BASE + "/health", { method: "GET" })
+    return fetchWithTimeout(API_BASE + "/health", { method: "GET" })
       .then(function (res) {
         markConnected(true);
         // Auto-fill the public demo credential so a reviewer never has to be handed one, or
         // type one, to drive the write routes. It is safe to publish precisely because the
         // server scopes it to a single tenant (handler._scope_tenant) -- 401 for anything else.
         // Nothing is overwritten if the visitor has already typed their own secret.
-        return res.json().then(function (h) { applyDemoCredential(h && h.demo); }).catch(function () {});
+        return res.json().then(function (h) {
+          applyDemoCredential(h && h.demo);
+          return h;
+        }).catch(function () { return null; });
       })
       .catch(function () {
         // A same-origin-policy / network failure / timeout means truly unreachable.
         // Any HTTP response at all (even 404, if /health isn't implemented)
         // still proves the server is up, and is handled in the .then above.
         markConnected(false);
+        return null;
       });
   }
 
   checkConnection();
+
+  // Stable identifiers for the isolated public demo tenant. They are declared
+  // before the guided path because that path starts during page load, not only
+  // after the Advanced workspace is opened.
+  var SEEDED_TENANT_ID = "9c8f6e5a-9d1a-4a1c-8f2e-3b6d1c7a4e10";
+  var SEEDED_AGENT_ID = "1a2b3c4d-5e6f-4708-9a0b-1c2d3e4f5061";
+
+  // --------------------------------------------------------- guided judge path
+  // The default page is deliberately not the four-form operator dashboard. It
+  // first shows the one contrast a judge must understand, then lets the visitor
+  // exercise the real decision route, then opens the recorded CockroachDB
+  // retrieval receipt. Raw JSON and all manual controls remain below under
+  // "Advanced workspace".
+  var GUIDED_QUERY = "payments-service p99 latency above 2s, error rate climbing";
+  var guidedResult = $("guidedResult");
+  var runGuidedDemoBtn = $("runGuidedDemo");
+  var inspectGuidedReceiptBtn = $("inspectGuidedReceipt");
+  var guidedInstruction = $("guidedInstruction");
+  var lastGuidedDecisionId = null;
+
+  function actionLabel(value) {
+    return String(value || "unknown").replace(/_/g, " ");
+  }
+
+  function findGuidedMemories(rows) {
+    var list = rows || [];
+    var restart = list.find(function (m) {
+      return String(m.attribute_value || "").toLowerCase() === "restart_service" ||
+        String(m.content || "").toLowerCase().indexOf("restart_service") !== -1;
+    }) || null;
+    var verified = list.find(function (m) {
+      return m.trust_tier === "verified" &&
+        (String(m.attribute_value || "").toLowerCase() === "scale_up" ||
+          String(m.content || "").toLowerCase().indexOf("scale_up") !== -1);
+    }) || null;
+    return { restart: restart, verified: verified };
+  }
+
+  function guidedMemoryCard(memory, opts) {
+    opts = opts || {};
+    var action = opts.action || actionLabel(memory && memory.attribute_value);
+    return el("article", { class: "guided-memory" + (opts.stronger ? " stronger" : "") }, [
+      el("div", { class: "guided-memory-head" }, [
+        el("span", {
+          class: "badge " + trustBadgeClass(memory && memory.trust_tier),
+          text: trustTierLabel(memory && memory.trust_tier),
+        }),
+        el("span", {
+          class: "distance",
+          text: memory && typeof memory.distance === "number"
+            ? "distance " + fmtNum(memory.distance)
+            : "distance unavailable",
+        }),
+      ]),
+      el("h4", { text: action }),
+      el("p", {
+        text: opts.explain || (memory && memory.content) || "The expected seeded memory is unavailable.",
+      }),
+    ]);
+  }
+
+  function renderGuidedComparison(rows) {
+    clear(guidedResult);
+    var pair = findGuidedMemories(rows);
+    if (!pair.restart || !pair.verified) {
+      guidedResult.appendChild(
+        el("div", { class: "error-banner", text:
+          "The live tenant did not return both seeded comparison memories. Reload the page or use the Advanced workspace to inspect the raw recall response." })
+      );
+      return;
+    }
+    guidedResult.appendChild(
+      el("div", { class: "guided-compare" }, [
+        guidedMemoryCard(pair.restart, {
+          action: "Restart service",
+          explain: "Closest word match. The page cleared, but the outcome was never independently corroborated.",
+        }),
+        guidedMemoryCard(pair.verified, {
+          action: "Scale up",
+          stronger: true,
+          explain: "Farther word match. CloudWatch-backed standing gives this memory authority the restart does not have.",
+        }),
+      ])
+    );
+    guidedInstruction.textContent =
+      "The restart is closer, but closeness is not proof. Click “Run the live decision” to see which memory may steer.";
+  }
+
+  function loadGuidedComparison() {
+    clear(guidedResult);
+    guidedResult.appendChild(placeholder("Loading the decisive memories from the live deployment…"));
+    apiGet("/recall", {
+      tenant_id: SEEDED_TENANT_ID,
+      q: GUIDED_QUERY,
+      k: 5,
+    }).then(function (result) {
+      if (!result.ok || !result.data) {
+        renderError(guidedResult, result);
+        guidedInstruction.textContent =
+          "The live comparison could not load. Check the connection status, then retry.";
+        return;
+      }
+      renderGuidedComparison(result.data.results || []);
+    });
+  }
+
+  function renderGuidedDecision(data) {
+    clear(guidedResult);
+    var consulted = data.consulted || [];
+    var pair = findGuidedMemories(consulted);
+    var chosenId = Array.isArray(data.cited_memory_ids) ? data.cited_memory_ids[0] : null;
+    var chosen = chosenId
+      ? consulted.find(function (m) { return m.memory_id === chosenId; })
+      : pair.verified;
+    var statusText = data.status === "held_for_approval"
+      ? "Held for human approval"
+      : "Cleared to proceed";
+    guidedResult.appendChild(
+      el("div", { class: "guided-verdict" }, [
+        el("div", {}, [
+          el("span", {
+            class: "badge " + (data.status === "held_for_approval" ? "amber" : "green"),
+            text: statusText,
+          }),
+          el("h4", { text: actionLabel(data.action) + " wins on trust" }),
+          el("p", {
+            text:
+              "The closer unconfirmed restart remained visible, but it did not steer the action. " +
+              "The " + trustTierLabel(chosen && chosen.trust_tier) +
+              " memory supplied the recommendation, and the high-risk action stayed behind human approval.",
+          }),
+        ]),
+        el("div", { class: "guided-metric" }, [
+          el("span", { text: "model calls" }),
+          el("strong", { text: String(typeof data.model_calls === "number" ? data.model_calls : 0) }),
+        ]),
+      ])
+    );
+    if (pair.restart && chosen) {
+      guidedResult.appendChild(
+        el("div", { class: "guided-compare" }, [
+          guidedMemoryCard(pair.restart, {
+            action: "Closer: restart",
+            explain: "Stored and inspectable, but unconfirmed — no keys.",
+          }),
+          guidedMemoryCard(chosen, {
+            action: "Chosen: " + actionLabel(data.action),
+            stronger: true,
+            explain: "Standing from outside evidence outranked word proximity.",
+          }),
+        ])
+      );
+    }
+    guidedResult.appendChild(rawJsonBlock(data));
+    guidedInstruction.textContent =
+      "Result: trust outranked proximity, and safety still held the risky action. Inspect the CockroachDB receipt next.";
+  }
+
+  function renderGuidedReceipt(data) {
+    clear(guidedResult);
+    var decision = data.decision || {};
+    var recalled = data.recalled_as_of || [];
+    var pair = findGuidedMemories(recalled);
+    guidedResult.appendChild(
+      el("div", { class: "guided-verdict" }, [
+        el("div", {}, [
+          el("span", { class: "badge purple", text: "CockroachDB receipt" }),
+          el("h4", { text: "The ranked context was preserved" }),
+          el("p", {
+            text:
+              "MemoryStand re-ran the recorded query at the decision timestamp. The old and new beliefs remain inspectable; nothing was overwritten to make the decision look cleaner.",
+          }),
+        ]),
+        el("div", { class: "guided-metric" }, [
+          el("span", { text: "recalled rows" }),
+          el("strong", { text: String(recalled.length) }),
+        ]),
+      ])
+    );
+    guidedResult.appendChild(
+      el("div", { class: "guided-receipt" }, [
+        el("div", { class: "receipt-line" }, [
+          el("span", { text: "Decision" }),
+          el("strong", { text: decision.decision_id || lastGuidedDecisionId || "unknown" }),
+        ]),
+        el("div", { class: "receipt-line" }, [
+          el("span", { text: "Recorded query" }),
+          el("strong", { text: decision.query_text || GUIDED_QUERY }),
+        ]),
+        el("div", { class: "receipt-line" }, [
+          el("span", { text: "Closer memory" }),
+          el("strong", {
+            text: pair.restart
+              ? "restart_service · " + trustTierLabel(pair.restart.trust_tier) + " · distance " + fmtNum(pair.restart.distance)
+              : "not returned",
+          }),
+        ]),
+        el("div", { class: "receipt-line" }, [
+          el("span", { text: "Stronger memory" }),
+          el("strong", {
+            text: pair.verified
+              ? "scale_up · " + trustTierLabel(pair.verified.trust_tier) + " · distance " + fmtNum(pair.verified.distance)
+              : "not returned",
+          }),
+        ]),
+        el("div", { class: "receipt-line" }, [
+          el("span", { text: "Time-travel basis" }),
+          el("strong", {
+            text: decision.decided_at
+              ? "AS OF SYSTEM TIME at " + decision.decided_at
+              : "decision timestamp unavailable",
+          }),
+        ]),
+      ])
+    );
+    guidedResult.appendChild(rawJsonBlock(data));
+    guidedInstruction.textContent =
+      "Complete: a non-causal restart stayed visible, the verified memory guided, the action was held, and CockroachDB preserved the receipt.";
+  }
+
+  if (runGuidedDemoBtn) {
+    runGuidedDemoBtn.addEventListener("click", function () {
+      runGuidedDemoBtn.disabled = true;
+      runGuidedDemoBtn.innerHTML = '<span class="spinner"></span> connecting…';
+      inspectGuidedReceiptBtn.disabled = true;
+      clear(guidedResult);
+      guidedResult.appendChild(placeholder("Checking the tenant-scoped public demo credential…"));
+
+      var credentialReady = sharedSecret()
+        ? Promise.resolve(true)
+        : checkConnection().then(function () { return Boolean(sharedSecret()); });
+
+      credentialReady.then(function (ready) {
+        if (!ready) return null;
+        runGuidedDemoBtn.innerHTML = '<span class="spinner"></span> running live decision…';
+        clear(guidedResult);
+        guidedResult.appendChild(placeholder("Calling the deployed /decide route…"));
+        return apiPost("/decide", {
+          tenant_id: SEEDED_TENANT_ID,
+          agent_id: SEEDED_AGENT_ID,
+          query: GUIDED_QUERY,
+          action: null,
+          rationale: "Guided demo: compare trust standing against vector proximity.",
+          k: 5,
+          // task_id is UUID-typed in CockroachDB. A friendly slug used here
+          // previously reached the database as invalid input and made the
+          // guided button look broken, so omit it on the public path.
+          task_id: null,
+          produced_memory_ids: [],
+          requires_approval: false,
+        }, secretHeaders());
+      }).then(function (result) {
+        runGuidedDemoBtn.disabled = false;
+        runGuidedDemoBtn.textContent = result ? "Run again" : "Retry live decision";
+        if (!result) {
+          clear(guidedResult);
+          guidedResult.appendChild(
+            el("div", { class: "error-banner", text:
+              "The API did not publish its tenant-scoped demo credential. The read-only comparison still works; reload the page or retry this button." })
+          );
+          guidedInstruction.textContent =
+            "The write path is unavailable until the public demo credential loads from /health.";
+          return;
+        }
+        if (!result.ok || !result.data) {
+          renderError(guidedResult, result);
+          guidedInstruction.textContent =
+            "The live decision did not complete. The public credential may still be loading; check connection status and retry.";
+          return;
+        }
+        lastGuidedDecisionId = result.data.decision_id || null;
+        if (lastGuidedDecisionId) {
+          $("confirmDecisionId").value = lastGuidedDecisionId;
+          $("timemachineDecisionId").value = lastGuidedDecisionId;
+          inspectGuidedReceiptBtn.disabled = false;
+        }
+        renderGuidedDecision(result.data);
+      });
+    });
+  }
+
+  if (inspectGuidedReceiptBtn) {
+    inspectGuidedReceiptBtn.addEventListener("click", function () {
+      if (!lastGuidedDecisionId) return;
+      inspectGuidedReceiptBtn.disabled = true;
+      inspectGuidedReceiptBtn.innerHTML = '<span class="spinner"></span> loading receipt…';
+      clear(guidedResult);
+      guidedResult.appendChild(placeholder("Reading the decision-time receipt from CockroachDB…"));
+      apiGet("/timemachine", {
+        tenant_id: SEEDED_TENANT_ID,
+        decision_id: lastGuidedDecisionId,
+      }).then(function (result) {
+        inspectGuidedReceiptBtn.disabled = false;
+        inspectGuidedReceiptBtn.textContent = "Inspect CockroachDB receipt";
+        if (!result.ok || !result.data) {
+          renderError(guidedResult, result);
+          return;
+        }
+        renderGuidedReceipt(result.data);
+      });
+    });
+  }
 
   // ---------------------------------------------------- seeded-demo preview strip
   // Values match the seeded tenant/agent this repo ships with (db/seed/seed.py via
@@ -475,8 +782,6 @@
   // inputs below. This exists so a first-time visitor never has to know or type a UUID:
   // click the button (or just load the page, since it auto-runs once) and see real
   // data, or a plain-language explanation of why there isn't any yet.
-  var SEEDED_TENANT_ID = "9c8f6e5a-9d1a-4a1c-8f2e-3b6d1c7a4e10";
-  var SEEDED_AGENT_ID = "1a2b3c4d-5e6f-4708-9a0b-1c2d3e4f5061";
   var previewResult = $("previewResult");
   var loadSeededDemoBtn = $("loadSeededDemo");
 
@@ -539,6 +844,7 @@
   // UUID by default) -- a first-time visitor who never clicks anything still sees real
   // data or a clear empty-state message instead of nothing.
   runPreview($("tenantId").value.trim() || SEEDED_TENANT_ID);
+  loadGuidedComparison();
 
   function tenantId() {
     return $("tenantId").value.trim();
