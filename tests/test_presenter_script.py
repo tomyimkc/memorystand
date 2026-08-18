@@ -51,9 +51,8 @@ def test_why_beat_shows_correlation_is_not_causation_in_plain_language():
     beat = next(b for b in spec["beats"] if b["id"] == "09-why-false-cause")
     visual = beat["broll"]["0"]
     displayed = " ".join([visual["headline"], *visual["callouts"]]).lower()
-    assert "page cleared" in displayed
-    assert "latency" in displayed
-    assert "stayed flat" in displayed
+    assert "alert cleared" in displayed
+    assert "only 3 ms" in displayed.lower()
     assert "before:" in displayed and "after:" in displayed
     assert "claimed improvement:" in displayed
     assert "not production cloudwatch" in displayed
@@ -63,11 +62,11 @@ def test_why_spoken_line_names_the_outside_metric_and_causal_error():
     spec = json.loads(SCRIPT_JSON.read_text())
     beat = next(b for b in spec["beats"] if b["id"] == "09-why-false-cause")
     spoken = beat["shots"][0].lower()
-    assert "seeded test" in spoken
-    assert "service latency stayed flat" in spoken
-    assert "page cleared" in spoken
-    assert "does not prove" in spoken
-    assert "reboot worked" in spoken
+    assert "seeded service latency" in spoken
+    assert "223 to 220 milliseconds" in spoken
+    assert "timing alone does not prove" in spoken
+    assert "alert went quiet" in spoken
+    assert "restart fixed it" in spoken
 
 
 def test_presenter_script_rejects_broll_outside_generated_artifacts():

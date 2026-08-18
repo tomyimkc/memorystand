@@ -116,6 +116,7 @@ CREATE TABLE IF NOT EXISTS agent_decisions (
     task_id               UUID,
     action                STRING NOT NULL,   -- 'page_oncall' | 'restart_service' | 'reply' | ...
     rationale             STRING,
+    target_entity         STRING,            -- structured incident subject for agent-selected actions
     consulted_memory_ids  UUID[] NOT NULL,
     produced_memory_ids   UUID[] NOT NULL DEFAULT '{}',
     requires_approval     BOOL NOT NULL DEFAULT false,

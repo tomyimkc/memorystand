@@ -52,6 +52,9 @@ Talking-head first. Load `/presenter-video-taste` before generating any still or
   timeline, prove their combined text covers every approved script word, sample a rendered
   frame inside every cue, independently transcribe every assembled shot, and match each
   master-audio segment back to its verified source.
+- Before capturing a product “success,” verify the cited memory's entity and the receipt that
+  earned its trust tier. The frame must show the structured target plus eligible/excluded/cited
+  state; a visually green row for another service is an exclusion receipt, never action proof.
 - Before re-running Whisper or building the Remotion story, verify that the selected Python
   environment imports both `faster_whisper` and `PIL`. Use an isolated environment if needed;
   a saved receipt is not evidence that a fresh rerun actually happened.

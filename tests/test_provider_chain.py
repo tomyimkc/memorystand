@@ -19,6 +19,21 @@ import pytest
 from backend import agent, anthropic_client, bedrock_client, trust
 
 
+def _eligible(tier: str) -> dict:
+    if tier == "verified":
+        return {
+            "action_eligible": True,
+            "action_eligibility_reason": "verified_receipt",
+            "action_receipt_external_ref":
+                "AWS/Lambda|Duration|FunctionName=payments-service",
+        }
+    return {
+        "action_eligible": True,
+        "action_eligibility_reason": "attested_advisory",
+        "action_receipt_external_ref": None,
+    }
+
+
 def _tool_response(action="restart_service", rationale="because the memory says so"):
     """An Anthropic Messages response carrying a tool_use block."""
     return {
@@ -77,8 +92,20 @@ def test_a_402_from_the_standby_does_not_leak_a_wallet_payload(monkeypatch):
     monkeypatch.setattr(bedrock_client, "converse", bedrock_down)
     monkeypatch.setattr(anthropic_client, "converse", standby_broke)
 
-    out = agent.propose("payments-service latency climbing", [])
-    assert out["reasoning_source"] == "fallback_heuristic"
+    out = agent.propose(
+        "payments-service latency climbing",
+        [{
+            "memory_id": "m-attested",
+            "trust_tier": "attested",
+            "entity": "payments-service",
+            "attribute_key": "remediation",
+            "attribute_value": "scale_up",
+            "content": "scale_up",
+            **_eligible("attested"),
+        }],
+        target_entity="payments-service",
+    )
+    assert out["reasoning_source"] == "fallback_memory"
     assert "teamorouter.com/dashboard" not in out["rationale"].lower()
     assert "钱包" not in out["rationale"]
     assert "insufficient_balance" in out["rationale"] or "standby reasoning provider" in out["rationale"]
@@ -98,13 +125,25 @@ def test_the_source_names_the_provider_that_actually_answered(monkeypatch):
         lambda **k: anthropic_client._to_bedrock_response(_tool_response("scale_up")),
     )
 
-    out = agent.propose("payments-service latency climbing", [])
+    out = agent.propose(
+        "payments-service latency climbing",
+        [{
+            "memory_id": "m-attested",
+            "trust_tier": "attested",
+            "entity": "payments-service",
+            "attribute_key": "remediation",
+            "attribute_value": "scale_up",
+            "content": "scale_up",
+            **_eligible("attested"),
+        }],
+        target_entity="payments-service",
+    )
     assert out["reasoning_source"].startswith(f"{anthropic_client.provider_label()}:")
     assert out["action"] == "scale_up"
     assert out["model_calls"] >= 0
 
 
-def test_every_provider_failing_falls_back_to_memory(monkeypatch):
+def test_every_provider_failing_falls_back_to_receipt_backed_memory(monkeypatch):
     """The fallback must still be reachable, and must still say so plainly."""
     monkeypatch.setattr(anthropic_client, "available", lambda: False)
 
@@ -115,7 +154,9 @@ def test_every_provider_failing_falls_back_to_memory(monkeypatch):
     out = agent.propose(
         "payments-service latency climbing",
         [{"memory_id": "m-9", "trust_tier": "verified", "attribute_key": "remediation",
-          "attribute_value": "restart_service", "content": "restart_service"}],
+          "attribute_value": "restart_service", "content": "restart_service",
+          "entity": "payments-service", **_eligible("verified")}],
+        target_entity="payments-service",
     )
     assert out["reasoning_source"] == "fallback_memory"
     assert out["action"] == "restart_service"

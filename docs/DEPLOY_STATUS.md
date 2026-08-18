@@ -1,15 +1,18 @@
 # Deployment status
 
-Last updated 2026-08-17. Written to be accurate rather than encouraging — a project whose
+Last updated 2026-08-18. Written to be accurate rather than encouraging — a project whose
 argument is "check claims before trusting them" cannot have an aspirational status page.
 
-**2026-08-17 live check (overrides older "pending" notes below).** `/health` reports
-migrations `001`–`003` applied, CockroachDB CCL v26.2.5 reachable, and a public demo
-credential. The default dashboard alert recalls a closer unconfirmed `restart_service`
-(`22207f6e`, d≈0.426) and a farther verified `scale_up` (`fb3b7ec0`, d≈0.578);
-`/decide` chooses the verified memory (`reasoning_source: fallback_memory`,
-`model_calls: 0`). Teamorouter is 402 / circuit-open; Bedrock breakers are open. The
-"001 not applied" section further down is historical and is no longer the live state.
+**2026-08-18 integrity correction (overrides the earlier success narrative).** The live
+deployment still reports migrations `001`–`003`, not migration `004`. A read-only audit
+found that the formerly displayed `scale_up` row belongs to `checkout-api`, while the
+guided query targets `payments-service`, and that legacy row has no recorded evidence
+source, external reference, or trust-check timestamp. The pre-004 `/decide` route can cite
+it across entity boundaries. Do not present that live result as a successful
+trust-over-proximity proof. The pending fix records `target_entity`, excludes mismatched and
+receiptless rows from decision context while retaining them for audit, and adds migration
+`004_decision_target_entity.sql`. Until that merged code and migration are deployed, use
+the current live service only as evidence of the bug, not of the corrected policy.
 
 ## Working, verified against real AWS
 
@@ -124,10 +127,10 @@ the deliberate, genuine one.
 alone.** Repeated capture runs re-ingested the same facts, so `checkout-api` queries return several
 near-identical memories at byte-identical distance (0.5034624821297287 — a lexical embedding stub
 maps near-identical text to the same vector). That was measured, and so was the consequence: the
-`payments-service` query the demo actually uses is unaffected and still separates
-`22207f6e` (unconfirmed, d=0.5778) from `fb3b7ec0` (verified, d=0.6938) with a real 0.116 gap.
-Deleting live rows to tidy a cosmetic artifact was not worth the risk, and the dashboard now
-refuses to narrate proximity when distances tie rather than papering over it.
+`payments-service` query the demo uses separates `22207f6e` (unconfirmed) from
+`fb3b7ec0` (verified label), but the latter belongs to `checkout-api` and lacks a current
+receipt. The corrected read policy leaves both rows untouched and visible, then excludes
+both from action authority for different reasons.
 
 **The demo credential is live, and its scoping is verified against production, not asserted.**
 `GET /health` publishes a write credential scoped to the seeded demo tenant
@@ -147,11 +150,11 @@ That `attested` is the point rather than a shortfall: the outcome was reported v
 which has no machine-checkable system of record, so it cannot reach `verified`. Only a CloudWatch
 metric can. The running system and the documentation agree on this.
 
-**Migration 003 is applied in production** and the retrieval receipt is working: `/timemachine`
-for that decision returned **5 ranked rows with real distances** — `4c414a15` (unconfirmed,
-d=0.5807) nearest, `fb3b7ec0` (verified, d=0.7818) further but trusted — which is both the
-re-ranked recall and trust-vs-proximity visible in one response. `GET /health` reports
-`source_sha` matching `HEAD` and all three migrations applied.
+**Migration 003 is applied in the old production build** and the ranked retrieval receipt
+works, but it did not persist the intended service. Migration 004 adds `target_entity`;
+after deployment `/timemachine` also reports which recalled rows were eligible and which
+were excluded. Do not call legacy row `fb3b7ec0` “further but trusted” for
+payments-service.
 
 **Trust decay runs on a schedule.** `infra/schedule_reverify.sh` provisions an EventBridge
 Scheduler rule (`memorystand-reverify`, `rate(1 day)`, ENABLED, 2 retries) that invokes the Lambda
@@ -221,11 +224,11 @@ renewed AWS CLI authentication and a run of `infra/deploy_frontend.sh`.
 
 The Hugging Face bundle is generated from the canonical files in `frontend/`
 with `python3 scripts/build_hf_space.py`; it is not a separate implementation.
-It is the current public build. The default experience is a concise guided
-path: compare the closer unconfirmed restart with the farther verified
-scale-up, run the deployed `/decide` route, then inspect its CockroachDB
-retrieval receipt. The manual four-panel dashboard remains under **Advanced
-workspace**.
+The corrected bundle is pending publication. After deployment, the default
+experience will compare the closer unconfirmed restart with the farther
+wrong-service scale-up row, run `/decide`, then inspect CockroachDB's
+target/retrieval/exclusion receipt. Until the exact manifest is published and
+verified logged out, the public Space must be treated as the earlier build.
 
 **API endpoint it talks to: <https://ojao6oaxlk26mqfjwpuy7g4dy40tglyi.lambda-url.us-west-2.on.aws>**
 — a JSON API with no root route, so `GET /` returns 404 by design. It is not the demo; it is
@@ -236,7 +239,7 @@ what the demo calls.
 | `GET /health` | 200 -- `database: reachable`, `gc_window_seconds: 4500`, plus `kill_switch`, `embedding_provenance`, `server_version`, and now **`circuit_breakers`** (e.g. `{"bedrock-converse":"open","bedrock-embed":"open"}`) |
 | `GET /recall` | 200 -- real memories from CockroachDB Cloud, ranked with distances |
 | `POST /ingest` without the secret | **401**, with CORS headers on the error |
-| `POST /decide` with the secret | 201 -- required body: `tenant_id`, `agent_id`, `query` (not `situation`). Returns `decision_id`, `decided_at`, `action`, `status`, `consulted[]` (with distance per memory), `produced[]`, **`rationale`**, `reasoning_source`, **`model_calls`** |
+| `POST /decide` with the secret | After migration 004 deploy: agent-selected calls require `tenant_id`, `agent_id`, `query`, and `target_entity`. Returns all recalled rows in `consulted[]`, plus `eligible_memory_ids`, `excluded_memories`, the persisted target, and the ordinary decision fields. Caller-supplied actions remain separately labeled. |
 | `POST /confirm_outcome` | `outcome: success`, **`model_calls: 0`** |
 | `GET /timemachine` | memories reconstructed at decision time -- last counted at 99 against the earlier 101-row seed; not re-counted this session against the current 50,131-row cluster, so that figure is stale and should not be repeated as current |
 

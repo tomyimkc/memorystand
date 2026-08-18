@@ -378,6 +378,11 @@ def _route_ingest(body: dict[str, Any], headers: dict[str, str], request_id: str
     _scope_tenant(credential, tenant_id)
     agent_id = _require_uuid(body, "agent_id")
     content = _require(body, "content")
+    task_id = (
+        _require_uuid(body, "task_id")
+        if body.get("task_id") is not None and str(body.get("task_id")).strip()
+        else None
+    )
     result = memory.remember(
         tenant_id,
         agent_id,
@@ -387,7 +392,7 @@ def _route_ingest(body: dict[str, Any], headers: dict[str, str], request_id: str
         attribute_value=body.get("attribute_value"),
         memory_type=body.get("memory_type", "semantic"),
         source=body.get("source"),
-        task_id=body.get("task_id"),
+        task_id=task_id,
         structured_data=body.get("structured_data"),
     )
     _log("memory_ingested", request_id, memory_id=result.get("memory_id"), verdict=result.get("verdict"))
@@ -401,12 +406,22 @@ def _route_decide(body: dict[str, Any], headers: dict[str, str], request_id: str
     agent_id = _require_uuid(body, "agent_id")
     query = _require(body, "query")
     k = _bounded_int(body, "k", 5, minimum=1, maximum=MAX_RECALL_K)
-    task_id = body.get("task_id")
+    task_id = (
+        _require_uuid(body, "task_id")
+        if body.get("task_id") is not None and str(body.get("task_id")).strip()
+        else None
+    )
 
     consulted = memory.recall(tenant_id, agent_id, query, k=k)
     consulted_ids = [row["memory_id"] for row in consulted]
 
     action = body.get("action")
+    target_entity_raw = body.get("target_entity")
+    target_entity = (
+        str(target_entity_raw).strip()
+        if target_entity_raw is not None and str(target_entity_raw).strip()
+        else None
+    )
     rationale = body.get("rationale")
     requires_approval = bool(body.get("requires_approval", False))
     if action:
@@ -418,14 +433,26 @@ def _route_decide(body: dict[str, Any], headers: dict[str, str], request_id: str
         reasoning_source = "caller_supplied"
         model_calls = 0
         cited_memory_ids: list[str] = []
+        eligible_memory_ids: list[str] = []
+        excluded_memories: list[dict[str, Any]] = []
     else:
-        proposed = agent.propose(query, consulted)
+        if not target_entity:
+            raise _BadRequest(
+                "target_entity is required when action is blank and MemoryStand selects the action"
+            )
+        proposed = agent.propose(
+            query,
+            consulted,
+            target_entity=target_entity,
+        )
         action = proposed["action"]
         rationale = proposed["rationale"]
         requires_approval = requires_approval or proposed["requires_approval"]
         reasoning_source = proposed["reasoning_source"]
         model_calls = proposed["model_calls"]
         cited_memory_ids = list(proposed["cited_memory_ids"])
+        eligible_memory_ids = list(proposed["eligible_memory_ids"])
+        excluded_memories = list(proposed["excluded_memories"])
 
     produced = tuple(
         _bounded_string_list(
@@ -447,6 +474,7 @@ def _route_decide(body: dict[str, Any], headers: dict[str, str], request_id: str
         recall_k=k,
         requires_approval=requires_approval,
         task_id=task_id,
+        target_entity=target_entity,
     )
     _log(
         "decision_recorded",
@@ -462,6 +490,9 @@ def _route_decide(body: dict[str, Any], headers: dict[str, str], request_id: str
         "reasoning_source": reasoning_source,
         "model_calls": model_calls,
         "cited_memory_ids": cited_memory_ids,
+        "eligible_memory_ids": eligible_memory_ids,
+        "excluded_memories": excluded_memories,
+        "target_entity": target_entity,
     }
 
 

@@ -122,13 +122,15 @@ redeploy against any other gateway relabels itself. The `/decide` captures under
 real historical responses recorded while the router had capacity; their `model_calls: 1` and
 latency are router figures.
 
-**Current live state (2026-08-17).** `/decide` still hits HTTP 402 `insufficient_balance` on
-the Teamorouter standby. The rationale now names only that class of failure — it does not
-paste the provider body — and a circuit breaker then fails fast to memory. The default
-dashboard alert returns `reasoning_source: fallback_memory`, `model_calls: 0`, citing the
-verified `scale_up` memory over a closer unconfirmed `restart_service`. Restoring *model*
-reasoning requires an owner-funded balance and a rotated credential; Bedrock can also reclaim
-the path automatically if AWS grants quota.
+**Current audited pre-deploy state (2026-08-18).** `/decide` still hits HTTP 402
+`insufficient_balance` on the Teamorouter standby. The rationale names only that class of
+failure — it does not paste the provider body — and a circuit breaker fails fast. The
+pending dashboard supplies `target_entity=payments-service`: once migration 004 and the
+matching backend are deployed, the unconfirmed restart and a verified-labelled
+`checkout-api` scale-up row remain visible, but neither may steer. The disclosed fixed
+heuristic then chooses `scale_up`, `model_calls: 0`, and the high-risk action is held.
+Restoring *model* reasoning requires an owner-funded balance and a rotated credential;
+Bedrock can also reclaim the path automatically if AWS grants quota.
 
 **What you are trusting.** Prompts and the SSM-held API key traverse `teamorouter.com`. That is a
 real third party in the request path, stated plainly so a judge does not have to discover it. The

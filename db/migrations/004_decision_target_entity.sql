@@ -1,0 +1,21 @@
+-- SPDX-License-Identifier: Apache-2.0
+--
+-- 004 — bind each agent-selected decision to the incident subject it was for.
+--
+-- Vector similarity is not identity.  Before this column existed, /decide could
+-- retrieve a verified checkout-api memory for a payments-service alert and cite it
+-- as the basis for an action.  The query text mentioned payments-service, but prose
+-- is not a structured subject contract and replay could not prove which entity the
+-- caller intended.
+--
+-- Nullable on purpose:
+--   * decisions written before this migration have no recorded target, and inventing
+--     one would fabricate provenance;
+--   * caller-supplied actions may use MemoryStand only as an audit ledger and are
+--     labelled reasoning_source=caller_supplied by the API.
+--
+-- New agent-selected /decide calls require target_entity in handler.py.  The value
+-- is persisted here and returned by /timemachine so the subject filter can be
+-- reconstructed alongside the ranked recall.
+
+ALTER TABLE agent_decisions ADD COLUMN IF NOT EXISTS target_entity STRING;

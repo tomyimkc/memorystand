@@ -39,6 +39,15 @@ def _normalise_memory_ids(values: Sequence[str], field: str) -> list[str]:
     return normalised
 
 
+def _normalise_optional_uuid(value: str | None, field: str) -> str | None:
+    if value is None or not str(value).strip():
+        return None
+    try:
+        return str(uuid.UUID(str(value)))
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise InvalidMemoryReference(f"{field} must be a UUID") from exc
+
+
 def _validate_memory_ids(cur, tenant_id: str, memory_ids: Sequence[str], field: str) -> None:
     """Every decision reference must name an admitted memory owned by the same tenant."""
     unique = list(dict.fromkeys(memory_ids))
@@ -76,6 +85,7 @@ def _insert(
     task_id: str | None,
     query_text: str | None = None,
     recall_k: int | None = None,
+    target_entity: str | None = None,
 ) -> dict:
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         _validate_memory_ids(cur, tenant_id, consulted, "consulted_memory_ids")
@@ -85,8 +95,8 @@ def _insert(
             INSERT INTO agent_decisions
                 (tenant_id, agent_id, task_id, action, rationale,
                  consulted_memory_ids, produced_memory_ids, requires_approval,
-                 query_text, recall_k)
-            VALUES (%s,%s,%s,%s,%s,%s::UUID[],%s::UUID[],%s,%s,%s)
+                 query_text, recall_k, target_entity)
+            VALUES (%s,%s,%s,%s,%s,%s::UUID[],%s::UUID[],%s,%s,%s,%s)
             RETURNING decision_id::string AS decision_id, decided_at, requires_approval
             """,
             (
@@ -100,6 +110,7 @@ def _insert(
                 requires_approval,
                 query_text,
                 recall_k,
+                target_entity,
             ),
         )
         row = dict(cur.fetchone())
@@ -132,6 +143,7 @@ def decide(
     task_id: str | None = None,
     query_text: str | None = None,
     recall_k: int | None = None,
+    target_entity: str | None = None,
 ) -> dict:
     """Record an action and its evidential basis.
 
@@ -141,6 +153,7 @@ def decide(
     """
     consulted = _normalise_memory_ids(consulted_memory_ids, "consulted_memory_ids")
     produced = _normalise_memory_ids(produced_memory_ids, "produced_memory_ids")
+    task = _normalise_optional_uuid(task_id, "task_id")
     row = db.retry_serializable(
         _insert,
         tenant_id=tenant_id,
@@ -150,14 +163,16 @@ def decide(
         consulted=consulted,
         produced=produced,
         requires_approval=requires_approval,
-        task_id=task_id,
+        task_id=task,
         query_text=query_text,
         recall_k=recall_k,
+        target_entity=target_entity,
     )
     return {
         "decision_id": row["decision_id"],
         "decided_at": row["decided_at"],
         "action": action,
+        "target_entity": target_entity,
         "status": "held_for_approval" if row["requires_approval"] else "taken",
         "consulted": consulted,
         "produced": produced,
@@ -173,6 +188,7 @@ def get(tenant_id: str, decision_id: str) -> dict | None:
                 SELECT decision_id::string AS decision_id, action, rationale, decided_at,
                        outcome, outcome_confirmed_at, outcome_metric_delta,
                        requires_approval, approved_by,
+                       target_entity,
                        consulted_memory_ids::STRING[] AS consulted_memory_ids,
                        produced_memory_ids::STRING[] AS produced_memory_ids
                 FROM agent_decisions WHERE tenant_id = %s AND decision_id = %s
@@ -193,7 +209,7 @@ def recent(tenant_id: str, limit: int = 20) -> list[dict]:
             cur.execute(
                 """
                 SELECT decision_id::string AS decision_id, action, decided_at, outcome,
-                       requires_approval, approved_by
+                       requires_approval, approved_by, target_entity
                 FROM agent_decisions WHERE tenant_id = %s
                 ORDER BY decided_at DESC LIMIT %s
                 """,

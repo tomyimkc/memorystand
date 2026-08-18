@@ -20,6 +20,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "artifacts" / "video" / "presenter-receipts"
 EVIDENCE = ROOT / "artifacts" / "video" / "capture" / "evidence.json"
+GUIDED_EVIDENCE = ROOT / "artifacts" / "video" / "capture" / "guided-refusal.json"
 WIDTH, HEIGHT = 1920, 1080
 SUBTITLE_SAFE_TOP = 1000
 BG = (5, 8, 13)
@@ -120,6 +121,12 @@ def load() -> dict[str, Any]:
     return json.loads(EVIDENCE.read_text())
 
 
+def load_guided() -> dict[str, Any]:
+    if not GUIDED_EVIDENCE.is_file():
+        raise SystemExit(f"missing {GUIDED_EVIDENCE}")
+    return json.loads(GUIDED_EVIDENCE.read_text())
+
+
 def require_path(data: dict[str, Any], *keys: str) -> Any:
     value: Any = data
     for key in keys:
@@ -132,16 +139,87 @@ def require_path(data: dict[str, Any], *keys: str) -> Any:
 def why_false(_: dict[str, Any]) -> Image.Image:
     im = background(); d = ImageDraw.Draw(im)
     header(d, "SEEDED CAUSAL EXAMPLE", "Alert stopped does not prove the restart worked.",
-           "Timing is correlation. An unchanged outcome metric breaks the causal claim.", color=AMBER)
+           "Timing is correlation. The observed change was only three milliseconds.", color=AMBER)
     step_card(d, (74, 315, 552, 756), "01", "RESTART", "service restarted", color=BLUE)
     arrow(d, 580, 700, 535, AMBER)
     step_card(d, (728, 315, 1206, 756), "02", "ALERT QUIET", "symptom disappeared", color=AMBER)
     arrow(d, 1234, 1354, 535, RED)
-    step_card(d, (1382, 315, 1846, 756), "03", "LATENCY FLAT", "223 ms  →  220 ms", color=RED)
-    text(d, (960, 838), "QUIET ≠ IMPROVEMENT ≠ CAUSE", size=48, color=INK, bold=True, anchor="ma")
-    text(d, (960, 912), "No outside receipt showed the reboot produced the claimed 112 ms improvement.",
+    step_card(d, (1382, 315, 1846, 756), "03", "ONLY 3 MS", "223 ms  →  220 ms", color=RED)
+    text(d, (960, 838), "QUIET ALERT ≠ PROVEN CAUSE", size=48, color=INK, bold=True, anchor="ma")
+    text(d, (960, 912), "The measured 3 ms change does not support the claimed 112 ms improvement.",
          size=28, color=DIM, anchor="ma")
     footer(d, "Seeded decision-rule example · not production CloudWatch")
+    return im
+
+
+def decision_refusal(e: dict[str, Any]) -> Image.Image:
+    im = background(); d = ImageDraw.Draw(im)
+    decision = require_path(e, "decision", "payload")
+    recall = require_path(e, "recall", "payload")
+    if require_path(e, "decision", "status") not in {200, 201}:
+        raise SystemExit("guided decision receipt is not successful")
+    if decision.get("target_entity") != "payments-service":
+        raise SystemExit("guided decision target is not payments-service")
+    if decision.get("reasoning_source") != "fallback_heuristic":
+        raise SystemExit("guided decision did not use the disclosed fixed fallback")
+    if decision.get("action") != "scale_up":
+        raise SystemExit("guided decision did not return scale_up")
+    if decision.get("model_calls") != 0:
+        raise SystemExit("guided decision no longer reports model_calls=0")
+    if decision.get("status") != "held_for_approval":
+        raise SystemExit("guided decision is not held for approval")
+    if decision.get("eligible_memory_ids"):
+        raise SystemExit("guided refusal unexpectedly contains an eligible memory")
+    if decision.get("cited_memory_ids"):
+        raise SystemExit("guided refusal unexpectedly cites a memory")
+
+    rows = recall.get("results") or []
+    wrong = next(
+        (
+            row for row in rows
+            if row.get("entity") == "checkout-api"
+            and row.get("trust_tier") == "verified"
+        ),
+        None,
+    )
+    if not wrong:
+        raise SystemExit("guided recall has no verified checkout-api row")
+    wrong_id = str(wrong.get("memory_id") or "")
+    excluded = decision.get("excluded_memories") or []
+    if not any(
+        str(row.get("memory_id") or "") == wrong_id
+        and row.get("reason") == "entity_mismatch"
+        for row in excluded
+    ):
+        raise SystemExit("guided decision did not exclude the checkout-api row")
+    if wrong_id in (decision.get("cited_memory_ids") or []):
+        raise SystemExit("guided decision cited the wrong-service row")
+
+    header(
+        d,
+        "LIVE DEPLOYED DECISION",
+        "Wrong service. No authority.",
+        "The row stays visible in recall, but it cannot steer a payments-service incident.",
+        color=GREEN,
+    )
+    panel(d, (74, 304, 742, 805), outline=BLUE, width=3)
+    text(d, (112, 344), "TARGET", size=22, color=FAINT, bold=True)
+    text(d, (112, 402), "payments-service", size=46, color=INK, bold=True)
+    text(d, (112, 526), "RECALLED ROW", size=22, color=FAINT, bold=True)
+    text(d, (112, 584), "checkout-api", size=43, color=RED, bold=True)
+    text(d, (112, 654), "verified label", size=27, color=DIM)
+    text(d, (112, 714), f"id {wrong_id[:8]}…", size=22, color=FAINT, mono=True)
+    arrow(d, 782, 940, 550, RED)
+    panel(d, (978, 304, 1846, 805), outline=GREEN, width=3)
+    text(d, (1018, 344), "SUBJECT POLICY", size=22, color=FAINT, bold=True)
+    text(d, (1412, 438), "EXCLUDED", size=72, color=RED, bold=True, anchor="ma")
+    text(d, (1412, 548), "entity mismatch", size=35, color=INK, bold=True, anchor="ma")
+    text(d, (1412, 635), "fixed fallback · scale up", size=29, color=DIM, anchor="ma")
+    text(d, (1412, 689), "held for human approval", size=29, color=AMBER, bold=True, anchor="ma")
+    text(d, (1412, 748), "model calls: 0", size=25, color=GREEN, mono=True, anchor="ma")
+    text(d, (960, 882), "VISIBLE FOR AUDIT. BARRED FROM ACTION.", size=47,
+         color=INK, bold=True, anchor="ma")
+    footer(d, "Captured live POST /decide receipt · AWS Lambda + CockroachDB Cloud")
     return im
 
 
@@ -214,34 +292,65 @@ def cloudwatch(e: dict[str, Any]) -> Image.Image:
     return im
 
 
-def cockroach(e: dict[str, Any]) -> Image.Image:
+def cockroach_guided(e: dict[str, Any]) -> Image.Image:
     im = background(); d = ImageDraw.Draw(im)
-    tm = require_path(e, "steps", "timemachine", "payload")
-    believed = len(tm.get("believed_at_decision_time") or [])
-    changed = tm.get("changed_since") or []
-    if not believed or not changed:
-        raise SystemExit("captured CockroachDB receipt has no pinned read or diff")
-    changed_row = changed[0]
-    header(d, "COCKROACHDB HISTORY", "The old belief and the new state both remain.",
-           "AS OF SYSTEM TIME replays what the agent knew, then compares it with the database now.", color=PURPLE)
-    panel(d, (74, 310, 830, 790), outline=PURPLE, width=3)
-    text(d, (112, 350), "AT DECISION TIME", size=23, color=FAINT, bold=True)
-    text(d, (112, 438), str(believed), size=112, color=BLUE, bold=True, mono=True)
-    text(d, (112, 585), "memories in the pinned read", size=28, color=INK, bold=True)
-    text(d, (112, 650), "AS OF SYSTEM TIME", size=27, color=PURPLE, bold=True, mono=True)
-    arrow(d, 866, 1028, 548, PURPLE)
-    panel(d, (1066, 310, 1846, 790), outline=GREEN, width=3)
-    text(d, (1106, 350), "DATABASE NOW", size=23, color=FAINT, bold=True)
-    text(d, (1106, 438), "1 CHANGE", size=66, color=GREEN, bold=True)
-    entity = require_path(changed_row, "entity")
-    key = require_path(changed_row, "attribute_key")
-    before = require_path(changed_row, "was_trust_tier")
-    after = require_path(changed_row, "trust_tier")
-    text(d, (1106, 552), f"{entity}.{key}", size=27, color=INK, bold=True)
-    text(d, (1106, 629), f"{before}  →  {after}", size=35, color=GREEN, bold=True, mono=True)
-    text(d, (960, 880), "REAL PINNED READ. REAL DIFF. NO RECONSTRUCTION.", size=39,
+    tm = require_path(e, "timemachine", "payload")
+    decision = require_path(tm, "decision")
+    recalled = tm.get("recalled_as_of") or []
+    excluded = tm.get("excluded_memories_as_of") or []
+    eligible = tm.get("eligible_memory_ids_as_of")
+    if decision.get("target_entity") != "payments-service":
+        raise SystemExit("time-travel receipt has the wrong target entity")
+    if not recalled or not isinstance(eligible, list):
+        raise SystemExit("time-travel receipt has no ranked recall or eligibility list")
+    if eligible:
+        raise SystemExit("time-travel receipt unexpectedly reconstructed an eligible memory")
+    wrong = next(
+        (
+            row for row in recalled
+            if row.get("entity") == "checkout-api"
+            and row.get("trust_tier") == "verified"
+        ),
+        None,
+    )
+    if not wrong:
+        raise SystemExit("time-travel receipt has no wrong-service row")
+    wrong_id = str(wrong.get("memory_id") or "")
+    if not any(
+        str(row.get("memory_id") or "") == wrong_id
+        and row.get("reason") == "entity_mismatch"
+        for row in excluded
+    ):
+        raise SystemExit("time-travel receipt did not preserve the entity exclusion")
+    if wrong_id in {str(value) for value in eligible}:
+        raise SystemExit("time-travel receipt made the wrong-service row eligible")
+
+    header(
+        d,
+        "COCKROACHDB DECISION RECEIPT",
+        "The ranking and refusal remain together.",
+        "A pinned read reconstructs the query, target, eligible set, and every exclusion.",
+        color=PURPLE,
+    )
+    panel(d, (74, 304, 642, 805), outline=PURPLE, width=3)
+    text(d, (112, 344), "RECORDED QUERY", size=22, color=FAINT, bold=True)
+    text(d, (112, 410), "payments-service\np99 latency", size=42, color=INK, bold=True)
+    text(d, (112, 565), "TARGET", size=22, color=FAINT, bold=True)
+    text(d, (112, 620), "payments-service", size=33, color=BLUE, bold=True)
+    text(d, (112, 714), "AS OF SYSTEM TIME", size=23, color=PURPLE, bold=True, mono=True)
+    arrow(d, 682, 814, 550, PURPLE)
+    panel(d, (852, 304, 1846, 805), outline=GREEN, width=3)
+    text(d, (892, 344), "PINNED DECISION CONTEXT", size=22, color=FAINT, bold=True)
+    text(d, (892, 410), f"{len(recalled)} ranked rows", size=42, color=INK, bold=True)
+    text(d, (892, 486), f"{len(eligible)} eligible", size=37, color=GREEN, bold=True)
+    text(d, (1220, 486), f"{len(excluded)} excluded", size=37, color=RED, bold=True)
+    text(d, (892, 590), "checkout-api row", size=29, color=DIM, bold=True)
+    text(d, (1220, 590), "entity_mismatch", size=29, color=RED, bold=True, mono=True)
+    text(d, (892, 672), "wrong row eligible", size=26, color=DIM)
+    text(d, (1220, 672), "NO", size=34, color=GREEN, bold=True)
+    text(d, (960, 882), "QUERY · TARGET · RANKING · REFUSAL", size=47,
          color=INK, bold=True, anchor="ma")
-    footer(d, "Captured GET /timemachine receipt · CockroachDB Cloud")
+    footer(d, "Captured live GET /timemachine receipt · CockroachDB Cloud")
     return im
 
 
@@ -265,12 +374,13 @@ def attack(_: dict[str, Any]) -> Image.Image:
 
 def main() -> int:
     evidence = load()
+    guided = load_guided()
     OUT.mkdir(parents=True, exist_ok=True)
     frames = {
         "why-false.png": why_false(evidence),
-        "receipt-first.png": receipt_first(evidence),
+        "decision-live.png": decision_refusal(guided),
         "cloudwatch.png": cloudwatch(evidence),
-        "cockroachdb.png": cockroach(evidence),
+        "cockroachdb.png": cockroach_guided(guided),
         "attack-test.png": attack(evidence),
     }
     for name, image in frames.items():

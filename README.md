@@ -18,21 +18,24 @@ The deployed agent can use a reasoning model, but the path that grants memory au
 evidence it re-queries Amazon CloudWatch, binds the metric to the memory's entity, checks
 direction and magnitude, and refuses contradicted or wrong-entity claims.
 
-When no reasoning provider is available, verified memory still affects the deterministic path
-with zero model calls. A recorded live example:
+When no reasoning provider is available, only a target-matching memory with a complete
+verification receipt may affect the deterministic path. The audited public tenant currently
+demonstrates refusal instead:
 
 ```
-top recalled:  22207f6e  distance 0.414  unconfirmed  restart_service
-               fb3b7ec0  distance 0.565  verified     scale_up      <- chosen
+top recalled:  22207f6e  payments-service  unconfirmed  restart_service
+               fb3b7ec0  checkout-api      verified     scale_up
 
-action: scale_up   reasoning_source: fallback_memory   model_calls: 0
-rationale: Chosen from memory fb3b7ec0 (trust_tier=verified) ... the memory
-           outranked the keyword table because an external system of record
-           corroborated its outcome.
+target_entity: payments-service
+eligible_memory_ids: []
+excluded: fb3b7ec0 (entity_mismatch), 22207f6e (trust_tier_not_eligible)
+action: scale_up   reasoning_source: fallback_heuristic   model_calls: 0
 ```
 
-Proximity said one thing; verified standing said another; verified standing won. An attested
-memory can recommend, but the API marks the decision `held_for_approval`.
+The rows stay inspectable, but neither may justify this incident's action. The disclosed
+fixed latency rule selects `scale_up`; because that action changes production state, the API
+marks it `held_for_approval`. An attested matching memory may recommend only behind the same
+human gate.
 
 ### Adversarial evidence, with authority measured separately from storage
 
@@ -79,10 +82,10 @@ isolated demo tenant; the operator credential is required for any other tenant.
 
 **Live guided demo (click this):
 <https://tomyimkc-memorystand.static.hf.space/>** — the public Hugging Face Static Space. It
-opens with a three-step path that compares the closer
-unconfirmed restart memory against the farther verified scale-up, runs the live decision, and
-opens the CockroachDB retrieval receipt. The manual four-panel operator workspace remains under
-**Advanced workspace**. The API it talks to is
+will be refreshed after the target-entity deployment. The pending build opens with a three-step
+path that compares a closer unconfirmed restart memory with a farther wrong-service scale-up
+row, runs the live decision, and opens CockroachDB's target, retrieval, and exclusion receipt.
+Until the refresh is verified, treat the public page as the earlier build. The API it talks to is
 <https://ojao6oaxlk26mqfjwpuy7g4dy40tglyi.lambda-url.us-west-2.on.aws>, a JSON API with no root
 route (`GET /` returns 404 by design — it is not a page to open in a browser). ·
 [deployment status](docs/DEPLOY_STATUS.md)
@@ -95,7 +98,8 @@ route (`GET /` returns 404 by design — it is not a page to open in a browser).
 > see [docs/DEPLOY_STATUS.md](docs/DEPLOY_STATUS.md), which records the failures found along the
 > way (an SQL injection, a cross-tenant trust escalation, an ungated trust-granting route, a
 > fail-open kill switch) alongside the fixes. The live health receipt reports CockroachDB CCL
-> v26.2.5 and all three schema migrations applied.
+> v26.2.5. The pending 2026-08-18 deployment adds migration 004 for decision subjects;
+> verify `/health.deployment.schema_migrations` before describing it as live.
 > [SPIKE-RESULTS.md](SPIKE-RESULTS.md) has the earlier spike record, including what failed.
 
 ---
@@ -259,16 +263,16 @@ Everything marked ✅ was run against a real CockroachDB v26.2.5 cluster, not ju
 | Lambda handler, 7 routes, kill switch, degraded mode | ✅ exercised over HTTP |
 | Bedrock agent loop + deterministic fallback | ✅ fallback path verified |
 | `memorystand` CLI (6 subcommands) | ✅ |
-| Static dashboard (`frontend/`) | ✅ guided judge path + advanced four-panel workspace, no build step; current public build at <https://tomyimkc-memorystand.static.hf.space/>. The older Amplify deployment remains reachable but has not yet been refreshed with this UI. |
+| Static dashboard (`frontend/`) | ⚠️ corrected guided judge path + advanced four-panel workspace pass local checks; the public HF Space still needs this exact bundle published and verified. The older Amplify deployment remains reachable but has not been refreshed with this UI. |
 | Tamper-evident checkpoints (`backend/snapshots.py`) | ✅ |
 | Authored CockroachDB Agent Skill | ✅ upstream format |
 | One-command demo (`scripts/demo.sh`) | ✅ 8 beats, exit 0 |
 | ccloud provisioning (`infra/provision.sh`) | ✅ flags verified against `ccloud 0.8.23`, and run for real — see cloud cluster row below |
 | AWS deploy scripts (`infra/provision.sh`, `infra/ssm_setup.sh`, `infra/deploy.sh`, `infra/deploy_frontend.sh`, IAM, SSM, keep-warm) | ✅ **all run against a real AWS account.** Lambda is Active, dashboard is live on Amplify. See [docs/DEPLOY.md](docs/DEPLOY.md) for the URL shape. |
-| Reasoning provider | ⚠️ Bedrock is tried first; this account's Bedrock quota is still ~0. The Teamorouter standby returned HTTP 402 (empty wallet) on 2026-08-17. `/decide` now fails fast through a circuit breaker and falls back to memory — the default dashboard alert chooses verified `scale_up` over a closer unconfirmed `restart_service`, `model_calls: 0`. Restoring *model* reasoning needs the owner to fund/rotate that credential; see [`DISCLOSURES.md`](DISCLOSURES.md). The promotion path stays model-free regardless. |
+| Reasoning provider | ⚠️ Bedrock is tried first; this account's Bedrock quota is still ~0. The Teamorouter standby returned HTTP 402 (empty wallet) on 2026-08-17. `/decide` fails fast through a circuit breaker, then uses only target-entity-matching, action-eligible memory or the disclosed fixed heuristic. Recalled wrong-service and legacy receiptless rows remain visible for audit but cannot steer. Restoring *model* reasoning needs the owner to fund/rotate that credential; see [`DISCLOSURES.md`](DISCLOSURES.md). The promotion path stays model-free regardless. |
 | Cloud cluster | ✅ CockroachDB Cloud BASIC, AWS us-west-2. Live `/health` reported CCL v26.2.5 on 2026-08-09. The last recorded row inventory remains 50,131 rows: 40 synthetic tenants at 1,250 rows each, plus the curated demo tenant (131 rows, 117 accepted); that inventory was not re-counted during the 2026-08-09 health check. |
 | MCP server wiring | ✅ working end to end (see [CockroachDB tools used](#cockroachdb-tools-used) for the honest access-level finding) |
-| Video | ⚠️ the current local presenter proof cut is 72.597 s, 1920×1080 H.264/AAC, SHA-256 `d5ca8ea60407ccd1ec02b46da953daade8bb39c229220a25cb900cce6fb7c44a`; 20/20 burned subtitle cues and all 9 assembled narration segments pass the final-master sync gate. **Public YouTube/Vimeo upload is still the submit blocker.** |
+| Video | ⚠️ the 72.597 s presenter cut passed framing/subtitle sync checks but is rejected: its product receipt shows a `checkout-api` memory steering a `payments-service` decision. A corrected capture and replacement MP4 are required before any public YouTube/Vimeo upload. |
 
 ## Measured results
 
@@ -405,7 +409,7 @@ git clone <this-repo> && cd memorystand
 Then:
 
 ```bash
-.venv/bin/python -m pytest -q                                   # 174 passed, 1 skipped on 2026-08-18 with the final local render present
+.venv/bin/python -m pytest -q                                   # run the current suite; do not reuse a stale count
 .venv/bin/python cli/memorystand.py recall --query "payments failover"
 .venv/bin/python scripts/loadtest.py --rows 10000 --tenants 50  # reproduce the numbers below
 ```

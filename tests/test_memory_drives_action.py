@@ -22,7 +22,7 @@ from backend import agent
 
 
 def _mem(memory_id, tier, value, content="restarting the service cleared it"):
-    return {
+    row = {
         "memory_id": memory_id,
         "trust_tier": tier,
         "entity": "payments-service",
@@ -30,6 +30,20 @@ def _mem(memory_id, tier, value, content="restarting the service cleared it"):
         "attribute_value": value,
         "content": content,
     }
+    if tier == "verified":
+        row.update({
+            "action_eligible": True,
+            "action_eligibility_reason": "verified_receipt",
+            "action_receipt_external_ref":
+                "AWS/Lambda|Duration|FunctionName=payments-service",
+        })
+    elif tier == "attested":
+        row.update({
+            "action_eligible": True,
+            "action_eligibility_reason": "attested_advisory",
+            "action_receipt_external_ref": None,
+        })
+    return row
 
 
 def test_without_memory_the_keyword_table_decides():
@@ -115,6 +129,7 @@ def test_only_verified_memories_are_sent_to_a_reasoning_model(monkeypatch):
             _mem("m-attested", "attested", "restart_service"),
             _mem("m-unconfirmed", "unconfirmed", "scale_up"),
         ],
+        target_entity="payments-service",
     )
     assert "m-verified" in seen["prompt"]
     assert "m-attested" not in seen["prompt"]
@@ -147,6 +162,7 @@ def test_attested_only_model_context_is_advisory_and_held(monkeypatch):
             _mem("m-attested", "attested", "restart_service"),
             _mem("m-unconfirmed", "unconfirmed", "scale_up"),
         ],
+        target_entity="payments-service",
     )
 
     assert "m-attested" in seen["prompt"]

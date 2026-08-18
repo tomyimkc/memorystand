@@ -33,7 +33,7 @@ from typing import Any, Iterable, Sequence
 
 from psycopg2.extras import RealDictCursor
 
-from . import db, embeddings
+from . import authority, db, embeddings
 
 # Cosine distance below which two memories are considered to be talking about the same
 # thing. Tuned against the seed corpus; exposed so it can be justified rather than magic.
@@ -379,7 +379,11 @@ def recall(tenant_id: str, agent_id: str | None, query: str, k: int = 5) -> list
                 """,
                 (vec_literal, tenant_id, vec_literal, k),
             )
-            rows = [dict(r) for r in cur.fetchall()]
+            rows = authority.annotate_action_eligibility(
+                cur,
+                tenant_id,
+                [dict(r) for r in cur.fetchall()],
+            )
         conn.commit()
     finally:
         db.put_conn(conn)
