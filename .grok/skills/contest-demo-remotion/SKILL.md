@@ -26,6 +26,9 @@ Talking-head first. Load `/presenter-video-taste` before generating any still or
 - Keep the presenter visible over evidence footage; use a proof cut, not a PPT takeover.
 - Trim fixed 10-second Grok takes to measured speech plus a short hold. Never equate maximum
   generation duration with honest editorial duration.
+- A number and its background must share provenance. Never place seeded values over unrelated
+  live footage; use the matching receipt, or state on screen that the example is seeded/synthetic
+  and not production evidence.
 
 ## Commands
 

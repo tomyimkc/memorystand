@@ -44,6 +44,9 @@ A portrait close-up `objectFit: cover` onto 16:9 crops the mouth off and looks l
   not evidence.
 - Never stack fresh captions over captions already burned into evidence footage. Crop or mask
   the source caption band, or deliberately use the existing caption as the only subtitle layer.
+- Evidence provenance must match the picture. Never overlay seeded or synthetic numbers on an
+  unrelated live dashboard; use the matching source, or label the example visibly and explicitly
+  as seeded/synthetic and not production evidence.
 
 ## Verify before you say done
 
