@@ -77,8 +77,9 @@ tenant: used against any other it returns `401`. Ingest a memory, run `/decide`,
 and watch a tier move. Public `recall`, `timemachine`, and `diff` reads are also restricted to that
 isolated demo tenant; the operator credential is required for any other tenant.
 
-**Live demo (click this): <https://main.d19xad9aeccy3e.amplifyapp.com>** — the judge-facing guided
-demo, deployed on AWS Amplify Hosting. It opens with a three-step path that compares the closer
+**Live guided demo (click this):
+<https://tomyimkc-memorystand.static.hf.space/>** — the public Hugging Face Static Space. It
+opens with a three-step path that compares the closer
 unconfirmed restart memory against the farther verified scale-up, runs the live decision, and
 opens the CockroachDB retrieval receipt. The manual four-panel operator workspace remains under
 **Advanced workspace**. The API it talks to is
@@ -258,7 +259,7 @@ Everything marked ✅ was run against a real CockroachDB v26.2.5 cluster, not ju
 | Lambda handler, 7 routes, kill switch, degraded mode | ✅ exercised over HTTP |
 | Bedrock agent loop + deterministic fallback | ✅ fallback path verified |
 | `memorystand` CLI (6 subcommands) | ✅ |
-| Static dashboard (`frontend/`) | ✅ 4 panels + seeded-demo preview strip, no build step; deployed live on AWS Amplify Hosting at <https://main.d19xad9aeccy3e.amplifyapp.com> |
+| Static dashboard (`frontend/`) | ✅ guided judge path + advanced four-panel workspace, no build step; current public build at <https://tomyimkc-memorystand.static.hf.space/>. The older Amplify deployment remains reachable but has not yet been refreshed with this UI. |
 | Tamper-evident checkpoints (`backend/snapshots.py`) | ✅ |
 | Authored CockroachDB Agent Skill | ✅ upstream format |
 | One-command demo (`scripts/demo.sh`) | ✅ 8 beats, exit 0 |
