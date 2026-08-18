@@ -8,7 +8,7 @@ from scripts.presenter.verify_script import SCRIPT_JSON, validate
 def test_general_public_presenter_script_contract():
     spec = json.loads(SCRIPT_JSON.read_text())
     assert validate(spec) == []
-    assert sum(len(beat.get("broll", {})) for beat in spec["beats"]) >= 3
+    assert sum(len(beat.get("broll", {})) for beat in spec["beats"]) >= 5
     assert all(len(beat["shots"]) == 1 for beat in spec["beats"])
     assert all(
         len(beat["panelData"].get("bullets", [])) <= 2
@@ -20,6 +20,52 @@ def test_presenter_script_rejects_overlapping_wording():
     spec = json.loads(SCRIPT_JSON.read_text())
     spec["beats"][4]["shots"][0] = spec["beats"][1]["shots"][0]
     assert any("overlapping wording" in error for error in validate(spec))
+
+
+def test_presenter_script_allows_reusing_one_accurate_noun():
+    spec = json.loads(SCRIPT_JSON.read_text())
+    spec["beats"][4]["shots"][0] = (
+        "CloudWatch blocks the wrong direction or amount until a person reviews it."
+    )
+    assert not any("overlapping wording" in error for error in validate(spec))
+
+
+def test_every_broll_beat_has_plain_english_callouts():
+    spec = json.loads(SCRIPT_JSON.read_text())
+    visuals = [
+        visual
+        for beat in spec["beats"]
+        for visual in beat.get("broll", {}).values()
+    ]
+    assert visuals
+    assert all(1 <= len(visual["callouts"]) <= 3 for visual in visuals)
+    assert all(
+        1 <= len(callout) <= 48
+        for visual in visuals
+        for callout in visual["callouts"]
+    )
+
+
+def test_why_beat_shows_correlation_is_not_causation_in_plain_language():
+    spec = json.loads(SCRIPT_JSON.read_text())
+    beat = next(b for b in spec["beats"] if b["id"] == "09-why-false-cause")
+    visual = beat["broll"]["0"]
+    displayed = " ".join([visual["headline"], *visual["callouts"]]).lower()
+    assert "alert quiet" in displayed
+    assert "latency" in displayed
+    assert "flat" in displayed
+    assert "before:" in displayed and "after:" in displayed
+    assert "claimed improvement:" in displayed
+
+
+def test_why_spoken_line_names_the_outside_metric_and_causal_error():
+    spec = json.loads(SCRIPT_JSON.read_text())
+    beat = next(b for b in spec["beats"] if b["id"] == "09-why-false-cause")
+    spoken = beat["shots"][0].lower()
+    assert "outside service latency graph" in spoken
+    assert "alert stopped" in spoken
+    assert "does not prove" in spoken
+    assert "reboot fixed" in spoken
 
 
 def test_presenter_script_rejects_broll_outside_generated_artifacts():

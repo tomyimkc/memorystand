@@ -11,8 +11,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SCRIPT_JSON = REPO_ROOT / "docs" / "demo" / "presenter-script.json"
 
-WORDS_MIN = 14
-WORDS_MAX = 20
+# ``image_to_video`` still receives a fixed ten-second source take, but the
+# final edit is trimmed to measured speech. Word count is therefore a
+# readability signal, not a reason to pad the film with silent face time.
+WORDS_MIN = 10
+WORDS_MAX = 24
 EXPECTED_BEATS = 9
 EXPECTED_TOTAL_SHOTS = 9
 MIN_SHOTS_PER_BEAT = 1
@@ -62,10 +65,16 @@ def _tokens(text: str) -> list[str]:
 
 
 def _overlap_errors(lines: list[str]) -> list[str]:
-    """Fail if two shots share a 3-gram, or if a content word is reused."""
+    """Fail if two shots reuse a phrase long enough to sound copied.
+
+    Reusing one accurate noun is normal speech: ``CloudWatch`` should not turn
+    into ``outside checker`` merely because another shot names the product.
+    The old one-word ban produced jargon such as ``heading or scale`` and made
+    the public explanation worse. A repeated three-word phrase still catches
+    actual copy-paste overlap without punishing precise vocabulary.
+    """
     errors: list[str] = []
     seen_grams: dict[tuple[str, str, str], str] = {}
-    seen_words: dict[str, str] = {}
     for index, line in enumerate(lines):
         tokens = _tokens(line)
         tag = f"shot {index}"
@@ -78,16 +87,6 @@ def _overlap_errors(lines: list[str]) -> list[str]:
                 )
             else:
                 seen_grams[gram] = tag
-        for token in tokens:
-            if token in _STOP or token.isdigit() or len(token) < 5:
-                continue
-            prior = seen_words.get(token)
-            if prior:
-                errors.append(
-                    f"overlapping wording: {token!r} in {prior} and {tag}"
-                )
-            else:
-                seen_words[token] = tag
     return errors
 
 
@@ -161,10 +160,17 @@ def validate(spec: dict) -> list[str]:
                 errors.append(f"{beat_id}-{raw_index}: broll startSeconds must be non-negative")
             label = visual.get("label", "")
             headline = visual.get("headline", "")
+            callouts = visual.get("callouts", [])
             if not isinstance(label, str) or not 1 <= len(label) <= 32:
                 errors.append(f"{beat_id}-{raw_index}: broll label must be 1-32 characters")
-            if not isinstance(headline, str) or not 1 <= len(headline) <= 56:
-                errors.append(f"{beat_id}-{raw_index}: broll headline must be 1-56 characters")
+            if not isinstance(headline, str) or not 1 <= len(headline) <= 64:
+                errors.append(f"{beat_id}-{raw_index}: broll headline must be 1-64 characters")
+            if not isinstance(callouts, list) or not 1 <= len(callouts) <= 3:
+                errors.append(f"{beat_id}-{raw_index}: broll callouts must contain 1-3 items")
+            elif any(not isinstance(item, str) or not 1 <= len(item) <= 48 for item in callouts):
+                errors.append(
+                    f"{beat_id}-{raw_index}: each broll callout must be 1-48 characters"
+                )
 
     spoken = " ".join(all_spoken).lower()
     if len(all_spoken) != EXPECTED_TOTAL_SHOTS:

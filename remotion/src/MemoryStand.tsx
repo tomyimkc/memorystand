@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-// Presenter-first cut. The Grok talking-head is the picture. No slide boards.
-// No screen-capture takeover. Captions + a thin lower-third only.
+// Presenter-led proof cut. The Grok talking-head carries the narration; selected
+// beats add reviewed product footage so the required functioning project and
+// CockroachDB memory layer are visible rather than merely named.
 
 import React from 'react';
 import {
@@ -24,16 +25,28 @@ const C = {
 };
 
 type Cue = {s: number; e: number; t: string};
+type Broll = {
+  source: string;
+  startSeconds: number;
+  durationSeconds: number;
+  label: string;
+  headline: string;
+  callouts: string[];
+};
 type Shot = {
   id: string;
   side: 'LEFT' | 'RIGHT';
   clip: string;
   durationFrames: number;
   panel?: {headline?: string};
+  broll?: Broll | null;
   cues: Cue[];
 };
 
-const Captions: React.FC<{list: Cue[]}> = ({list}) => {
+const Captions: React.FC<{list: Cue[]; evidence?: boolean}> = ({
+  list,
+  evidence = false,
+}) => {
   const frame = useCurrentFrame();
   const t = frame / FPS;
   const cue = list.find((c) => t >= c.s && t < c.e);
@@ -42,23 +55,36 @@ const Captions: React.FC<{list: Cue[]}> = ({list}) => {
     <div
       style={{
         position: 'absolute',
-        bottom: 48,
-        left: 0,
-        width: '100%',
+        bottom: evidence ? 42 : 56,
+        left: evidence ? '50%' : 0,
+        transform: evidence ? 'translateX(-50%)' : undefined,
+        width: evidence ? 1200 : '100%',
+        minHeight: evidence ? 94 : undefined,
         display: 'flex',
         justifyContent: 'center',
+        alignItems: 'center',
         pointerEvents: 'none',
+        backgroundColor: evidence ? 'rgba(3, 6, 10, 0.98)' : undefined,
+        border: evidence ? '1px solid rgba(255,255,255,0.18)' : undefined,
+        borderRadius: evidence ? 18 : undefined,
+        boxShadow: evidence ? '0 16px 36px rgba(0,0,0,0.42)' : undefined,
+        padding: evidence ? '12px 28px 14px' : undefined,
       }}
     >
       <div
         style={{
-          maxWidth: '70%',
+          maxWidth: evidence ? '100%' : '74%',
           textAlign: 'center',
-          fontSize: 36,
+          fontSize: evidence ? 34 : 38,
           lineHeight: 1.28,
-          fontWeight: 650,
+          fontWeight: 700,
           color: C.ink,
-          textShadow: '0 2px 16px rgba(0,0,0,0.85)',
+          backgroundColor: evidence ? 'transparent' : 'rgba(3, 6, 10, 0.78)',
+          border: evidence ? 'none' : '1px solid rgba(255,255,255,0.14)',
+          borderRadius: evidence ? 0 : 14,
+          padding: evidence ? 0 : '12px 24px 14px',
+          boxShadow: evidence ? 'none' : '0 12px 30px rgba(0,0,0,0.28)',
+          textShadow: '0 2px 12px rgba(0,0,0,0.9)',
         }}
       >
         {cue.t}
@@ -110,26 +136,130 @@ const LowerThird: React.FC<{label: string; side: 'LEFT' | 'RIGHT'}> = ({
   );
 };
 
-const FADE_FRAMES = 18;
+const EvidenceCard: React.FC<{broll: Broll}> = ({broll}) => (
+  <AbsoluteFill style={{backgroundColor: C.bg}}>
+    <OffthreadVideo
+      src={staticFile('evidence.mp4')}
+      startFrom={Math.round(broll.startSeconds * FPS)}
+      volume={0}
+      style={{
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover',
+      }}
+    />
+    <AbsoluteFill
+      style={{
+        background:
+          'linear-gradient(90deg, rgba(3,6,10,0.04) 0%, rgba(3,6,10,0.02) 52%, rgba(3,6,10,0.90) 100%)',
+      }}
+    />
+    <div
+      style={{
+        position: 'absolute',
+        top: 34,
+        right: 56,
+        width: 560,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-end',
+        textAlign: 'right',
+      }}
+    >
+      <div
+        style={{
+          fontSize: 18,
+          letterSpacing: 3,
+          fontWeight: 800,
+          color: C.accent,
+        }}
+      >
+        {broll.label}
+      </div>
+      <div
+        style={{
+          marginTop: 12,
+          fontSize: 40,
+          lineHeight: 1.08,
+          fontWeight: 820,
+          color: C.ink,
+          textShadow: '0 4px 20px rgba(0,0,0,0.85)',
+        }}
+      >
+        {broll.headline}
+      </div>
+      <div style={{marginTop: 18, display: 'flex', flexDirection: 'column', gap: 10}}>
+        {broll.callouts.map((item) => (
+          <div
+            key={item}
+            style={{
+              padding: '9px 14px',
+              borderRadius: 10,
+              backgroundColor: 'rgba(5,10,16,0.82)',
+              border: '1px solid rgba(77,163,255,0.48)',
+              color: C.ink,
+              fontSize: 21,
+              fontWeight: 650,
+              boxShadow: '0 8px 22px rgba(0,0,0,0.24)',
+            }}
+          >
+            {item}
+          </div>
+        ))}
+      </div>
+    </div>
+  </AbsoluteFill>
+);
 
-const ShotView: React.FC<{shot: Shot}> = ({shot}) => {
-  const frame = useCurrentFrame();
-  const fadeIn = interpolate(frame, [0, FADE_FRAMES], [0, 1], {
-    extrapolateRight: 'clamp',
-  });
-  const fadeOut = interpolate(
-    frame,
-    [Math.max(FADE_FRAMES, shot.durationFrames - FADE_FRAMES), shot.durationFrames],
-    [1, 0],
-    {extrapolateLeft: 'clamp'},
-  );
-  const opacity = fadeIn * fadeOut;
-  const kicker = (shot.panel?.headline || '').replace(/\n/g, ' ').replace(/\.$/, '');
+const PresenterPictureInPicture: React.FC<{shot: Shot}> = ({shot}) => {
+  const left = shot.side === 'LEFT' ? 54 : undefined;
+  const right = shot.side === 'RIGHT' ? 54 : undefined;
   return (
-    <AbsoluteFill style={{backgroundColor: C.bg, opacity}}>
+    <div
+      style={{
+        position: 'absolute',
+        left,
+        right,
+        bottom: 166,
+        width: 410,
+        height: 223,
+        overflow: 'hidden',
+        borderRadius: 20,
+        border: '2px solid rgba(255,255,255,0.28)',
+        boxShadow: '0 20px 48px rgba(0,0,0,0.46)',
+        backgroundColor: C.bg,
+      }}
+    >
       <OffthreadVideo
         src={staticFile(shot.clip)}
-        volume={opacity}
+        volume={1}
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          objectPosition: 'center center',
+        }}
+      />
+    </div>
+  );
+};
+
+const ShotView: React.FC<{shot: Shot}> = ({shot}) => {
+  const kicker = (shot.panel?.headline || '').replace(/\n/g, ' ').replace(/\.$/, '');
+  if (shot.broll) {
+    return (
+      <AbsoluteFill style={{backgroundColor: C.bg}}>
+        <EvidenceCard broll={shot.broll} />
+        <PresenterPictureInPicture shot={shot} />
+        <Captions list={shot.cues} evidence />
+      </AbsoluteFill>
+    );
+  }
+  return (
+    <AbsoluteFill style={{backgroundColor: C.bg}}>
+      <OffthreadVideo
+        src={staticFile(shot.clip)}
+        volume={1}
         style={{
           width: '100%',
           height: '100%',

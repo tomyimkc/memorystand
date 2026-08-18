@@ -1,16 +1,16 @@
 {
   "schemaVersion": 5,
   "title": "MemoryStand",
-  "targetDurationSeconds": 110,
+  "targetDurationSeconds": 73,
   "candidateOnly": true,
   "canClaimAGI": false,
   "_notes": [
     "GENERAL-PUBLIC CUT. One idea per shot. No repeated 3-word phrase. No filler.",
-    "Nine beats, nine shots. Each line is 14-20 words.",
+    "Nine beats, nine shots. Spoken lines are transcript-verified against the generated clips.",
     "Story: problem, why it is false, rule, check, refuse, ledger, conflict, proof, limits.",
-    "Each take plays the full 10s so the idle tail can fade into the next shot.",
-    "Panels state the claim in different words from the voiceover.",
-    "Remotion composes presenter + captions. Grok only generates the lip-synced takes.",
+    "Remotion trims each fixed 10s take to measured speech plus a short, honest hold.",
+    "Evidence shots keep the presenter visible while the functioning product supplies the picture.",
+    "Remotion composes presenter + captions + reviewed product footage. Grok only generated the lip-synced takes.",
     "Every shot must pass transcript comparison before render."
   ],
   "beats": [
@@ -37,13 +37,26 @@
         "kind": "hero",
         "headline": "SYMPTOM\nIS NOT CAUSE.",
         "bullets": [
-          "Number stayed flat",
-          "Silence is luck"
+        "Outside result stayed flat",
+        "Timing alone proves nothing"
         ],
         "footnote": "The alert stopping is not an outcome receipt."
       },
+      "broll": {
+        "0": {
+          "source": "artifacts/video/memorystand-evidence-source.mp4",
+          "startSeconds": 90,
+          "label": "OUTSIDE RECEIPT",
+          "headline": "ALERT QUIET. SERVICE LATENCY STILL FLAT.",
+          "callouts": [
+            "Before: 223 ms",
+            "After: 220 ms",
+            "Claimed improvement: 112 ms"
+          ]
+        }
+      },
       "shots": [
-        "The latency figure never moved. Quiet is not evidence, so treating that reboot as the cause is false."
+        "The outside service latency graph stayed flat. The alert stopped, but that timing does not prove the reboot fixed anything."
       ]
     },
     {
@@ -61,9 +74,14 @@
       "broll": {
         "0": {
           "source": "artifacts/video/memorystand-evidence-source.mp4",
-          "startSeconds": 0,
+          "startSeconds": 2,
           "label": "LIVE DASHBOARD",
-          "headline": "THE APP IS RUNNING"
+          "headline": "THE DEPLOYED APP IS RUNNING",
+          "callouts": [
+            "Write a memory",
+            "Check the outcome",
+            "Only then grant authority"
+          ]
         }
       },
       "shots": [
@@ -85,9 +103,14 @@
       "broll": {
         "0": {
           "source": "artifacts/video/memorystand-evidence-source.mp4",
-          "startSeconds": 78,
+          "startSeconds": 96,
           "label": "LIVE METRIC CHECK",
-          "headline": "CLOUDWATCH IS RE-QUERIED"
+          "headline": "CLOUDWATCH IS RE-QUERIED",
+          "callouts": [
+            "Right metric",
+            "Right direction",
+            "Right amount"
+          ]
         }
       },
       "shots": [
@@ -101,13 +124,13 @@
         "kind": "hero",
         "headline": "NO MATCH.\nNO KEYS.",
         "bullets": [
-          "Wrong heading → stop",
-          "Wrong scale → stop"
+          "Wrong direction → stop",
+          "Wrong amount → stop"
         ],
         "footnote": "Authority stays blocked until a person reviews."
       },
       "shots": [
-        "A miss on heading or scale blocks acting alone without a human in the loop."
+        "If CloudWatch shows the wrong direction or amount, autonomous action stops until a person reviews it."
       ]
     },
     {
@@ -125,9 +148,14 @@
       "broll": {
         "0": {
           "source": "artifacts/video/memorystand-evidence-source.mp4",
-          "startSeconds": 30,
-          "label": "LIVE SQL HISTORY",
-          "headline": "THE LEDGER DID NOT DROP A ROW"
+          "startSeconds": 118,
+          "label": "COCKROACHDB HISTORY",
+          "headline": "THE OLD AND NEW BELIEF BOTH REMAIN",
+          "callouts": [
+            "Pinned read at decision time",
+            "Live database now",
+            "Real diff, no reconstruction"
+          ]
         }
       },
       "shots": [
@@ -161,6 +189,19 @@
           "True cases kept"
         ],
         "footnote": "Authority scored separately from storage"
+      },
+      "broll": {
+        "0": {
+          "source": "artifacts/video/memorystand-evidence-source.mp4",
+          "startSeconds": 163,
+          "label": "DETERMINISTIC TEST RECEIPT",
+          "headline": "540 ATTACKS · 60 HONEST · 0 PROMOTED",
+          "callouts": [
+            "540 of 540 attacks stored",
+            "0 of 540 attacks gained authority",
+            "60 of 60 honest controls preserved"
+          ]
+        }
       },
       "shots": [
         "We tested five hundred forty attack cases and sixty honest controls. None of the attacks were promoted."

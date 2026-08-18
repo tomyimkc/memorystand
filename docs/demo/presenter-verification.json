@@ -38,9 +38,9 @@
     },
     "06-refuse-mismatch-0": {
       "clip": "06-refuse-mismatch-0.mp4",
-      "asked": "A miss on heading or scale blocks acting alone without a human in the loop.",
-      "heard": "the mist on heading or scale blocks acting alone without a human in the loop.",
-      "similarity": 0.867,
+      "asked": "If CloudWatch shows the wrong direction or amount, autonomous action stops until a person reviews it.",
+      "heard": "If CloudWatch shows the wrong direction or amount,  autonomous action stops until a person reviews it.",
+      "similarity": 1.0,
       "passed": true
     },
     "07-attack-test-0": {
@@ -59,8 +59,8 @@
     },
     "09-why-false-cause-0": {
       "clip": "09-why-false-cause-0.mp4",
-      "asked": "The latency figure never moved. Quiet is not evidence, so treating that reboot as the cause is false.",
-      "heard": "The latency figure never moved, quiet is not evidence, so treating that reboot as the cause is false.",
+      "asked": "The outside service latency graph stayed flat. The alert stopped, but that timing does not prove the reboot fixed anything.",
+      "heard": "The outside service latency graph stayed flat.  The alert stopped, but that timing does not prove the reboot fixed anything.",
       "similarity": 1.0,
       "passed": true
     }

@@ -14,11 +14,18 @@ Talking-head first. Load `/presenter-video-taste` before generating any still or
 
 ## Hard rules
 
-- Script: `docs/demo/presenter-script.json`. 14–20 words per shot. No repeated 3-gram.
+- Script: `docs/demo/presenter-script.json`. Prefer 10–24 plain-English words per shot. No
+  repeated 3-gram. Accurate nouns may recur; never contort ordinary language merely to make
+  every content word globally unique.
 - `python scripts/presenter/verify_script.py` must pass before any generate.
 - Every take is 16:9 medium. Never animate `artifacts/presenter/base/*` if those PNGs are 3:4 portraits.
 - Whisper gate ≥ 0.72 via `python scripts/presenter/make_clips.py --verify-only`.
 - Remotion is the compositor. Do not ship a raw Grok concat as the public cut.
+- Contest-rule footage is mandatory when the rules ask for a functioning project and the
+  CockroachDB memory layer at work. Render every authored `broll` range or fail closed.
+- Keep the presenter visible over evidence footage; use a proof cut, not a PPT takeover.
+- Trim fixed 10-second Grok takes to measured speech plus a short hold. Never equate maximum
+  generation duration with honest editorial duration.
 
 ## Commands
 

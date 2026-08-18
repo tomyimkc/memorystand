@@ -361,11 +361,12 @@ Fields the owner alone can answer are called out again in the day-of checklist a
 > tool cannot supply the required `output.upload_url`; `scripts/presenter/xai_video.py` therefore
 > calls the xAI endpoint directly and receives each MP4 through a short-lived, token-protected
 > upload bridge. Every narration clip is transcribed locally and must pass the committed
-> similarity receipt before `compose.py` will include it. Selected shots replace the presenter
-> with muted footage from the reviewed deployed demo, visibly showing the live application,
-> CockroachDB memory history, and AWS outcome gate. Pillow renders one large headline and fresh
-> subtitle bands; ffmpeg assembles and burns English subtitles into the 1920×1080 H.264/AAC
-> render while also writing a matching `.srt`. The end card discloses the synthetic presenter.
+> similarity receipt before the Remotion story builder will include it. Selected shots keep the
+> presenter visible in a medium-shot picture-in-picture over muted footage from the reviewed
+> deployed demo, visibly showing the live application, CockroachDB memory history, AWS outcome
+> gate, and deterministic attack receipt. Remotion renders one large headline, compact evidence
+> callouts, and fresh subtitle bands into the 1920×1080 H.264/AAC master while also writing a
+> matching `.srt`. The end card discloses the synthetic presenter.
 > The complete reproducible workflow is documented in
 > `docs/demo/PRESENTER_VIDEO_PLAN.md` and implemented under `scripts/presenter/`.
 >
