@@ -9,7 +9,7 @@
     "Nine beats, nine shots. Spoken lines are transcript-verified against the generated clips.",
     "Story: problem, why it is false, rule, check, refuse, ledger, conflict, proof, limits.",
     "Remotion trims each fixed 10s take to measured speech plus a short, honest hold.",
-    "Evidence shots keep the presenter visible while the functioning product supplies the picture.",
+    "Evidence beats begin on the medium-shot presenter, then hand the full frame to one focused receipt.",
     "Remotion composes presenter + captions + reviewed product footage. Grok only generated the lip-synced takes.",
     "Every shot must pass transcript comparison before render."
   ],
@@ -44,7 +44,7 @@
       },
       "broll": {
         "0": {
-          "source": "artifacts/video/memorystand-evidence-source.mp4",
+          "source": "artifacts/video/presenter-receipts/why-false.png",
           "startSeconds": 0,
           "label": "SEEDED DECISION-RULE TEST",
           "headline": "THE PAGE CLEARED. LATENCY STAYED FLAT.",
@@ -74,8 +74,8 @@
       },
       "broll": {
         "0": {
-          "source": "artifacts/video/memorystand-evidence-source.mp4",
-          "startSeconds": 2,
+          "source": "artifacts/video/presenter-receipts/receipt-first.png",
+          "startSeconds": 0,
           "label": "LIVE DASHBOARD",
           "headline": "THE DEPLOYED APP IS RUNNING",
           "callouts": [
@@ -103,8 +103,8 @@
       },
       "broll": {
         "0": {
-          "source": "artifacts/video/memorystand-evidence-source.mp4",
-          "startSeconds": 96,
+          "source": "artifacts/video/presenter-receipts/cloudwatch.png",
+          "startSeconds": 0,
           "label": "LIVE METRIC CHECK",
           "headline": "CLOUDWATCH IS RE-QUERIED",
           "callouts": [
@@ -148,8 +148,8 @@
       },
       "broll": {
         "0": {
-          "source": "artifacts/video/memorystand-evidence-source.mp4",
-          "startSeconds": 118,
+          "source": "artifacts/video/presenter-receipts/cockroachdb.png",
+          "startSeconds": 0,
           "label": "COCKROACHDB HISTORY",
           "headline": "THE OLD AND NEW BELIEF BOTH REMAIN",
           "callouts": [
@@ -193,8 +193,8 @@
       },
       "broll": {
         "0": {
-          "source": "artifacts/video/memorystand-evidence-source.mp4",
-          "startSeconds": 163,
+          "source": "artifacts/video/presenter-receipts/attack-test.png",
+          "startSeconds": 0,
           "label": "DETERMINISTIC TEST RECEIPT",
           "headline": "540 ATTACKS · 60 HONEST · 0 PROMOTED",
           "callouts": [
