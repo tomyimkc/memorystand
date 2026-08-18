@@ -14,10 +14,10 @@ An AI memory must show an outside receipt before it gets the keys to act alone.
 
 That sentence is the editorial test for every beat. The narration assumes the viewer has
 never used an AI agent, CockroachDB, AWS, vector search, or an incident-management tool.
-The film uses one large headline and at most three short evidence callouts. Five shots use
-reviewed deployed-demo footage while keeping the presenter visible, so judges can see the
-project functioning, the CockroachDB memory history, the AWS outcome gate, and the adversarial
-test receipt without turning the film into a screen-capture walkthrough.
+The film uses one large headline and only the decisive state or number. Five shots begin on the
+medium-shot presenter, then hand the complete 1920×1080 frame to focused receipts derived from
+captured deployed API, CockroachDB, and CloudWatch evidence. A shrunk dashboard was rejected
+because its product words were unreadable at normal playback size.
 
 ## Nine-beat arc
 
@@ -70,21 +70,24 @@ python scripts/presenter/make_clips.py
 python scripts/presenter/xai_video.py
 python scripts/presenter/make_clips.py --verify-only
 
-# Put the reviewed deployed-demo evidence cut at the path referenced by presenter-script.json.
-# It remains gitignored because it is a generated delivery artifact.
-cp /absolute/path/to/reviewed-deployed-demo.mp4 \
-  artifacts/video/memorystand-evidence-source.mp4
+# Build five focused 1920x1080 receipts from captured evidence and fixed test claims.
+python scripts/video/build_presenter_receipts.py
 
-# Remotion compose — same layout contract as the earlier contest films.
+# Remotion compose and final-master verification.
 python scripts/presenter/build_remotion_story.py
 ( cd remotion && npm install && npm run render )
+cp remotion/public/memorystand-presenter.srt remotion/out/memorystand-presenter.srt
+python scripts/video/verify_presenter_subtitles.py remotion/out/memorystand-presenter.mp4
+python scripts/video/verify_video.py remotion/out/memorystand-presenter.mp4 --profile presenter
 cp remotion/out/memorystand-presenter.mp4 artifacts/video/memorystand-presenter.mp4
 ```
 
-The Remotion component renders every `broll` entry. Each evidence beat keeps the talking-head
-visible in a medium-shot picture-in-picture; the product footage supplies the proof, not a PPT
-board. `build_remotion_story.py` fails closed if a requested evidence range would exceed the
-reviewed source.
+The Remotion component renders every `broll` entry. Each evidence beat starts on the medium-shot
+presenter for about 1.85 seconds, then makes a hard handoff to a full-frame receipt. Presenter
+chrome, headings, gradients, and callouts do not cover the evidence. The receipt generator
+reserves an empty lower rail for burned subtitles, so captions remain present for every spoken
+word without covering a product label, metric, number, provenance line, or the presenter's mouth.
+`build_remotion_story.py` rejects a still that is not exactly 1920×1080.
 
 Outputs are gitignored:
 
@@ -92,10 +95,12 @@ Outputs are gitignored:
 - `artifacts/video/memorystand-presenter.srt`
 
 The transcript receipt is committed as
-[`presenter-verification.json`](./presenter-verification.json). `compose.py` refuses to use a
-clip that does not have a current passing receipt. It also refuses a live-evidence time range
-that exceeds the reviewed source file. Evidence footage is muted; the already-verified narration
-remains the only audio, so the film keeps one subtitle and timing source of truth.
+[`presenter-verification.json`](./presenter-verification.json). The story builder refuses to use
+a clip that does not have a current passing receipt. The final-master subtitle gate then compares
+all 20 SRT cues with the Remotion timeline, samples a rendered frame inside every cue to prove the
+burned text exists, independently transcribes all nine assembled shots against their approved
+lines, and cross-correlates each master-audio segment against its verified source clip. Source
+verification alone is not accepted as proof that the compositor kept subtitles or audio in sync.
 
 ## Claim boundaries
 

@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
-// Presenter-led proof cut. The Grok talking-head carries the narration; selected
-// beats add reviewed product footage so the required functioning project and
-// CockroachDB memory layer are visible rather than merely named.
+// Presenter-led proof cut. The Grok talking-head introduces each claim, then
+// hands the full 1920x1080 frame to the reviewed evidence. Product text is
+// never covered by presenter chrome, captions, headings, gradients, or callouts.
 
 import React from 'react';
 import {
   AbsoluteFill,
+  Audio,
+  Img,
   OffthreadVideo,
   Sequence,
-  interpolate,
   spring,
   staticFile,
   useCurrentFrame,
@@ -17,21 +18,25 @@ import story from './story.json';
 import {FPS} from './Root';
 
 const C = {
-  bg: '#07090d',
+  bg: '#05080d',
   ink: '#f4f7fb',
   dim: '#b7c0cc',
   faint: '#8b96a8',
   accent: '#4da3ff',
 };
+const UI_FONT =
+  'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
 type Cue = {s: number; e: number; t: string};
 type Broll = {
   source: string;
   startSeconds: number;
   durationSeconds: number;
-  label: string;
-  headline: string;
-  callouts: string[];
+  asset: string;
+  kind: 'image' | 'video';
+  label?: string;
+  headline?: string;
+  callouts?: string[];
 };
 type Shot = {
   id: string;
@@ -43,41 +48,45 @@ type Shot = {
   cues: Cue[];
 };
 
-const Captions: React.FC<{list: Cue[]; evidence?: boolean}> = ({
-  list,
-  evidence = false,
-}) => {
-  const frame = useCurrentFrame();
+const EVIDENCE_HANDOFF_S = 1.85;
+
+const currentCue = (list: Cue[], frame: number) => {
   const t = frame / FPS;
-  const cue = list.find((c) => t >= c.s && t < c.e);
+  return list.find((cue) => t >= cue.s && t < cue.e);
+};
+
+const Captions: React.FC<{
+  list: Cue[];
+  evidence?: boolean;
+}> = ({list, evidence = false}) => {
+  const cue = currentCue(list, useCurrentFrame());
   if (!cue) return null;
   return (
     <div
       style={{
         position: 'absolute',
-        bottom: evidence ? 42 : 56,
-        left: evidence ? '50%' : 0,
-        transform: evidence ? 'translateX(-50%)' : undefined,
-        width: evidence ? 1200 : '100%',
-        minHeight: evidence ? 94 : undefined,
+        bottom: evidence ? 0 : 56,
+        left: 0,
+        width: '100%',
+        minHeight: evidence ? 74 : undefined,
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
         pointerEvents: 'none',
-        backgroundColor: evidence ? 'rgba(3, 6, 10, 0.98)' : undefined,
-        border: evidence ? '1px solid rgba(255,255,255,0.18)' : undefined,
-        borderRadius: evidence ? 18 : undefined,
-        boxShadow: evidence ? '0 16px 36px rgba(0,0,0,0.42)' : undefined,
-        padding: evidence ? '12px 28px 14px' : undefined,
+        backgroundColor: evidence ? 'rgba(2, 5, 9, 0.97)' : undefined,
+        borderTop: evidence ? '1px solid rgba(255,255,255,0.16)' : undefined,
+        padding: evidence ? '10px 44px 12px' : undefined,
+        boxSizing: 'border-box',
       }}
     >
       <div
         style={{
-          maxWidth: evidence ? '100%' : '74%',
+          maxWidth: evidence ? '92%' : '74%',
           textAlign: 'center',
-          fontSize: evidence ? 34 : 38,
+          fontSize: evidence ? 32 : 38,
           lineHeight: 1.28,
           fontWeight: 700,
+          fontFamily: UI_FONT,
           color: C.ink,
           backgroundColor: evidence ? 'transparent' : 'rgba(3, 6, 10, 0.78)',
           border: evidence ? 'none' : '1px solid rgba(255,255,255,0.14)',
@@ -117,6 +126,7 @@ const LowerThird: React.FC<{label: string; side: 'LEFT' | 'RIGHT'}> = ({
           fontSize: 14,
           letterSpacing: 2.4,
           fontWeight: 750,
+          fontFamily: UI_FONT,
           color: C.accent,
         }}
       >
@@ -126,6 +136,7 @@ const LowerThird: React.FC<{label: string; side: 'LEFT' | 'RIGHT'}> = ({
         style={{
           fontSize: 22,
           fontWeight: 650,
+          fontFamily: UI_FONT,
           color: C.dim,
           letterSpacing: 0.2,
         }}
@@ -136,133 +147,17 @@ const LowerThird: React.FC<{label: string; side: 'LEFT' | 'RIGHT'}> = ({
   );
 };
 
-const EvidenceCard: React.FC<{broll: Broll}> = ({broll}) => (
-  <AbsoluteFill style={{backgroundColor: C.bg}}>
-    <OffthreadVideo
-      src={staticFile('evidence.mp4')}
-      startFrom={Math.round(broll.startSeconds * FPS)}
-      volume={0}
-      style={{
-        width: '100%',
-        height: '100%',
-        objectFit: 'cover',
-      }}
-    />
-    <AbsoluteFill
-      style={{
-        background:
-          'linear-gradient(90deg, rgba(3,6,10,0.04) 0%, rgba(3,6,10,0.02) 52%, rgba(3,6,10,0.90) 100%)',
-      }}
-    />
-    <div
-      style={{
-        position: 'absolute',
-        // The reviewed evidence source has its own candidate-only badge in the
-        // upper-right corner. Keep authored proof labels below that baked safe
-        // area instead of making two independently valid labels unreadable.
-        top: 82,
-        right: 56,
-        width: 560,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'flex-end',
-        textAlign: 'right',
-      }}
-    >
-      <div
-        style={{
-          fontSize: 18,
-          letterSpacing: 3,
-          fontWeight: 800,
-          color: C.accent,
-        }}
-      >
-        {broll.label}
-      </div>
-      <div
-        style={{
-          marginTop: 12,
-          fontSize: 40,
-          lineHeight: 1.08,
-          fontWeight: 820,
-          color: C.ink,
-          textShadow: '0 4px 20px rgba(0,0,0,0.85)',
-        }}
-      >
-        {broll.headline}
-      </div>
-      <div style={{marginTop: 18, display: 'flex', flexDirection: 'column', gap: 10}}>
-        {broll.callouts.map((item) => (
-          <div
-            key={item}
-            style={{
-              padding: '9px 14px',
-              borderRadius: 10,
-              backgroundColor: 'rgba(5,10,16,0.82)',
-              border: '1px solid rgba(77,163,255,0.48)',
-              color: C.ink,
-              fontSize: 21,
-              fontWeight: 650,
-              boxShadow: '0 8px 22px rgba(0,0,0,0.24)',
-            }}
-          >
-            {item}
-          </div>
-        ))}
-      </div>
-    </div>
-  </AbsoluteFill>
-);
-
-const PresenterPictureInPicture: React.FC<{shot: Shot}> = ({shot}) => {
-  const left = shot.side === 'LEFT' ? 54 : undefined;
-  const right = shot.side === 'RIGHT' ? 54 : undefined;
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        left,
-        right,
-        bottom: 166,
-        width: 410,
-        height: 223,
-        overflow: 'hidden',
-        borderRadius: 20,
-        border: '2px solid rgba(255,255,255,0.28)',
-        boxShadow: '0 20px 48px rgba(0,0,0,0.46)',
-        backgroundColor: C.bg,
-      }}
-    >
-      <OffthreadVideo
-        src={staticFile(shot.clip)}
-        volume={1}
-        style={{
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          objectPosition: 'center center',
-        }}
-      />
-    </div>
-  );
-};
-
-const ShotView: React.FC<{shot: Shot}> = ({shot}) => {
+const PresenterShot: React.FC<{
+  shot: Shot;
+  captions: boolean;
+  volume?: number;
+}> = ({shot, captions, volume = 1}) => {
   const kicker = (shot.panel?.headline || '').replace(/\n/g, ' ').replace(/\.$/, '');
-  if (shot.broll) {
-    return (
-      <AbsoluteFill style={{backgroundColor: C.bg}}>
-        <EvidenceCard broll={shot.broll} />
-        <PresenterPictureInPicture shot={shot} />
-        <Captions list={shot.cues} evidence />
-      </AbsoluteFill>
-    );
-  }
   return (
     <AbsoluteFill style={{backgroundColor: C.bg}}>
       <OffthreadVideo
         src={staticFile(shot.clip)}
-        volume={1}
+        volume={volume}
         style={{
           width: '100%',
           height: '100%',
@@ -277,9 +172,70 @@ const ShotView: React.FC<{shot: Shot}> = ({shot}) => {
         }}
       />
       <LowerThird label={kicker} side={shot.side} />
-      <Captions list={shot.cues} />
+      {captions ? <Captions list={shot.cues} /> : null}
     </AbsoluteFill>
   );
+};
+
+const EvidenceShot: React.FC<{shot: Shot; broll: Broll}> = ({shot, broll}) => {
+  const handoffFrame = Math.min(
+    Math.max(1, shot.durationFrames - 1),
+    Math.round(EVIDENCE_HANDOFF_S * FPS),
+  );
+  const evidenceFrames = Math.max(1, shot.durationFrames - handoffFrame);
+  return (
+    <AbsoluteFill style={{backgroundColor: C.bg}}>
+      <Sequence from={0} durationInFrames={handoffFrame} premountFor={FPS}>
+        <PresenterShot shot={shot} captions volume={0} />
+      </Sequence>
+      <Sequence
+        from={handoffFrame}
+        durationInFrames={evidenceFrames}
+        premountFor={FPS}
+      >
+        <AbsoluteFill style={{backgroundColor: '#030507'}}>
+          {broll.kind === 'image' ? (
+            <Img
+              src={staticFile(broll.asset)}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                objectPosition: 'center center',
+              }}
+            />
+          ) : (
+            <OffthreadVideo
+              src={staticFile(broll.asset)}
+              startFrom={Math.round(broll.startSeconds * FPS)}
+              volume={0}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                objectPosition: 'center center',
+              }}
+            />
+          )}
+        </AbsoluteFill>
+        <Captions
+          list={shot.cues.map((cue) => ({
+            ...cue,
+            s: cue.s - handoffFrame / FPS,
+            e: cue.e - handoffFrame / FPS,
+          }))}
+          evidence
+        />
+      </Sequence>
+      {/* One continuous verified narration track; evidence itself remains muted. */}
+      <Audio src={staticFile(shot.clip)} volume={1} />
+    </AbsoluteFill>
+  );
+};
+
+const ShotView: React.FC<{shot: Shot}> = ({shot}) => {
+  if (shot.broll) return <EvidenceShot shot={shot} broll={shot.broll} />;
+  return <PresenterShot shot={shot} captions />;
 };
 
 const Outro: React.FC = () => {
@@ -290,6 +246,7 @@ const Outro: React.FC = () => {
     <AbsoluteFill
       style={{
         backgroundColor: C.bg,
+        fontFamily: UI_FONT,
         alignItems: 'center',
         justifyContent: 'center',
         opacity: enter,
@@ -322,7 +279,7 @@ export const MemoryStand: React.FC = () => {
   const shots = (story.shots || []) as Shot[];
   let cursor = 0;
   return (
-    <AbsoluteFill style={{backgroundColor: C.bg}}>
+    <AbsoluteFill style={{backgroundColor: C.bg, fontFamily: UI_FONT}}>
       {shots.map((shot) => {
         const from = cursor;
         cursor += shot.durationFrames;

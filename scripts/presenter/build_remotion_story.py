@@ -2,10 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 """Turn verified presenter clips into remotion/src/story.json.
 
-The Remotion composition is the same layout contract as the earlier contest
-films. This script is the only place that measures speech and writes the
-timeline Remotion will render. It refuses a clip that is not in the whisper
-receipt as passed.
+This script is the only place that measures speech and writes the timeline
+Remotion will render. It refuses a clip that is not in the whisper receipt as
+passed. Evidence may be a reviewed video or a 1920x1080 receipt image; every
+source is copied separately so one beat cannot silently display another beat's
+evidence.
 """
 
 from __future__ import annotations
@@ -69,45 +70,8 @@ def main() -> int:
 
     public_clips = PUBLIC / "clips"
     public_clips.mkdir(parents=True, exist_ok=True)
-    evidence_sources = {
-        str(visual["source"])
-        for beat in spec["beats"]
-        for visual in (beat.get("broll") or {}).values()
-    }
-    if len(evidence_sources) > 1:
-        print(
-            "refusing story: Remotion currently supports one shared evidence source, "
-            f"found {sorted(evidence_sources)!r}",
-            file=sys.stderr,
-        )
-        return 2
-    evidence_source = next(iter(evidence_sources), "")
-    evidence_path = REPO_ROOT / evidence_source if evidence_source else None
-    if evidence_path and evidence_path.is_file():
-        shutil.copy2(evidence_path, PUBLIC / "evidence.mp4")
-        evidence_probe = json.loads(
-            subprocess.run(
-                [
-                    "ffprobe",
-                    "-v",
-                    "error",
-                    "-show_entries",
-                    "format=duration",
-                    "-of",
-                    "json",
-                    str(evidence_path),
-                ],
-                check=True,
-                capture_output=True,
-                text=True,
-            ).stdout
-        )
-        evidence_duration = float(evidence_probe["format"]["duration"])
-    elif evidence_source:
-        print(f"refusing story: b-roll source is missing: {evidence_path}", file=sys.stderr)
-        return 2
-    else:
-        evidence_duration = 0.0
+    public_evidence = PUBLIC / "evidence"
+    public_evidence.mkdir(parents=True, exist_ok=True)
 
     story_shots = []
     for beat in spec["beats"]:
@@ -144,22 +108,60 @@ def main() -> int:
             visual = (beat.get("broll") or {}).get(str(index))
             if visual:
                 visual = dict(visual)
-                if visual["source"] != evidence_source:
-                    print(
-                        f"refusing {tag}: b-roll source changed after validation",
-                        file=sys.stderr,
-                    )
+                evidence_path = REPO_ROOT / str(visual["source"])
+                if not evidence_path.is_file():
+                    print(f"refusing {tag}: evidence source is missing: {evidence_path}", file=sys.stderr)
                     return 2
                 visual_duration = float(visual.get("durationSeconds", duration))
                 start = float(visual["startSeconds"])
-                if start + visual_duration > evidence_duration + 0.05:
-                    print(
-                        f"refusing {tag}: b-roll range {start:.2f}-"
-                        f"{start + visual_duration:.2f}s exceeds the "
-                        f"{evidence_duration:.2f}s reviewed source",
-                        file=sys.stderr,
+                suffix = evidence_path.suffix.lower()
+                if suffix in {".png", ".jpg", ".jpeg", ".webp"}:
+                    from PIL import Image
+
+                    with Image.open(evidence_path) as image:
+                        if image.size != (1920, 1080):
+                            print(
+                                f"refusing {tag}: still evidence must be 1920x1080, "
+                                f"found {image.size[0]}x{image.size[1]}",
+                                file=sys.stderr,
+                            )
+                            return 2
+                    kind = "image"
+                elif suffix in {".mp4", ".mov", ".m4v", ".webm"}:
+                    evidence_probe = json.loads(
+                        subprocess.run(
+                            [
+                                "ffprobe",
+                                "-v",
+                                "error",
+                                "-show_entries",
+                                "format=duration",
+                                "-of",
+                                "json",
+                                str(evidence_path),
+                            ],
+                            check=True,
+                            capture_output=True,
+                            text=True,
+                        ).stdout
                     )
+                    evidence_duration = float(evidence_probe["format"]["duration"])
+                    if start + visual_duration > evidence_duration + 0.05:
+                        print(
+                            f"refusing {tag}: evidence range {start:.2f}-"
+                            f"{start + visual_duration:.2f}s exceeds the "
+                            f"{evidence_duration:.2f}s reviewed source",
+                            file=sys.stderr,
+                        )
+                        return 2
+                    kind = "video"
+                else:
+                    print(f"refusing {tag}: unsupported evidence type {suffix!r}", file=sys.stderr)
                     return 2
+                public_name = f"{tag}{suffix}"
+                shutil.copy2(evidence_path, public_evidence / public_name)
+                visual["asset"] = f"evidence/{public_name}"
+                visual["kind"] = kind
                 visual["durationSeconds"] = round(visual_duration, 3)
             story_shots.append(
                 {

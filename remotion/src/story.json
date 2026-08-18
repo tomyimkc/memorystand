@@ -47,7 +47,7 @@
         "footnote": "The alert stopping is not an outcome receipt."
       },
       "broll": {
-        "source": "artifacts/video/memorystand-evidence-source.mp4",
+        "source": "artifacts/video/presenter-receipts/why-false.png",
         "startSeconds": 0,
         "label": "SEEDED DECISION-RULE TEST",
         "headline": "THE PAGE CLEARED. LATENCY STAYED FLAT.",
@@ -57,6 +57,8 @@
           "Claimed improvement: 112 ms",
           "Not production CloudWatch"
         ],
+        "asset": "evidence/09-why-false-cause-0.png",
+        "kind": "image",
         "durationSeconds": 8.25
       },
       "cues": [
@@ -93,8 +95,8 @@
         "footnote": "github.com/tomyimkc/memorystand"
       },
       "broll": {
-        "source": "artifacts/video/memorystand-evidence-source.mp4",
-        "startSeconds": 2,
+        "source": "artifacts/video/presenter-receipts/receipt-first.png",
+        "startSeconds": 0,
         "label": "LIVE DASHBOARD",
         "headline": "THE DEPLOYED APP IS RUNNING",
         "callouts": [
@@ -102,6 +104,8 @@
           "Check the outcome",
           "Only then grant authority"
         ],
+        "asset": "evidence/01-receipt-first-0.png",
+        "kind": "image",
         "durationSeconds": 6.47
       },
       "cues": [
@@ -133,8 +137,8 @@
         "footnote": "AWS outcome path \u00b7 model_calls: 0"
       },
       "broll": {
-        "source": "artifacts/video/memorystand-evidence-source.mp4",
-        "startSeconds": 96,
+        "source": "artifacts/video/presenter-receipts/cloudwatch.png",
+        "startSeconds": 0,
         "label": "LIVE METRIC CHECK",
         "headline": "CLOUDWATCH IS RE-QUERIED",
         "callouts": [
@@ -142,6 +146,8 @@
           "Right direction",
           "Right amount"
         ],
+        "asset": "evidence/05-cloudwatch-receipt-0.png",
+        "kind": "image",
         "durationSeconds": 6.85
       },
       "cues": [
@@ -202,8 +208,8 @@
         "footnote": "CockroachDB Cloud \u00b7 VECTOR \u00b7 AS OF SYSTEM TIME"
       },
       "broll": {
-        "source": "artifacts/video/memorystand-evidence-source.mp4",
-        "startSeconds": 118,
+        "source": "artifacts/video/presenter-receipts/cockroachdb.png",
+        "startSeconds": 0,
         "label": "COCKROACHDB HISTORY",
         "headline": "THE OLD AND NEW BELIEF BOTH REMAIN",
         "callouts": [
@@ -211,6 +217,8 @@
           "Live database now",
           "Real diff, no reconstruction"
         ],
+        "asset": "evidence/03-cockroachdb-aws-0.png",
+        "kind": "image",
         "durationSeconds": 7.27
       },
       "cues": [
@@ -271,8 +279,8 @@
         "footnote": "Authority scored separately from storage"
       },
       "broll": {
-        "source": "artifacts/video/memorystand-evidence-source.mp4",
-        "startSeconds": 163,
+        "source": "artifacts/video/presenter-receipts/attack-test.png",
+        "startSeconds": 0,
         "label": "DETERMINISTIC TEST RECEIPT",
         "headline": "540 ATTACKS \u00b7 60 HONEST \u00b7 0 PROMOTED",
         "callouts": [
@@ -280,6 +288,8 @@
           "0 of 540 attacks gained authority",
           "60 of 60 honest controls preserved"
         ],
+        "asset": "evidence/07-attack-test-0.png",
+        "kind": "image",
         "durationSeconds": 7.39
       },
       "cues": [

@@ -47,6 +47,21 @@ A portrait close-up `objectFit: cover` onto 16:9 crops the mouth off and looks l
 - Treat baked badges, watermarks, and status labels as occupied space too. Inspect the full
   evidence frame before placing authored headings; reserve a safe area so labels such as
   `candidateOnly`, `LIVE`, or source provenance never collide with the new title.
+- For text-dense product footage, a safe area guessed from one still is not enough. Treat the
+  entire product viewport as protected: scale the whole source with `contain`, then put presenter,
+  headings, callouts, and captions in dedicated rails outside that rectangle. Do not place
+  semi-transparent chrome over changing UI text.
+- Non-overlap is not enough if the protected viewport becomes too small to read. If a side rail
+  leaves the product below roughly 90% of the 16:9 frame, use a presenter-to-full-screen evidence
+  handoff instead. During the receipt, show no authored overlay except a dedicated subtitle rail
+  whose background covers only deliberately empty pixels reserved in the evidence master.
+- A full dashboard can still be useless evidence. Crop or rebuild a provenance-backed receipt
+  around the one decisive state or number, in large type. Remove duplicate headings and helper
+  prose; narration supplies context while the picture supplies proof.
+- Subtitle completeness is non-negotiable. Do not suppress burned captions during evidence
+  handoffs. The receipt must reserve an empty lower rail, and the final master must be sampled
+  inside every cue to prove visible text exists at the same time as the speech. Use the same
+  clean sans-serif family as the receipt UI; a default browser serif makes subtitles look pasted on.
 - Evidence provenance must match the picture. Never overlay seeded or synthetic numbers on an
   unrelated live dashboard; use the matching source, or label the example visibly and explicitly
   as seeded/synthetic and not production evidence.
@@ -57,4 +72,5 @@ Extract a frame at ~2s and ~mid-shot. Fail if: forehead-only, mouth under a capt
 or the subject fills more than half the frame height. For evidence beats, also fail if the product
 text is unreadable at 1920×1080, the presenter covers the receipt, or an authored heading overlaps
 text already baked into the source. Inspect the overlay region at full resolution, not only in a
-scaled contact sheet.
+scaled contact sheet. For changing evidence footage, inspect early, middle, and late frames and
+compare each against the unobstructed source; every source word must remain visible.

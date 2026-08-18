@@ -32,6 +32,20 @@ Talking-head first. Load `/presenter-video-taste` before generating any still or
 - Evidence overlays must respect every label already baked into the reviewed footage. Audit one
   full-resolution frame from each b-roll range and move authored headings out of the safe area
   used by `candidateOnly`, `LIVE`, watermark, or source-caption text.
+- Text-dense b-roll uses a non-overlap layout: the complete `contain`-scaled source gets a
+  protected viewport, while presenter, proof copy, callouts, and subtitles live in separate
+  side/bottom rails. Audit early/middle/late frames against the source, not one representative
+  still.
+- Fail a technically non-overlapping layout when it makes the screen capture too small to read.
+  Prefer a short talking-head setup followed by a full-frame, overlay-free evidence handoff.
+- Maximize keypoints, not words: one receipt, one decisive state/number, and at most one short
+  interpretation line. A whole dashboard shrunk beside explanatory chrome is not a proof shot.
+- Burn subtitles for every spoken word, including evidence handoffs. Reserve a dedicated empty
+  subtitle rail in the receipt rather than covering product words, numbers, or provenance.
+- Verify the assembled master, not only source clips: compare all SRT cues with the Remotion
+  timeline, prove their combined text covers every approved script word, sample a rendered
+  frame inside every cue, independently transcribe every assembled shot, and match each
+  master-audio segment back to its verified source.
 - Before re-running Whisper or building the Remotion story, verify that the selected Python
   environment imports both `faster_whisper` and `PIL`. Use an isolated environment if needed;
   a saved receipt is not evidence that a fresh rerun actually happened.

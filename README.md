@@ -264,7 +264,7 @@ Everything marked ✅ was run against a real CockroachDB v26.2.5 cluster, not ju
 | Reasoning provider | ⚠️ Bedrock is tried first; this account's Bedrock quota is still ~0. The Teamorouter standby returned HTTP 402 (empty wallet) on 2026-08-17. `/decide` now fails fast through a circuit breaker and falls back to memory — the default dashboard alert chooses verified `scale_up` over a closer unconfirmed `restart_service`, `model_calls: 0`. Restoring *model* reasoning needs the owner to fund/rotate that credential; see [`DISCLOSURES.md`](DISCLOSURES.md). The promotion path stays model-free regardless. |
 | Cloud cluster | ✅ CockroachDB Cloud BASIC, AWS us-west-2. Live `/health` reported CCL v26.2.5 on 2026-08-09. The last recorded row inventory remains 50,131 rows: 40 synthetic tenants at 1,250 rows each, plus the curated demo tenant (131 rows, 117 accepted); that inventory was not re-counted during the 2026-08-09 health check. |
 | MCP server wiring | ✅ working end to end (see [CockroachDB tools used](#cockroachdb-tools-used) for the honest access-level finding) |
-| Video | ⚠️ local 1920×1080 H.264/AAC renders exist (winner-readiness 172.0 s SHA-256 `3ce6696e747fc599dace4093ac82e5f75064cd6ad58e6e46fdb9fab3dd96c63c`; hybrid keypoints 110.958 s SHA-256 `d5424d5243a75634632209cd27cf04f535ee316eccfb098b93e7c1c188e7fa0c`). **Public YouTube/Vimeo upload is still the submit blocker.** |
+| Video | ⚠️ the current local presenter proof cut is 72.597 s, 1920×1080 H.264/AAC, SHA-256 `d5ca8ea60407ccd1ec02b46da953daade8bb39c229220a25cb900cce6fb7c44a`; 20/20 burned subtitle cues and all 9 assembled narration segments pass the final-master sync gate. **Public YouTube/Vimeo upload is still the submit blocker.** |
 
 ## Measured results
 
