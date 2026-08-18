@@ -36,6 +36,13 @@
       "similarity": 0.929,
       "passed": true
     },
+    "06-refuse-mismatch-0": {
+      "clip": "06-refuse-mismatch-0.mp4",
+      "asked": "A miss on heading or scale blocks acting alone without a human in the loop.",
+      "heard": "the mist on heading or scale blocks acting alone without a human in the loop.",
+      "similarity": 0.867,
+      "passed": true
+    },
     "07-attack-test-0": {
       "clip": "07-attack-test-0.mp4",
       "asked": "We tested five hundred forty attack cases and sixty honest controls. None of the attacks were promoted.",
@@ -48,6 +55,13 @@
       "asked": "Today, search matches words not meaning. Decisions use a fixed fallback. Promotion still uses zero model calls.",
       "heard": "Today, search match is words not meaning.  Decisions use a fixed fallback.  Promotion still uses zero model calls.",
       "similarity": 0.914,
+      "passed": true
+    },
+    "09-why-false-cause-0": {
+      "clip": "09-why-false-cause-0.mp4",
+      "asked": "The latency figure never moved. Quiet is not evidence, so treating that reboot as the cause is false.",
+      "heard": "The latency figure never moved, quiet is not evidence, so treating that reboot as the cause is false.",
+      "similarity": 1.0,
       "passed": true
     }
   }

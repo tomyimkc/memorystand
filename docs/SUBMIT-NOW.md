@@ -7,16 +7,15 @@ Do these in order. Do not improvise field values; they are already written in
 
 ## 1. Upload the video (this is the remaining hard blocker)
 
-Upload this cut — 2026-08-17 Remotion compose, **story order**:
-problem → rule → CloudWatch → ledger → conflict → proof → limits.
-16:9 medium shot. Whisper 7/7. No repeated wording.
+Upload this cut — 2026-08-18 Remotion compose. Nine full 10s medium-shot
+takes with fades. Beat 2 now says **why** the restart-as-fix memory is false
+(the latency figure never moved; quiet is not evidence).
 
 | Cut | Path | Runtime | SHA-256 |
 |---|---|---|---|
-| **Use this** | `~/Downloads/MemoryStand-Remotion-story-order-2026-08-17.mp4` | 52.843 s | `206ea39a78114fd8240463ce56a3c4f5b741d0544d9089c0cdd21fe6cceb6db8` |
-| Sidecar SRT | `~/Downloads/MemoryStand-Remotion-story-order-2026-08-17.srt` | 15 cues | same timings as this cut |
-| Do not use | `~/Downloads/MemoryStand-Remotion-medium-shot-2026-08-17.mp4` | 52.843 s | same takes, old beat order |
-| Do not use | `~/Downloads/MemoryStand-Remotion-presenter-first-2026-08-17.mp4` | 53.845 s | portrait cover-crop; face too close |
+| **Use this** | `~/Downloads/MemoryStand-Remotion-why-hold-2026-08-18.mp4` | 98.048 s | `1dddd4d17c122dd3fc7445c5de2531187a104593712fec0e72a364e8ee83885c` |
+| Sidecar SRT | `~/Downloads/MemoryStand-Remotion-why-hold-2026-08-18.srt` | 20 cues | same timings as this cut |
+| Do not use | earlier `story-order` / `medium-shot` / `presenter-first` files | — | missing the why-beat, or too tight / too close |
 
 1. YouTube or Vimeo, **Public**, not Unlisted.
 2. Watch the public link logged out, start to finish.

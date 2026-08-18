@@ -28,7 +28,10 @@ PUBLIC = REPO_ROOT / "remotion" / "public"
 STORY_OUT = REPO_ROOT / "remotion" / "src" / "story.json"
 EVIDENCE = REPO_ROOT / "artifacts" / "video" / "memorystand-evidence-source.mp4"
 FPS = 24
-HOLD_S = 0.45
+# Play the whole 10s Grok take. The idle tail after speech is the hold
+# that makes the cut breathe; Remotion fades across that tail.
+CLIP_DURATION_S = 10.0
+OUTRO_FRAMES = 192
 
 
 def _whisper_words(mp4: Path) -> list[tuple[str, float, float]]:
@@ -75,8 +78,7 @@ def main() -> int:
             dest = public_clips / src.name
             shutil.copy2(src, dest)
             words = align_to_script(line, _whisper_words(src))
-            end = words[-1][2] if words else 8.0
-            duration = min(10.0, end + HOLD_S)
+            duration = CLIP_DURATION_S
             cues = [
                 {"s": round(s, 3), "e": round(e, 3), "t": text}
                 for s, e, text in caption_cues(words)
@@ -104,12 +106,12 @@ def main() -> int:
 
     story = {
         "fps": FPS,
-        "outroFrames": 72,
+        "outroFrames": OUTRO_FRAMES,
         "shots": story_shots,
         "outro": spec["outro"],
     }
     STORY_OUT.write_text(json.dumps(story, indent=2) + "\n")
-    total = sum(s["durationFrames"] for s in story_shots) + 72
+    total = sum(s["durationFrames"] for s in story_shots) + OUTRO_FRAMES
     print(f"wrote {STORY_OUT}  {len(story_shots)} shots  {total / FPS:.1f}s")
     return 0
 
